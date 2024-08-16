@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Release)
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      0.3
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/Miners/IndividualMiner?id*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
-// @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
-// @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
+// @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet
+// @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet
 // @grant        none
 // ==/UserScript==
 
