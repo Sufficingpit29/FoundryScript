@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.5
+// @version      0.6
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
-// @match        https://foundryoptifleet.com/Content/Miners/IndividualMiner?id*
+// @match        https://foundryoptifleet.com/*
 // @match        *://tasks.office.com/foundrydigital.com/*
 // @match        *://foundrydigitalllc.sharepoint.com/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
@@ -37,6 +37,137 @@ const urlLookupPlanner = {
 };
 
 const currentUrl = window.location.href;
+
+if(currentUrl.includes("https://foundryoptifleet.com/")) {
+
+    // Check is the user ever inputs something
+    var serialInputted = "";
+    var lastInputTime = 0;
+    var timeoutId;
+    document.addEventListener('keydown', function(event) {
+        if(Date.now() - lastInputTime > 1000) {
+            serialInputted = "";
+        } else {
+            serialInputted += event.key;
+
+            if (timeoutId) {
+                clearTimeout(timeoutId);
+            }
+            timeoutId = setTimeout(function() {
+                // Checks to see if there is Shift and Enter in the string, if not, stop
+                if (serialInputted.indexOf('Enter') === -1) {
+                    console.log("No Enter", serialInputted);
+                    serialInputted = "";
+                    return;
+                }
+
+                // Clean Shift and Enter
+                serialInputted = serialInputted.replace(/Shift/g, '');
+                serialInputted = serialInputted.replace(/Enter/g, '');
+
+                // Save the serial number to the storage
+                GM_SuperValue.set('serialNumberInputted', serialInputted);
+
+                // Redirect to https://foundryoptifleet.com/Content/Dashboard/Miners/List
+                window.location.href = "https://foundryoptifleet.com/Content/Dashboard/Miners/List";
+            }, 500);
+        }
+        lastInputTime = Date.now();
+    });
+
+    const savedSerialNumber = GM_SuperValue.get('serialNumberInputted', '');
+    if (savedSerialNumber !== '') {
+        // Find ddlZones_listbox and select All Sites
+        const ddlZones = document.querySelector('#ddlZones');
+        console.log("Going to click on ddlZones");
+        if (ddlZones) {
+            ddlZones.click();
+            const animationContainer = document.querySelector('.k-animation-container');
+            const list = animationContainer.querySelector('.k-list');
+            const items = list.querySelectorAll('.k-item');
+            const selectedOption = list.querySelector('.k-state-selected');
+            if (selectedOption.textContent !== 'All Zones') {
+                items[0].click();
+            }
+            ddlZones.click();
+        }
+
+        // Select .op-select-filters clickable
+        const moreFilters = document.querySelector('.op-select-filters.clickable');
+        if (moreFilters) {
+            moreFilters.click();
+        }
+
+        // Now select and enable Serial Number and click apply
+        const serialNumberOption = document.querySelector('.option.m-menu-item input[c-id="serialNumberOption"]');
+        
+        // If it exists and is not checked, click on it
+        if (serialNumberOption && !serialNumberOption.checked) {
+            serialNumberOption.click();
+
+            // Now click on Apply
+            const moreFiltersApplyBtn = document.querySelector('[c-id="moreFiltersApplyBtn"]');
+            if (moreFiltersApplyBtn) {
+                moreFiltersApplyBtn.click();
+            }
+        } else {
+            moreFilters.click();
+        }
+
+        // Now click on the serial number filter
+        const serialNumberFilter = document.querySelector('[c-id="serialNumberFilter"]');
+        if (serialNumberFilter) {
+            serialNumberFilter.click();
+        }
+
+        // Now enter number in serialNumberInput
+        const serialNumberInput = document.querySelector('[c-id="serialNumberInput"]');
+        if (serialNumberInput) {
+            serialNumberInput.value = savedSerialNumber;
+        }
+
+        // Now apply serialNumberApplyBtn
+        const serialNumberApplyBtn = document.querySelector('[c-id="serialNumberApplyBtn"]');
+        if (serialNumberApplyBtn) {
+            serialNumberApplyBtn.click();
+        }
+
+        // Repeativly check for menu-wrapper for 6 seconds
+        var counter = 0;
+        var intervalId = setInterval(function() {
+            const minerGrid = document.querySelector('#minerGrid');
+            if (minerGrid) {
+                const rows = minerGrid.querySelectorAll('tr.k-master-row');
+                rows.forEach(row => {
+                    const serialNumber = row.querySelector('td[role="gridcell"]:nth-child(2)');
+                    const uid = row.getAttribute('data-uid');
+
+                    if (serialNumber && uid) {
+                        console.log(serialNumber.textContent);
+                        console.log(uid);
+                        //menu-wrapper
+                        let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
+                        if (minerLinkElement) {
+                            let minerID = minerLinkElement.getAttribute('data-miner-id');
+                            clearInterval(intervalId);
+
+                            // Open link in new tab
+                            GM_SuperValue.set("serialNumberInputted", "");
+                            window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`, '_blank');
+                            return;
+                        }
+                    }
+                });
+            }
+            counter++;
+            if (counter === 12) {
+                clearInterval(intervalId);
+            }
+        }, 1000);
+
+        serialInputted = "";
+    }
+}
 
 // Check if on the source website
 if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) {
