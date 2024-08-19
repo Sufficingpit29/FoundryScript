@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/Miners/IndividualMiner?id*
@@ -16,11 +16,19 @@
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // ==/UserScript==
 
-const urlLookupExcel = {
+var urlLookupExcel = {
+    /*
     "Bitmain": "https://foundrydigitalllc.sharepoint.com/:x:/r/sites/SiteOps/_layouts/15/Doc.aspx?sourcedoc=%7B8D61FC1B-172C-44B2-9D05-72998A4F6275%7D&file=Bitmain%200002%20Minden%20GV.xlsx&action=default&mobileredirect=true",
     "Fortitude": "https://foundrydigitalllc.sharepoint.com/:x:/r/sites/SiteOps/_layouts/15/Doc.aspx?sourcedoc=%7BD26A9087-8D1A-45B6-B005-45F4FB25E42D%7D&file=Fortitude%20Hashboard%20Repair.xlsx&action=default&mobileredirect=true",
     "RAMM": "https://foundrydigitalllc.sharepoint.com/:x:/r/sites/SiteOps/_layouts/15/Doc.aspx?sourcedoc=%7BC5DD3CF5-19C8-4F8F-A192-52E1F9CA4A41%7D&file=RAMM%200001%20GV%20Minden.xlsx&action=default&mobileredirect=true"
+    */
 };
+const defaultExcelLink = "https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3";
+
+urlLookupExcel["Bitmain"] = GM_SuperValue.get("bitmainLink", defaultExcelLink);
+urlLookupExcel["Fortitude"] = GM_SuperValue.get("fortitudeLink", defaultExcelLink);;
+urlLookupExcel["RAMM"] = GM_SuperValue.get("rammLink", defaultExcelLink);
+
 
 const urlLookupPlanner = {
     "Bitmain": "https://tasks.office.com/foundrydigital.com/Home/Planner/#/plantaskboard?groupId=efbb33a0-825d-4dff-8384-a8b34b58b606&planId=wkeUw2vf1kqEkw6-XXaSR2UABn4T",
@@ -86,6 +94,19 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         console.log("Copied content:", text);
     }
 
+    // Clean Text fuction
+    function cleanText(text) {
+        return text
+        .replace(/Copy\s*$/gm, '') // Remove 'Copy' button text
+        .replace(/All details copied!/, '') // Remove 'All details copied!' message
+        .replace(/Text copied!/, '') // Remove 'Text copied!' message
+        .replace(/                /g, '') // Remove whitespacing
+        .replace(/\n            \n            AutoPool Enabled\n/, '') // Remove the autopool text
+        .replace(/\n+$/, '') // Remove trailing newlines
+        .replace(/\n            \n            /g, '\n') // Removes extra new lines  )
+        .trim();
+    }
+
     function copyAllDetails() {
         const container = document.querySelector('.miner-details-section.m-stack');
         if (!container) return;
@@ -94,14 +115,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         const buttons = clone.querySelectorAll('.copyBtn');
         buttons.forEach(btn => btn.remove());
 
-        let textToCopy = clone.innerText
-            .replace(/Copy\s*$/gm, '') // Remove 'Copy' button text
-            .replace(/All details copied!/, '') // Remove 'All details copied!' message
-            .replace(/Text copied!/, '') // Remove 'Text copied!' message
-            .replace(/                /g, '') // Remove whitespacing
-            .replace(/\n            \n            AutoPool Enabled\n/, '') // Remove the autopool text
-            .replace(/\n+$/, '') // Remove trailing newlines
-            .trim();
+        let textToCopy = cleanText(clone.innerText);
 
         copyTextToClipboard(textToCopy);
     }
@@ -114,14 +128,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         const buttons = clone.querySelectorAll('.copyBtn');
         buttons.forEach(btn => btn.remove());
 
-        let cleanedText = clone.innerText
-            .replace(/Copy\s*$/gm, '') // Remove 'Copy' button text
-            .replace(/All details copied!/, '') // Remove 'All details copied!' message
-            .replace(/Text copied!/, '') // Remove 'Text copied!' message
-            .replace(/                /g, '') // Remove whitespacing
-            .replace(/\n            \n            AutoPool Enabled\n/, '') // Remove the autopool text
-            .replace(/\n+$/, '') // Remove trailing newlines
-            .trim();
+        let cleanedText = cleanText(clone.innerText);
 
         function parseMinerDetails(text) {
             console.log(text);
@@ -183,29 +190,32 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         const popupElement = document.createElement('div');
         popupElement.innerHTML = `
             <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #333; color: white; padding: 20px;">
-            <h1>Enter Issue and Log</h1>
-            <form id="issueLogForm">
-            <div style="margin-bottom: 10px;">
-            <label for="issue" style="display: block; font-weight: bold;">Issue:</label>
-            <input type="text" id="issue" name="issue" required style="width: 100%; padding: 5px; color: white;">
-            </div>
-            <div style="margin-bottom: 10px;">
-            <label for="log" style="display: block; font-weight: bold;">Log:</label>
-            <textarea id="log" name="log" required style="width: 100%; height: 100px; padding: 5px; color: white;"></textarea>
-            </div>
-            <div style="margin-bottom: 10px;">
-            <label for="type" style="display: block; font-weight: bold;">Type:</label>
-            <select id="type" name="type" required style="width: 100%; padding: 5px; color: white; background-color: #222;">
-            <option value="Bitmain">Bitmain</option>
-            <option value="Fortitude">Fortitude</option>
-            <option value="RAMM">RAMM</option>
-            </select>
-            </div>
-            <div>
-            <button type="button" id="submitBtn" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Next</button>
-            <button type="button" id="cancelBtn" style="background-color: #f44336; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Cancel</button>
-            </div>
-            </form>
+                <h1>Enter Issue and Log</h1>
+                <form id="issueLogForm">
+                    <div style="margin-bottom: 10px;">
+                        <label for="issue" style="display: block; font-weight: bold;">Issue:</label>
+                        <input type="text" id="issue" name="issue" required style="width: 100%; padding: 5px; color: white;">
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <label for="log" style="display: block; font-weight: bold;">Log:</label>
+                        <textarea id="log" name="log" required style="width: 100%; height: 100px; padding: 5px; color: white;"></textarea>
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <label for="type" style="display: block; font-weight: bold;">Type:</label>
+                        <select id="type" name="type" required style="width: 100%; padding: 5px; color: white; background-color: #222;">
+                            <option value="Bitmain">Bitmain</option>
+                            <option value="Fortitude">Fortitude</option>
+                            <option value="RAMM">RAMM</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>
+                            <button type="button" id="submitBtn" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Next</button>
+                            <button type="button" id="cancelBtn" style="background-color: #f44336; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Cancel</button>
+                        </div>
+                        <button type="button" id="linksBtn" style="background-color: #4287f5; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Edit Links</button>
+                    </div>
+                </form>
             </div>
         `;
         // Function to submit Issue and Log
@@ -226,6 +236,73 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
             // Remove the popup element
             popupElement.remove();
         }
+
+        // Function to edit links
+        function editLinks() {
+            popupElement.remove();
+
+            // Creates a side panel element with links to Excel that can be edited and saved
+            const sidePanel = document.createElement('div');
+            const bitmainLink = urlLookupExcel["Bitmain"];
+            const fortitudeLink = urlLookupExcel["Fortitude"];
+            const rammLink = urlLookupExcel["RAMM"];
+            sidePanel.innerHTML = `
+                <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #333; color: white; padding: 20px;">
+                    <h1>Edit Links</h1>
+                    <form id="linksForm">
+                        <div style="margin-bottom: 10px;">
+                            <label for="bitmain" style="display: block; font-weight: bold;">Bitmain:</label>
+                            <input type="text" id="bitmain" name="bitmain" required style="width: 100%; padding: 5px; color: white;" value="${bitmainLink}">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label for="fortitude" style="display: block; font-weight: bold;">Fortitude:</label>
+                            <input type="text" id="fortitude" name="fortitude" required style="width: 100%; padding: 5px; color: white;" value="${fortitudeLink}">
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label for="ramm" style="display: block; font-weight: bold;">RAMM:</label>
+                            <input type="text" id="ramm" name="ramm" required style="width: 100%; padding: 5px; color: white;" value="${rammLink}">
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button type="button" id="saveBtn" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Save</button>
+                            <button type="button" id="cancelBtn" style="background-color: #f44336; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Cancel</button>
+                            <a href="${defaultExcelLink}" target="_blank" style="background-color: #0078d4; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; text-decoration: none;">Site Ops</a>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(sidePanel);
+
+            // Add event listeners to select text on focus
+            document.getElementById('bitmain').addEventListener('focus', function() {
+                this.select();
+            });
+            document.getElementById('fortitude').addEventListener('focus', function() {
+                this.select();
+            });
+            document.getElementById('ramm').addEventListener('focus', function() {
+                this.select();
+            });
+
+            function saveLinks() {
+                const bitmainLink = document.getElementById("bitmain").value;
+                const fortitudeLink = document.getElementById("fortitude").value;
+                const rammLink = document.getElementById("ramm").value;
+                
+                GM_SuperValue.set("bitmainLink", bitmainLink !== "" ? bitmainLink : defaultExcelLink);
+                GM_SuperValue.set("fortitudeLink", fortitudeLink !== "" ? fortitudeLink : defaultExcelLink);
+                GM_SuperValue.set("rammLink", rammLink !== "" ? rammLink : defaultExcelLink);
+
+                urlLookupExcel["Bitmain"] = bitmainLink !== "" ? bitmainLink : defaultExcelLink;
+                urlLookupExcel["Fortitude"] = fortitudeLink !== "" ? fortitudeLink : defaultExcelLink;
+                urlLookupExcel["RAMM"] = rammLink !== "" ? rammLink : defaultExcelLink;
+                sidePanel.remove();
+            }
+
+            document.getElementById('saveBtn').addEventListener('click', saveLinks);
+            document.getElementById('cancelBtn').addEventListener('click', () => {
+                sidePanel.remove();
+            });
+        }
     
         // Append the popup element to the document body
         document.body.appendChild(popupElement);
@@ -233,6 +310,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         // Attach event listeners to the buttons
         document.getElementById('submitBtn').addEventListener('click', submitIssueLog);
         document.getElementById('cancelBtn').addEventListener('click', cancelIssueLog);
+        document.getElementById('linksBtn').addEventListener('click', editLinks);
     }
     
     function addCopyButton(element, textToCopy) {
@@ -315,7 +393,9 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         addCopyButtonsToElements();
         addMutationObserver();
     });
-} else if (currentUrl.includes("foundrydigitalllc.sharepoint.com/:x:/r/sites/SiteOps/_layouts/")) {
+} else if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
+
+    console.log("Running on SharePoint");
 
     // If there is a taskName/Notes in storage, then create a overlay on the right side of the page that says Go to Planner
     const taskName = GM_SuperValue.get("taskName", "");
