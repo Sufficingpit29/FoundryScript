@@ -75,7 +75,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
         lastInputTime = Date.now();
     });
 
-    const savedSerialNumber = GM_SuperValue.get('serialNumberInputted', 'YNAHANCBCABJA024D');
+    const savedSerialNumber = GM_SuperValue.get('serialNumberInputted', '');
     if (savedSerialNumber !== '') {
         // Find ddlZones_listbox and select All Sites
         const ddlZones = document.querySelector('#ddlZones');
