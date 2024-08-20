@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.6.1
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
