@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.6.1
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -75,7 +75,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
         lastInputTime = Date.now();
     });
 
-    const savedSerialNumber = GM_SuperValue.get('serialNumberInputted', '');
+    const savedSerialNumber = GM_SuperValue.get('serialNumberInputted', 'YNAHANCBCABJA024D');
     if (savedSerialNumber !== '') {
         // Find ddlZones_listbox and select All Sites
         const ddlZones = document.querySelector('#ddlZones');
@@ -100,7 +100,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
 
         // Now select and enable Serial Number and click apply
         const serialNumberOption = document.querySelector('.option.m-menu-item input[c-id="serialNumberOption"]');
-        
+
         // If it exists and is not checked, click on it
         if (serialNumberOption && !serialNumberOption.checked) {
             serialNumberOption.click();
@@ -302,7 +302,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
             'Active Pool': activePool,
         } = minerDetails;
 
-        
+
         GM_SuperValue.set("taskName", `${model} - ${serialNumber} - ${issue}`);
         GM_SuperValue.set("taskNotes", cleanedText);
         GM_SuperValue.set("taskComment", log);
@@ -354,14 +354,14 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
             const issue = document.getElementById("issue").value;
             const log = document.getElementById("log").value;
             const type = document.getElementById("type").value;
-    
+
             // Remove the popup element
             popupElement.remove();
-    
+
             // Copy the details for Quick Sharepoint & Planner and set the taskName and taskNotes
             copyAllDetailsForSharepoint(issue, log, type);
         }
-    
+
         // Function to cancel Issue and Log
         function cancelIssueLog() {
             // Remove the popup element
@@ -418,7 +418,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
                 const bitmainLink = document.getElementById("bitmain").value;
                 const fortitudeLink = document.getElementById("fortitude").value;
                 const rammLink = document.getElementById("ramm").value;
-                
+
                 GM_SuperValue.set("bitmainLink", bitmainLink !== "" ? bitmainLink : defaultExcelLink);
                 GM_SuperValue.set("fortitudeLink", fortitudeLink !== "" ? fortitudeLink : defaultExcelLink);
                 GM_SuperValue.set("rammLink", rammLink !== "" ? rammLink : defaultExcelLink);
@@ -434,16 +434,16 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
                 sidePanel.remove();
             });
         }
-    
+
         // Append the popup element to the document body
         document.body.appendChild(popupElement);
-    
+
         // Attach event listeners to the buttons
         document.getElementById('submitBtn').addEventListener('click', submitIssueLog);
         document.getElementById('cancelBtn').addEventListener('click', cancelIssueLog);
         document.getElementById('linksBtn').addEventListener('click', editLinks);
     }
-    
+
     function addCopyButton(element, textToCopy) {
         if (element.querySelector('.copyBtn')) return;
 
@@ -531,7 +531,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
     // If there is a taskName/Notes in storage, then create a overlay on the right side of the page that says Go to Planner
     const taskName = GM_SuperValue.get("taskName", "");
     const detailsData = GM_SuperValue.get("detailsData", {});
-    
+
 
     if (taskName !== "") {
         const overlay = document.createElement('div');
@@ -592,7 +592,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
 
     // Function to simulate real typing using execCommand
     function setupTask(inputElement) {
-        
+
         inputElement.focus();
 
         let i = 0;
