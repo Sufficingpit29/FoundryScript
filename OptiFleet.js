@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.6.1
+// @version      0.7
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -778,5 +778,447 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
 
     window.addEventListener('load', function () {
         setTimeout(createAutoCreateCardButton, 1000);
+    });
+}
+
+//--------------------------------------------
+// Reboot Counter
+if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
+
+    // Function that gets all the miner serial numbers
+    var idLookup = {};
+    function getMinerSerialNumbers() {
+        idLookup = {};
+        const minerGrid = document.querySelector('#minerList');
+        if (minerGrid) {
+            const serialNumberColElement = document.querySelector('.k-header[data-title="Serial Number"]');
+            if (serialNumberColElement) {
+                var serialNumberColIndex = serialNumberColElement.getAttribute('data-index');
+                const rows = minerGrid.querySelectorAll('tr.k-master-row');
+                rows.forEach(row => {
+                    const serialNumber = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(serialNumberColIndex) + 1) + ')');
+                    const uid = row.getAttribute('data-uid');
+
+                    if (serialNumber && uid) {
+                        //menu-wrapper
+                        let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
+                        if (minerLinkElement) {
+                            let minerID = minerLinkElement.getAttribute('data-miner-id');
+                            idLookup[minerID] = serialNumber.textContent;
+                        }
+                    }
+                });
+            }
+        }
+
+        // Save the idLookup object to local storage
+        GM_SuperValue.set('getRebootsFor', JSON.stringify(idLookup));
+
+        // Save the length of the idLookup object to local storage
+        GM_SuperValue.set('getRebootsForLength', Object.keys(idLookup).length);
+
+        // Clear the previous reboot counts
+        GM_SuperValue.set('rebootCounts', '{}');
+
+        // Open a new tab to the first miner
+        const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0] + "&active_tab=Activity";
+        window.open(fistLink, 'Collecting Data...');
+    }
+
+    // Find the issuesActionsDropdown and add a new action
+    var checkInterval;
+    const interval = setInterval(() => {
+        const issuesActionsDropdown = document.getElementById('issuesActionsDropdown');
+        if (issuesActionsDropdown) {
+            clearInterval(interval);
+            const newAction = document.createElement('div');
+            newAction.classList.add('m-menu-item');
+            newAction.textContent = 'Scan for Reboots';
+            newAction.onclick = function() {
+                if (checkInterval) {
+                    clearInterval(checkInterval);
+                }
+
+                getMinerSerialNumbers();
+
+                // Repeativly check if getRebootsFor is empty
+                checkInterval = setInterval(() => {
+                    const minersToSearch = JSON.parse(GM_SuperValue.get('getRebootsFor', '{}'));
+                    if (Object.keys(minersToSearch).length === 0) {
+                        clearInterval(checkInterval);
+                        
+                        
+                        // Create a popup element for showing the results
+                        const popupResultElement = document.createElement('div');
+                        popupResultElement.innerHTML = `
+                            <div style="
+                                position: fixed;
+                                top: 50%;
+                                left: 50%;
+                                transform: translate(-50%, -50%);
+                                background-color: #333;
+                                color: white;
+                                padding: 20px;
+                                font-family: Arial, sans-serif;
+                                border-radius: 5px;
+                                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+                            ">
+                                <h1 style="text-align: center; margin-bottom: 20px;">Reboot Count</h1>
+                                <div style="max-height: 400px; overflow-y: auto;">
+                                    <table style="width: 100%;">
+                                        <thead>
+                                            <tr>
+                                                <th style="padding: 10px;">Reboot Count</th>
+                                                <th style="padding: 10px;">Serial Number</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <button id="closePopup" style="
+                                    padding: 10px 20px;
+                                    background-color: #555;
+                                    color: white;
+                                    border: none;
+                                    cursor: pointer;
+                                    margin-top: 10px;
+                                    border-radius: 3px;
+                                ">Close</button>
+                            </div>
+                        `;
+
+                        const closePopupButton = popupResultElement.querySelector('#closePopup');
+                        closePopupButton.onclick = function() {
+                            popupResultElement.remove();
+                        };
+
+                        document.body.appendChild(popupResultElement);
+
+                        // Order the reboot counts by the count
+                        const rebootCounts = JSON.parse(GM_SuperValue.get('rebootCounts', '{}'));
+                        const orderedRebootCounts = Object.entries(rebootCounts).sort((a, b) => b[1] - a[1]);
+
+                        // Loop through the ordered reboot counts and add them to the popup
+                        const popupTableBody = popupResultElement.querySelector('tbody');
+                        orderedRebootCounts.forEach(([minerID, rebootCount]) => {
+                            const serialNumber = idLookup[minerID];
+                            const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td style="padding: 10px; color: white;">${rebootCount}</td>
+                                <td style="padding: 10px;"><a href="${minerLink}" target="_blank" style="color: white;">${serialNumber}</a></td>
+                            `;
+                            popupTableBody.appendChild(row);
+                        });
+                    }
+                }, 500);
+            };
+            issuesActionsDropdown.querySelector('.m-menu').appendChild(newAction);
+        } else {
+            console.log('issuesActionsDropdown not found');
+        }
+    }, 500);
+} else if(currentUrl.includes("https://foundryoptifleet.com/Content/Miners/IndividualMiner")) {
+    
+    function addDataBox(title, data, updateFunc, updateInterval) {
+        // Add new m-box to m-grid-list
+        const mGridList = document.querySelector('.m-grid-list');
+        const mBox = document.createElement('div');
+        mBox.classList.add('m-box');
+        mGridList.appendChild(mBox);
+
+        // Add new m-stack to m-box
+        const mStack = document.createElement('div');
+        mStack.classList.add('m-stack');
+        mStack.classList.add('has-space-s');
+        mBox.appendChild(mStack);
+
+        // Add new h3 to m-stack
+        const h3 = document.createElement('h3');
+        h3.classList.add('m-heading');
+        h3.classList.add('is-muted');
+        h3.textContent = title;
+        mStack.appendChild(h3);
+
+        // Add new p to m-stack
+        const p = document.createElement('p');
+        p.classList.add('m-code');
+        p.classList.add('is-size-xl');
+        p.textContent = data;
+        mStack.appendChild(p);
+
+        // Run the update function if it exists
+        if (updateFunc) {
+            updateFunc(mBox, h3, p);
+            if (updateInterval) {
+                setInterval(() => {
+                    updateFunc(mBox, h3, p);
+                }, updateInterval);
+            }
+        }
+
+        // Return the m-box element
+        return mBox;
+    }
+    
+    
+    const minerID = currentUrl.match(/id=(\d+)/)[1];
+    const minersToSearch = JSON.parse(GM_SuperValue.get('getRebootsFor', '{}'));
+    const originalLength = GM_SuperValue.get('getRebootsForLength', 0);
+    const minerSerialNumber = minersToSearch[minerID];
+    const isScanning = minerSerialNumber !== undefined;
+    
+    if(isScanning) {
+        // Find and remove ticket-details-column
+        const ticketDetailsColumn = document.querySelector('.ticket-details-column');
+        if (ticketDetailsColumn) {
+            ticketDetailsColumn.remove();
+        }
+
+        // Create an element to completely cover the page
+        const scanningElement = document.createElement('div');
+        scanningElement.style.position = 'fixed';
+        scanningElement.style.top = '0';
+        scanningElement.style.left = '0';
+        scanningElement.style.width = '100%';
+        scanningElement.style.height = '100%';
+        scanningElement.style.backgroundColor = 'rgba(10, 10, 10, 1)';
+        scanningElement.style.color = 'white';
+        scanningElement.style.display = 'flex';
+        scanningElement.style.flexDirection = 'column'; // Added line
+        scanningElement.style.justifyContent = 'center';
+        scanningElement.style.alignItems = 'center';
+        scanningElement.style.fontSize = '2em';
+        document.body.appendChild(scanningElement);
+
+        const progressBar = document.createElement('div');
+        progressBar.style.width = '50%';
+        progressBar.style.height = '20px';
+        progressBar.style.backgroundColor = 'gray';
+        progressBar.style.marginTop = '10px';
+        progressBar.style.border = '4px solid black';
+        scanningElement.appendChild(progressBar);
+
+        const progressFill = document.createElement('div');
+        progressFill.style.width = '0%';
+        progressFill.style.height = '100%';
+        progressFill.style.backgroundColor = 'green';
+        progressFill.style.borderRight = '1px solid black'; // Modify border style
+        progressBar.appendChild(progressFill);
+        
+        // Add Scanning text below the progress bar
+        const scanningText = document.createElement('div');
+        scanningText.textContent = 'Scanning';
+        scanningText.style.marginTop = '10px';
+        scanningText.style.textAlign = 'left';
+        scanningElement.appendChild(scanningText);
+
+        // Animate the ... cycling
+        let dots = 0;
+        const scanningInterval = setInterval(() => {
+            dots = (dots + 1) % 4;
+            scanningText.textContent = 'Scanning' + '.'.repeat(dots);
+        }, 500);
+        
+
+        // Calculate the progress percentage
+        const totalMinersLeft = Object.keys(minersToSearch).length;
+        const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
+
+        // Update the progress bar fill
+        progressFill.style.width = progressPercentage + '%';
+    }
+    
+    // Get the current saved reboot counts
+    var rebootCounts = JSON.parse(GM_SuperValue.get('rebootCounts', '{}'));
+
+    // Wait for the miner activity list to exist and be fully loaded
+    const waitForMinerActivityList = setInterval(() => {
+        const minerActivityList = document.getElementById('miner-activity-list-IndividualMiner');
+        const activityRows = minerActivityList.querySelectorAll('.m-table-row');
+        const noActivityElement = document.querySelector('.no-activity-section.active');
+        const errorCount = GM_SuperValue.get("errorCount", 0);
+        const pastMaxErrors = errorCount > 3;
+        if (minerActivityList && (activityRows && activityRows.length > 0) || noActivityElement || pastMaxErrors) {
+
+            clearInterval(waitForMinerActivityList);
+
+            if(isScanning) {
+                // Remove this miner from the list
+                delete minersToSearch[minerID];
+
+                // Save the updated list to local storage
+                GM_SuperValue.set('getRebootsFor', JSON.stringify(minersToSearch));
+            }
+
+            var lastRebootTime;
+            //reboot initiated by dhernandez@foundrydigital.com  9:34:55 AM    8/23/24
+            const reboots = [];
+            if(!pastMaxErrors) {
+                // Loop through the activity list and find the reboots
+                activityRows.forEach(row => {
+                    const cell = row.querySelector('.m-table-cell');
+                    if (cell.textContent.includes('reboot initiated')) {
+                        reboots.push(cell.textContent);
+
+                        if(!lastRebootTime) {
+                            const time = cell.textContent.match(/(\d{1,2}:\d{1,2}:\d{1,2} [AP]M)/);
+                            const date = cell.textContent.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+                            lastRebootTime = new Date(date[0] + ' ' + time[0]);
+                            console.log(lastRebootTime);
+                        }
+                    }
+                });
+
+                rebootCounts[minerID] = reboots.length;
+            } else {
+                rebootCounts[minerID] = 'Error';
+            }
+
+            if(isScanning) {
+                // Update the reboot counts
+                GM_SuperValue.set('rebootCounts', JSON.stringify(rebootCounts));
+
+                // Recalculate the progress percentage
+                const totalMinersLeft = Object.keys(minersToSearch).length;
+                const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
+
+                // Update the progress bar fill
+                progressFill.style.width = progressPercentage + '%';
+
+                // Open the next miner
+                const nextMinerID = Object.keys(minersToSearch)[0];
+                if (nextMinerID) {
+                    const nextLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + nextMinerID + "&active_tab=Activity";
+                    window.location.href = nextLink;
+                } else {
+                    // Remove the scanning element
+                    clearInterval(scanningInterval);
+                    
+                    // Set the scanning text to "Finished"
+                    scanningText.textContent = 'Finished';
+
+                    // Close this page
+                    setTimeout(() => {
+                        GM_SuperValue.set("errorCount", 0);
+                        window.close();
+                    }, 500);
+                }
+            } else {
+
+                // Add the reboot count to the page
+                addDataBox('Reboot Count (Activity Log)', reboots.length);
+
+                // Time since last reboot
+                if(lastRebootTime) {
+                    const timeSinceReboot = Date.now() - lastRebootTime;
+                    const timeSinceRebootElement = addDataBox('Time Since Last Reboot (Activity Log)', timeSinceReboot, (mBox, h3, p) => {
+                        let timeSinceReboot = Date.now() - lastRebootTime;
+                        const days = Math.floor(timeSinceReboot / (1000 * 60 * 60 * 24));
+                        timeSinceReboot = new Date(timeSinceReboot).toISOString().substr(11, 8);
+                        if (days > 0) {
+                            timeSinceReboot = days + 'd ' + timeSinceReboot;
+                        }
+                        p.textContent = timeSinceReboot;
+                    }, 1000);
+                }
+                
+
+            }
+        } else if (minerActivityList && minerActivityList.querySelector('.m-table-body') && minerActivityList.querySelector('.m-table-body').textContent === 'Error loading activity...') {
+            // Add text saying there was an error, retrying
+            clearInterval(scanningInterval);
+            scanningText.textContent = 'Error, Retrying...';
+            setTimeout(() => {
+                GM_SuperValue.set("errorCount", GM_SuperValue.get("errorCount", 0) + 1);
+                window.location.reload();
+            }, 500);
+        }
+    }, 500);
+
+    function parsePathData(d) {
+        const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
+        let currentY = 0;
+        let topY = Number.POSITIVE_INFINITY;
+        let bottomY = Number.NEGATIVE_INFINITY;
+        let downCounts = 0;
+        let upCounts = 0;
+        let lastY;
+    
+        commands.forEach(command => {
+            const type = command[0];
+            const values = command.slice(1).trim().split(/[\s,]+/).map(Number);
+    
+            console.log(type, values);
+
+            switch (type) {
+                case 'M':
+                case 'L':
+                    currentY = values[1];
+                    break;
+                case 'C':
+                    currentY = values[5];
+                    break;
+            }
+
+            if(currentY !== lastY) {
+                if(currentY > 0) { // Height changes, anything above 0 should always been it is down, since it is a binary on/off and I know 0 has to be on.
+                    downCounts++;
+                }
+                if(currentY === 0) {
+                    upCounts++;
+                }
+            }
+            lastY = currentY;
+        });
+    
+        return { downCounts, upCounts };
+    }
+    
+
+    const upTimeChart = document.querySelector('#uptimeChart');
+    var downCountBox;
+    var lastd = '';
+    const observer = new MutationObserver(() => {
+        const path = upTimeChart.querySelector('[id^="SvgjsPath"]');
+        if (path) {
+            const d = path.getAttribute('d');
+
+            if (d === lastd) {
+                return;
+            }
+            lastd = d;
+            const result = parsePathData(d);
+            console.log(result);
+
+            // Check if reportRange.textContent changes
+            const reportRange = document.getElementById('reportrange');
+            const timeSpan = reportRange.textContent.trim();
+
+            // Find the existing data box
+            if (downCountBox) {
+                // Update the range in the box
+                const h3 = downCountBox.querySelector('h3');
+                if (h3) {
+                    h3.textContent = 'Times Down (' + timeSpan + ')';
+                }
+
+                // Update the down times count
+                const p = downCountBox.querySelector('p');
+                if (p) {
+                    p.textContent = result.downCounts;
+                }
+            } else {
+                // Add the new data box to the page
+                downCountBox = addDataBox('Times Down (' + timeSpan + ')', result.downCounts);
+            }
+        }
+    });
+    
+    observer.observe(upTimeChart, {
+        childList: true,
+        subtree: true
     });
 }
