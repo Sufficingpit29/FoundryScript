@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.7
+// @version      0.7.1
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -55,7 +55,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
             }
             timeoutId = setTimeout(function() {
                 // Checks to see if there is Shift and Enter in the string, if not, stop
-                if (serialInputted.indexOf('Enter') === -1) {
+                if (serialInputted.indexOf('Enter') === -1 || serialInputted.indexOf('Shift') === -1) {
                     console.log("No Enter", serialInputted);
                     serialInputted = "";
                     return;
@@ -80,92 +80,94 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
         // Find ddlZones_listbox and select All Sites
         const ddlZones = document.querySelector('#ddlZones');
         console.log("Going to click on ddlZones");
-        if (ddlZones) {
-            ddlZones.click();
-            const animationContainer = document.querySelector('.k-animation-container');
-            const list = animationContainer.querySelector('.k-list');
-            const items = list.querySelectorAll('.k-item');
-            const selectedOption = list.querySelector('.k-state-selected');
-            if (selectedOption.textContent !== 'All Zones') {
-                items[0].click();
+        setTimeout(() => {
+            if (ddlZones) {
+                ddlZones.click();
+                const animationContainer = document.querySelector('.k-animation-container');
+                const list = animationContainer.querySelector('.k-list');
+                const items = list.querySelectorAll('.k-item');
+                const selectedOption = list.querySelector('.k-state-selected');
+                if (selectedOption.textContent !== 'All Zones') {
+                    items[0].click();
+                }
+                ddlZones.click();
             }
-            ddlZones.click();
-        }
 
-        // Select .op-select-filters clickable
-        const moreFilters = document.querySelector('.op-select-filters.clickable');
-        if (moreFilters) {
-            moreFilters.click();
-        }
-
-        // Now select and enable Serial Number and click apply
-        const serialNumberOption = document.querySelector('.option.m-menu-item input[c-id="serialNumberOption"]');
-        
-        // If it exists and is not checked, click on it
-        if (serialNumberOption && !serialNumberOption.checked) {
-            serialNumberOption.click();
-
-            // Now click on Apply
-            const moreFiltersApplyBtn = document.querySelector('[c-id="moreFiltersApplyBtn"]');
-            if (moreFiltersApplyBtn) {
-                moreFiltersApplyBtn.click();
+            // Select .op-select-filters clickable
+            const moreFilters = document.querySelector('.op-select-filters.clickable');
+            if (moreFilters) {
+                moreFilters.click();
             }
-        } else {
-            moreFilters.click();
-        }
 
-        // Now click on the serial number filter
-        const serialNumberFilter = document.querySelector('[c-id="serialNumberFilter"]');
-        if (serialNumberFilter) {
-            serialNumberFilter.click();
-        }
+            // Now select and enable Serial Number and click apply
+            const serialNumberOption = document.querySelector('.option.m-menu-item input[c-id="serialNumberOption"]');
+            
+            // If it exists and is not checked, click on it
+            if (serialNumberOption && !serialNumberOption.checked) {
+                serialNumberOption.click();
 
-        // Now enter number in serialNumberInput
-        const serialNumberInput = document.querySelector('[c-id="serialNumberInput"]');
-        if (serialNumberInput) {
-            serialNumberInput.value = savedSerialNumber;
-        }
+                // Now click on Apply
+                const moreFiltersApplyBtn = document.querySelector('[c-id="moreFiltersApplyBtn"]');
+                if (moreFiltersApplyBtn) {
+                    moreFiltersApplyBtn.click();
+                }
+            } else {
+                moreFilters.click();
+            }
 
-        // Now apply serialNumberApplyBtn
-        const serialNumberApplyBtn = document.querySelector('[c-id="serialNumberApplyBtn"]');
-        if (serialNumberApplyBtn) {
-            serialNumberApplyBtn.click();
-        }
+            // Now click on the serial number filter
+            const serialNumberFilter = document.querySelector('[c-id="serialNumberFilter"]');
+            if (serialNumberFilter) {
+                serialNumberFilter.click();
+            }
 
-        // Repeativly check for menu-wrapper for 6 seconds
-        var counter = 0;
-        var intervalId = setInterval(function() {
-            const minerGrid = document.querySelector('#minerGrid');
-            if (minerGrid) {
-                const rows = minerGrid.querySelectorAll('tr.k-master-row');
-                rows.forEach(row => {
-                    const serialNumber = row.querySelector('td[role="gridcell"]:nth-child(2)');
-                    const uid = row.getAttribute('data-uid');
+            // Now enter number in serialNumberInput
+            const serialNumberInput = document.querySelector('[c-id="serialNumberInput"]');
+            if (serialNumberInput) {
+                serialNumberInput.value = savedSerialNumber;
+            }
 
-                    if (serialNumber && uid) {
-                        console.log(serialNumber.textContent);
-                        console.log(uid);
-                        //menu-wrapper
-                        let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
-                        if (minerLinkElement) {
-                            let minerID = minerLinkElement.getAttribute('data-miner-id');
-                            clearInterval(intervalId);
+            // Now apply serialNumberApplyBtn
+            const serialNumberApplyBtn = document.querySelector('[c-id="serialNumberApplyBtn"]');
+            if (serialNumberApplyBtn) {
+                serialNumberApplyBtn.click();
+            }
 
-                            // Open link in new tab
-                            GM_SuperValue.set("serialNumberInputted", "");
-                            window.location.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                            return;
+            // Repeativly check for menu-wrapper for 6 seconds
+            var counter = 0;
+            var intervalId = setInterval(function() {
+                const minerGrid = document.querySelector('#minerGrid');
+                if (minerGrid) {
+                    const rows = minerGrid.querySelectorAll('tr.k-master-row');
+                    rows.forEach(row => {
+                        const serialNumber = row.querySelector('td[role="gridcell"]:nth-child(2)');
+                        const uid = row.getAttribute('data-uid');
+
+                        if (serialNumber && uid) {
+                            console.log(serialNumber.textContent);
+                            console.log(uid);
+                            //menu-wrapper
+                            let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
+                            if (minerLinkElement) {
+                                let minerID = minerLinkElement.getAttribute('data-miner-id');
+                                clearInterval(intervalId);
+
+                                // Open link in new tab
+                                GM_SuperValue.set("serialNumberInputted", "");
+                                window.location.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                                return;
+                            }
                         }
-                    }
-                });
-            }
-            counter++;
-            if (counter === 12) {
-                clearInterval(intervalId);
-            }
-        }, 1000);
+                    });
+                }
+                counter++;
+                if (counter === 12) {
+                    clearInterval(intervalId);
+                }
+            }, 1000);
 
-        serialInputted = "";
+            serialInputted = "";
+        }, 500);
     }
 }
 
@@ -847,7 +849,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                     if (Object.keys(minersToSearch).length === 0) {
                         clearInterval(checkInterval);
                         
-                        
                         // Create a popup element for showing the results
                         const popupResultElement = document.createElement('div');
                         popupResultElement.innerHTML = `
@@ -868,7 +869,9 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                                     <table style="width: 100%;">
                                         <thead>
                                             <tr>
-                                                <th style="padding: 10px;">Reboot Count</th>
+                                                <th style="padding: 10px;">Down Count</th>
+                                                <th style="padding: 10px;">Status</th>
+                                                <th style="padding: 10px;">Error</th>
                                                 <th style="padding: 10px;">Serial Number</th>
                                             </tr>
                                         </thead>
@@ -908,6 +911,8 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                             const row = document.createElement('tr');
                             row.innerHTML = `
                                 <td style="padding: 10px; color: white;">${rebootCount}</td>
+                                <td style="padding: 10px;">'Test'}</td>
+                                <td style="padding: 10px;">'Test'}</td>
                                 <td style="padding: 10px;"><a href="${minerLink}" target="_blank" style="color: white;">${serialNumber}</a></td>
                             `;
                             popupTableBody.appendChild(row);
@@ -969,7 +974,12 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     const originalLength = GM_SuperValue.get('getRebootsForLength', 0);
     const minerSerialNumber = minersToSearch[minerID];
     const isScanning = minerSerialNumber !== undefined;
-    
+
+    var progressFill;
+    var scanningText;
+    var scanningInterval;
+    var percentageText;
+
     if(isScanning) {
         // Find and remove ticket-details-column
         const ticketDetailsColumn = document.querySelector('.ticket-details-column');
@@ -1001,7 +1011,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         progressBar.style.border = '4px solid black';
         scanningElement.appendChild(progressBar);
 
-        const progressFill = document.createElement('div');
+        progressFill = document.createElement('div');
         progressFill.style.width = '0%';
         progressFill.style.height = '100%';
         progressFill.style.backgroundColor = 'green';
@@ -1009,26 +1019,37 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         progressBar.appendChild(progressFill);
         
         // Add Scanning text below the progress bar
-        const scanningText = document.createElement('div');
+        scanningText = document.createElement('div');
         scanningText.textContent = 'Scanning';
         scanningText.style.marginTop = '10px';
         scanningText.style.textAlign = 'left';
         scanningElement.appendChild(scanningText);
 
-        // Animate the ... cycling
+        // Animate the dots cycling
         let dots = 0;
-        const scanningInterval = setInterval(() => {
+        scanningInterval = setInterval(() => {
             dots = (dots + 1) % 4;
             scanningText.textContent = 'Scanning' + '.'.repeat(dots);
         }, 500);
-        
+
+        // Add percentage text above the progress bar starting from left side
+        percentageText = document.createElement('div');
+        percentageText.textContent = '0%';
+        percentageText.style.position = 'absolute';
+        percentageText.style.left = '10px';
+        percentageText.style.top = '10px';
+        percentageText.style.color = 'white';
+        percentageText.style.fontSize = '1em';
+        progressBar.appendChild(percentageText);
+
 
         // Calculate the progress percentage
         const totalMinersLeft = Object.keys(minersToSearch).length;
         const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
 
-        // Update the progress bar fill
+        // Update the progress bar fill and percentage text
         progressFill.style.width = progressPercentage + '%';
+        percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + (originalLength - totalMinersLeft) + '/' + originalLength + ')';
     }
     
     // Get the current saved reboot counts
@@ -1078,6 +1099,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             }
 
             if(isScanning) {
+                /*
                 // Update the reboot counts
                 GM_SuperValue.set('rebootCounts', JSON.stringify(rebootCounts));
 
@@ -1085,8 +1107,9 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 const totalMinersLeft = Object.keys(minersToSearch).length;
                 const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
 
-                // Update the progress bar fill
+                // Update the progress bar fill and percentage text
                 progressFill.style.width = progressPercentage + '%';
+                percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + (originalLength - totalMinersLeft) + '/' + originalLength + ')';
 
                 // Open the next miner
                 const nextMinerID = Object.keys(minersToSearch)[0];
@@ -1106,6 +1129,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                         window.close();
                     }, 500);
                 }
+                    */
             } else {
 
                 // Add the reboot count to the page
