@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.7.1
+// @version      0.7.5
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -53,17 +53,31 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
+
+
             timeoutId = setTimeout(function() {
+                // Clean Shift and Enter
+                const originalSerialInputted = serialInputted;
+                serialInputted = serialInputted.replace(/Shift/g, '');
+                serialInputted = serialInputted.replace(/Enter/g, '');
+
+                // Count up how many times Shift is in the string and check if that many characters are in the cleaned string
+                const shiftCount = originalSerialInputted.split('Shift').length;
+                const serialInputtedNoNumbers = serialInputted.replace(/\d/g, '');
+                const shiftMatchCount = shiftCount === serialInputtedNoNumbers.length && shiftCount > 6;
+
+                console.log("No Numbers:", serialInputtedNoNumbers);
+                console.log("Original Serial Inputted:", originalSerialInputted);
+                console.log("Shift Count:", shiftCount);
+                console.log("Shift Match Count:", shiftMatchCount);
+
+
                 // Checks to see if there is Shift and Enter in the string, if not, stop
-                if (serialInputted.indexOf('Enter') === -1 || serialInputted.indexOf('Shift') === -1) {
-                    console.log("No Enter", serialInputted);
+                if ( !shiftMatchCount ) {
+                    console.log("No Enter/Shift or Low Length", serialInputted);
                     serialInputted = "";
                     return;
                 }
-
-                // Clean Shift and Enter
-                serialInputted = serialInputted.replace(/Shift/g, '');
-                serialInputted = serialInputted.replace(/Enter/g, '');
 
                 // Save the serial number to the storage
                 GM_SuperValue.set('serialNumberInputted', serialInputted);
@@ -814,13 +828,13 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         }
 
         // Save the idLookup object to local storage
-        GM_SuperValue.set('getRebootsFor', JSON.stringify(idLookup));
+        GM_SuperValue.set('getDownsFor', JSON.stringify(idLookup));
 
         // Save the length of the idLookup object to local storage
-        GM_SuperValue.set('getRebootsForLength', Object.keys(idLookup).length);
+        GM_SuperValue.set('getDownsForLength', Object.keys(idLookup).length);
 
         // Clear the previous reboot counts
-        GM_SuperValue.set('rebootCounts', '{}');
+        GM_SuperValue.set('downsCount', '{}');
 
         // Open a new tab to the first miner
         const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0] + "&active_tab=Activity";
@@ -830,101 +844,75 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     // Find the issuesActionsDropdown and add a new action
     var checkInterval;
     const interval = setInterval(() => {
-        const issuesActionsDropdown = document.getElementById('issuesActionsDropdown');
-        if (issuesActionsDropdown) {
+
+        // Make a second Actions button for different scan times
+        const actionsDropdown = document.querySelector('.op-dropdown')
+        if (actionsDropdown) {
             clearInterval(interval);
-            const newAction = document.createElement('div');
-            newAction.classList.add('m-menu-item');
-            newAction.textContent = 'Scan for Reboots';
-            newAction.onclick = function() {
-                if (checkInterval) {
-                    clearInterval(checkInterval);
-                }
 
-                getMinerSerialNumbers();
+            /* <div class="op-dropdown">
+            <button id="btnExport" type="button" class="m-button" onclick="issues.toggleDropdownMenu('issuesActionsDropdown'); return false;">
+            Actions
+                <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+        </button>
+        <div id="issuesActionsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
+            <div class="m-menu">
+                <div id="ContentPlaceHolder1_rebootActionsButton" class="m-menu-item" onclick="issues.rebootMiners()">
+                    Reboot
+                </div>
+                <div id="ContentPlaceHolder1_createTicketActionsButton" class="m-menu-item" onclick="issues.createTicket()">
+                    Create Ticket
+                </div>
+                <div class="m-menu-item" onclick="issues.exportToExcel()">
+                    Export XLSX
+                </div>
+            </div>
+        </div>
+    </div>*/
+            
+            // Create a new dropdown element
+            const newActionsDropdown = document.createElement('div');
+            newActionsDropdown.classList.add('op-dropdown');
+            newActionsDropdown.style.display = 'inline-block';
+            newActionsDropdown.innerHTML = `
+                <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('newActionsDropdown'); return false;">
+                    Down Scans (WIP)
+                    <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                </button>
+                <div id="newActionsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
+                    <div class="m-menu">
+                        <div class="m-menu-item" onclick="lastHourScan()">
+                            Scan Last Hour
+                        </div>
+                        <div class="m-menu-item" onclick="last4HourScan()">
+                            Scan Last 4 Hours
+                        </div>
+                        <div class="m-menu-item" onclick="last24HourScan()">
+                            Scan Last 24 Hours
+                        </div>
+                        <div class="m-menu-item" onclick="last7DayScan()">
+                            Scan Last 7 Days
+                        </div>
+                        <div class="m-menu-item" onclick="last30DayScan()">
+                            Scan Last 30 Days
+                        </div>
+                    </div>
+                </div>
+            `;
 
-                // Repeativly check if getRebootsFor is empty
-                checkInterval = setInterval(() => {
-                    const minersToSearch = JSON.parse(GM_SuperValue.get('getRebootsFor', '{}'));
-                    if (Object.keys(minersToSearch).length === 0) {
-                        clearInterval(checkInterval);
-                        
-                        // Create a popup element for showing the results
-                        const popupResultElement = document.createElement('div');
-                        popupResultElement.innerHTML = `
-                            <div style="
-                                position: fixed;
-                                top: 50%;
-                                left: 50%;
-                                transform: translate(-50%, -50%);
-                                background-color: #333;
-                                color: white;
-                                padding: 20px;
-                                font-family: Arial, sans-serif;
-                                border-radius: 5px;
-                                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-                            ">
-                                <h1 style="text-align: center; margin-bottom: 20px;">Reboot Count</h1>
-                                <div style="max-height: 400px; overflow-y: auto;">
-                                    <table style="width: 100%;">
-                                        <thead>
-                                            <tr>
-                                                <th style="padding: 10px;">Down Count</th>
-                                                <th style="padding: 10px;">Status</th>
-                                                <th style="padding: 10px;">Error</th>
-                                                <th style="padding: 10px;">Serial Number</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                        </tbody>
-                                    </table>
-                                </div>
+            // Put the new dropdown before the original dropdown
+            actionsDropdown.before(newActionsDropdown);
 
-                                <button id="closePopup" style="
-                                    padding: 10px 20px;
-                                    background-color: #555;
-                                    color: white;
-                                    border: none;
-                                    cursor: pointer;
-                                    margin-top: 10px;
-                                    border-radius: 3px;
-                                ">Close</button>
-                            </div>
-                        `;
+            // Add the new scan functions
+            lastHourScan = function() {
+                console.log("Scanning Last Hour");
+                //getMinerSerialNumbers();
+            }
+            
 
-                        const closePopupButton = popupResultElement.querySelector('#closePopup');
-                        closePopupButton.onclick = function() {
-                            popupResultElement.remove();
-                        };
-
-                        document.body.appendChild(popupResultElement);
-
-                        // Order the reboot counts by the count
-                        const rebootCounts = JSON.parse(GM_SuperValue.get('rebootCounts', '{}'));
-                        const orderedRebootCounts = Object.entries(rebootCounts).sort((a, b) => b[1] - a[1]);
-
-                        // Loop through the ordered reboot counts and add them to the popup
-                        const popupTableBody = popupResultElement.querySelector('tbody');
-                        orderedRebootCounts.forEach(([minerID, rebootCount]) => {
-                            const serialNumber = idLookup[minerID];
-                            const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                            const row = document.createElement('tr');
-                            row.innerHTML = `
-                                <td style="padding: 10px; color: white;">${rebootCount}</td>
-                                <td style="padding: 10px;">'Test'}</td>
-                                <td style="padding: 10px;">'Test'}</td>
-                                <td style="padding: 10px;"><a href="${minerLink}" target="_blank" style="color: white;">${serialNumber}</a></td>
-                            `;
-                            popupTableBody.appendChild(row);
-                        });
-                    }
-                }, 500);
-            };
-            issuesActionsDropdown.querySelector('.m-menu').appendChild(newAction);
-        } else {
-            console.log('issuesActionsDropdown not found');
         }
-    }, 500);
+        
+    }, 1000);
 } else if(currentUrl.includes("https://foundryoptifleet.com/Content/Miners/IndividualMiner")) {
     
     function addDataBox(title, data, updateFunc, updateInterval) {
@@ -970,8 +958,8 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     
     
     const minerID = currentUrl.match(/id=(\d+)/)[1];
-    const minersToSearch = JSON.parse(GM_SuperValue.get('getRebootsFor', '{}'));
-    const originalLength = GM_SuperValue.get('getRebootsForLength', 0);
+    const minersToSearch = JSON.parse(GM_SuperValue.get('getDownsFor', '{}'));
+    const originalLength = GM_SuperValue.get('getDownsForLength', 0);
     const minerSerialNumber = minersToSearch[minerID];
     const isScanning = minerSerialNumber !== undefined;
 
@@ -1053,7 +1041,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     }
     
     // Get the current saved reboot counts
-    var rebootCounts = JSON.parse(GM_SuperValue.get('rebootCounts', '{}'));
+    var downsCount = JSON.parse(GM_SuperValue.get('downsCount', '{}'));
 
     // Wait for the miner activity list to exist and be fully loaded
     const waitForMinerActivityList = setInterval(() => {
@@ -1071,7 +1059,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 delete minersToSearch[minerID];
 
                 // Save the updated list to local storage
-                GM_SuperValue.set('getRebootsFor', JSON.stringify(minersToSearch));
+                GM_SuperValue.set('getDownsFor', JSON.stringify(minersToSearch));
             }
 
             var lastRebootTime;
@@ -1093,15 +1081,15 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                     }
                 });
 
-                rebootCounts[minerID] = reboots.length;
+                downsCount[minerID] = reboots.length;
             } else {
-                rebootCounts[minerID] = 'Error';
+                downsCount[minerID] = 'Error';
             }
 
             if(isScanning) {
                 /*
                 // Update the reboot counts
-                GM_SuperValue.set('rebootCounts', JSON.stringify(rebootCounts));
+                GM_SuperValue.set('downsCount', JSON.stringify(downsCount));
 
                 // Recalculate the progress percentage
                 const totalMinersLeft = Object.keys(minersToSearch).length;
