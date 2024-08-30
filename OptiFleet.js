@@ -1,15 +1,15 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.7.5
+// @version      0.8
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
 // @match        *://tasks.office.com/foundrydigital.com/*
 // @match        *://foundrydigitalllc.sharepoint.com/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
-// @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet
-// @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet
+// @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
+// @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
@@ -66,15 +66,15 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
                 const serialInputtedNoNumbers = serialInputted.replace(/\d/g, '');
                 const shiftMatchCount = shiftCount === serialInputtedNoNumbers.length && shiftCount > 6;
 
-                console.log("No Numbers:", serialInputtedNoNumbers);
-                console.log("Original Serial Inputted:", originalSerialInputted);
-                console.log("Shift Count:", shiftCount);
-                console.log("Shift Match Count:", shiftMatchCount);
+                //console.log("No Numbers:", serialInputtedNoNumbers);
+                //console.log("Original Serial Inputted:", originalSerialInputted);
+                //console.log("Shift Count:", shiftCount);
+                //console.log("Shift Match Count:", shiftMatchCount);
 
 
                 // Checks to see if there is Shift and Enter in the string, if not, stop
                 if ( !shiftMatchCount ) {
-                    console.log("No Enter/Shift or Low Length", serialInputted);
+                    //console.log("No Enter/Shift or Low Length", serialInputted);
                     serialInputted = "";
                     return;
                 }
@@ -93,7 +93,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
     if (savedSerialNumber !== '') {
         // Find ddlZones_listbox and select All Sites
         const ddlZones = document.querySelector('#ddlZones');
-        console.log("Going to click on ddlZones");
         setTimeout(() => {
             if (ddlZones) {
                 ddlZones.click();
@@ -158,8 +157,8 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
                         const uid = row.getAttribute('data-uid');
 
                         if (serialNumber && uid) {
-                            console.log(serialNumber.textContent);
-                            console.log(uid);
+                            //console.log(serialNumber.textContent);
+                            //console.log(uid);
                             //menu-wrapper
                             let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
                             if (minerLinkElement) {
@@ -238,7 +237,6 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         tempTextArea.select();
         document.execCommand('copy');
         document.body.removeChild(tempTextArea);
-        console.log("Copied content:", text);
     }
 
     // Clean Text fuction
@@ -278,15 +276,11 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         let cleanedText = cleanText(clone.innerText);
 
         function parseMinerDetails(text) {
-            console.log(text);
             const details = {};
-
             const minerDetailsText = text.trim().split('\n');
-            console.log(minerDetailsText);
 
             var lastKey = "";
             for (let i = 0; i < minerDetailsText.length; i++) {
-                console.log(minerDetailsText[i]);
 
                 const key = minerDetailsText[i].trim();
                 if (i + 1 < minerDetailsText.length && key.length > 2 && key != lastKey) {
@@ -303,7 +297,6 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         }
 
         const minerDetails = parseMinerDetails(cleanedText);
-        console.log(minerDetails);
 
         minerDetails['type'] = type;
         minerDetails['issue'] = issue;
@@ -542,8 +535,6 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
     });
 } else if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
 
-    console.log("Running on SharePoint");
-
     // If there is a taskName/Notes in storage, then create a overlay on the right side of the page that says Go to Planner
     const taskName = GM_SuperValue.get("taskName", "");
     const detailsData = GM_SuperValue.get("detailsData", {});
@@ -586,7 +577,6 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
     }
 
 } else if (currentUrl.includes("tasks.office.com/foundrydigital.com/")) {
-    console.log("Script Started");
 
     const taskName = GM_SuperValue.get("taskName", "");
     if (taskName === "") {
@@ -635,13 +625,11 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
                 const addTaskButton = document.querySelector('.addTaskButton');
                 if (addTaskButton) {
                     addTaskButton.click();
-                    console.log('Clicked add task button.');
 
                     // Locate the new element with the inputted text
                     setTimeout(() => {
                         const newElement = document.querySelector(`[aria-label="${taskName}"]`);
                         if (newElement) {
-                            console.log('New element found:', newElement);
                             // Click the element
                             newElement.click();
 
@@ -658,7 +646,6 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
 
                                     // Insert the text into the notes editor
                                     document.execCommand('insertText', false, taskNotes);
-                                    console.log('Inserted text into notes editor.');
 
                                     // Now lets add the comment to the task for the log
                                     const commentField = document.querySelector('textarea[aria-label="New comment"]');
@@ -666,14 +653,12 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
                                         commentField.click();
                                         commentField.focus();
                                         document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
-                                        console.log('Inserted text into comment field.');
                                     }
 
                                     // Now find the send button and click it
                                     const sendButton = document.querySelector('.sendCommentButton');
                                     if (sendButton) {
                                         sendButton.click();
-                                        console.log('Clicked send button.');
 
                                         // We'll now reset the taskName and taskNotes values
                                         GM_SuperValue.set("taskName", "");
@@ -704,9 +689,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
     var hasClicked = false;
     function clickAddTaskButton() {
         if(hasClicked) { return; }
-        console.log("Attempting to click.");
         const headers = document.querySelectorAll('.columnTitle');
-        console.log('Headers found:', headers.length);
 
         const header = Array.from(headers).find(el => el.textContent.trim() === 'Diagnosed');
 
@@ -746,7 +729,6 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
             console.log('Header with title "TestName" not found.');
         }
 
-        console.log("Click Attempted...");
         return false; // Keep observing for further mutations
     }
 
@@ -802,7 +784,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
 if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
     // Function that gets all the miner serial numbers
-    var idLookup = {};
+    var idLookup = false;
     function getMinerSerialNumbers() {
         idLookup = {};
         const minerGrid = document.querySelector('#minerList');
@@ -837,8 +819,28 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         GM_SuperValue.set('downsCount', '{}');
 
         // Open a new tab to the first miner
-        const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0] + "&active_tab=Activity";
+        const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0];
         window.open(fistLink, 'Collecting Data...');
+
+        function makeHttpObject() {
+            try {return new XMLHttpRequest();}
+            catch (error) {}
+            try {return new ActiveXObject("Msxml2.XMLHTTP");}
+            catch (error) {}
+            try {return new ActiveXObject("Microsoft.XMLHTTP");}
+            catch (error) {}
+            
+            throw new Error("Could not create HTTP request object.");
+        }
+        /*
+        var request = makeHttpObject();
+        request.open("GET", fistLink, true);
+        request.send(null);
+        request.onreadystatechange = function() {
+        if (request.readyState == 4)
+            console.log(request.responseText);
+        };
+        */
     }
 
     // Find the issuesActionsDropdown and add a new action
@@ -850,26 +852,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         if (actionsDropdown) {
             clearInterval(interval);
 
-            /* <div class="op-dropdown">
-            <button id="btnExport" type="button" class="m-button" onclick="issues.toggleDropdownMenu('issuesActionsDropdown'); return false;">
-            Actions
-                <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-        </button>
-        <div id="issuesActionsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
-            <div class="m-menu">
-                <div id="ContentPlaceHolder1_rebootActionsButton" class="m-menu-item" onclick="issues.rebootMiners()">
-                    Reboot
-                </div>
-                <div id="ContentPlaceHolder1_createTicketActionsButton" class="m-menu-item" onclick="issues.createTicket()">
-                    Create Ticket
-                </div>
-                <div class="m-menu-item" onclick="issues.exportToExcel()">
-                    Export XLSX
-                </div>
-            </div>
-        </div>
-    </div>*/
-            
             // Create a new dropdown element
             const newActionsDropdown = document.createElement('div');
             newActionsDropdown.classList.add('op-dropdown');
@@ -905,14 +887,138 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
             // Add the new scan functions
             lastHourScan = function() {
-                console.log("Scanning Last Hour");
-                //getMinerSerialNumbers();
-            }
-            
+                // Close the dropdown
+                issues.toggleDropdownMenu('newActionsDropdown');
 
+                // Set that we're checking for last hour
+                GM_SuperValue.set('downsForTime', 'Last 1 Hour');
+
+                getMinerSerialNumbers();
+            }
+
+            last4HourScan = function() {
+                // Close the dropdown
+                issues.toggleDropdownMenu('newActionsDropdown');
+
+                // Set that we're checking for last 4 hours
+                GM_SuperValue.set('downsForTime', 'Last 4 Hours');
+
+                getMinerSerialNumbers();
+            }
+        
+            last24HourScan = function() {
+                // Close the dropdown
+                issues.toggleDropdownMenu('newActionsDropdown');
+
+                // Set that we're checking for last 24 hours
+                GM_SuperValue.set('downsForTime', 'Last 24 Hours');
+
+                getMinerSerialNumbers();
+            }
+
+            last7DayScan = function() {
+                // Close the dropdown
+                issues.toggleDropdownMenu('newActionsDropdown');
+
+                // Set that we're checking for last 7 days
+                GM_SuperValue.set('downsForTime', 'Last 7 Days');
+
+                getMinerSerialNumbers();
+            }
+
+            last30DayScan = function() {
+                // Close the dropdown
+                issues.toggleDropdownMenu('newActionsDropdown');
+
+                // Set that we're checking for last 30 days
+                GM_SuperValue.set('downsForTime', 'Last 30 Days');
+
+                getMinerSerialNumbers();
+            }
         }
         
     }, 1000);
+
+    // Repeativly check if getRebootsFor is empty
+    var popupResultElement;
+    var checkInterval = setInterval(() => {
+        const minersToSearch = JSON.parse(GM_SuperValue.get('getDownsFor', '{}'));
+        const rebootCounts = JSON.parse(GM_SuperValue.get('downsCount', '{}'));
+        if (Object.keys(minersToSearch).length === 0 && Object.keys(rebootCounts).length > 0 && !popupResultElement && idLookup) {
+
+            // Reset the reboot counts
+            GM_SuperValue.set('downsCount', '{}');
+
+            // Time frame
+            const scanTimeFrame = GM_SuperValue.get('downsForTime', '');
+            
+            
+            // Create a popup element for showing the results
+            popupResultElement = document.createElement('div');
+            popupResultElement.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background-color: #333;
+                    color: white;
+                    padding: 20px;
+                    font-family: Arial, sans-serif;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+                ">
+                    <h1 style="text-align: center; margin-bottom: 20px;">Offline Count List (${scanTimeFrame})</h1>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        <table style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="padding: 10px;">Offline Count</th>
+                                    <th style="padding: 10px;">Serial Number</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <button id="closePopup" style="
+                        padding: 10px 20px;
+                        background-color: #555;
+                        color: white;
+                        border: none;
+                        cursor: pointer;
+                        margin-top: 10px;
+                        border-radius: 3px;
+                    ">Close</button>
+                </div>
+            `;
+
+            const closePopupButton = popupResultElement.querySelector('#closePopup');
+            closePopupButton.onclick = function() {
+                popupResultElement.remove();
+                popupResultElement = null;
+            };
+
+            document.body.appendChild(popupResultElement);
+
+            // Order the reboot counts by the count
+            const orderedRebootCounts = Object.entries(rebootCounts).sort((a, b) => b[1] - a[1]);
+
+            // Loop through the ordered reboot counts and add them to the popup
+            const popupTableBody = popupResultElement.querySelector('tbody');
+            orderedRebootCounts.forEach(([minerID, rebootCount]) => {
+                const serialNumber = idLookup[minerID];
+                const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td style="padding: 10px; color: white;">${rebootCount}</td>
+                    <td style="padding: 10px;"><a href="${minerLink}" target="_blank" style="color: white;">${serialNumber}</a></td>
+                `;
+                popupTableBody.appendChild(row);
+            });
+        }
+    }, 500);
 } else if(currentUrl.includes("https://foundryoptifleet.com/Content/Miners/IndividualMiner")) {
     
     function addDataBox(title, data, updateFunc, updateInterval) {
@@ -961,12 +1067,215 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     const minersToSearch = JSON.parse(GM_SuperValue.get('getDownsFor', '{}'));
     const originalLength = GM_SuperValue.get('getDownsForLength', 0);
     const minerSerialNumber = minersToSearch[minerID];
-    const isScanning = minerSerialNumber !== undefined;
+    const isScanning = minerSerialNumber !== undefined
+
+    // Get the time frame for the scan
+    const scanTimeFrame = GM_SuperValue.get('downsForTime', '');
+
+    /*
+    <div id="reportrange" class="m-box" style="max-width: 22rem; padding: .4rem">
+        <div class="m-stack is-horizontal has-space-between">
+            <m-icon name="calendar" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+            <span class="text m-text is-accent">Last 24 Hours</span>
+            <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+        </div>
+    </div>
+
+    <div class="daterangepicker ltr show-ranges show-calendar opensleft" style="display: block; top: 32.2786px; left: auto; right: -0.0211092px;">
+            <div class="ranges"><ul><li data-range-key="Last 15 minutes" class="m-text is-size-xs">Last 15 minutes</li><li data-range-key="Last 30 minutes" class="m-text is-size-xs">Last 30 minutes</li><li data-range-key="Last 1 Hour" class="m-text is-size-xs">Last 1 Hour</li><li data-range-key="Last 4 Hours" class="m-text is-size-xs">Last 4 Hours</li><li data-range-key="Last 24 Hours" class="m-text is-size-xs active">Last 24 Hours</li><li data-range-key="Last 7 Days" class="m-text is-size-xs">Last 7 Days</li><li data-range-key="Last 30 Days" class="m-text is-size-xs">Last 30 Days</li><li data-range-key="Custom Range" class="m-text is-size-xs">Custom Range</li></ul></div>
+            <div class="drp-calendar left">
+            <div class="calendar-table"><table class="table-condensed"><thead><tr><th class="prev available"><m-icon class="m-button-icon" name="chevron-left" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon></th><th colspan="5" class="month m-heading">Jul 2024</th><th></th></tr><tr><th class="m-heading">Su</th><th class="m-heading">Mo</th><th class="m-heading">Tu</th><th class="m-heading">We</th><th class="m-heading">Th</th><th class="m-heading">Fr</th><th class="m-heading">Sa</th></tr></thead><tbody><tr><td class="m-text weekend off ends available" data-title="r0c0">30</td><td class="m-text available" data-title="r0c1">1</td><td class="m-text available" data-title="r0c2">2</td><td class="m-text available" data-title="r0c3">3</td><td class="m-text available" data-title="r0c4">4</td><td class="m-text available" data-title="r0c5">5</td><td class="m-text weekend available" data-title="r0c6">6</td></tr><tr><td class="m-text weekend available" data-title="r1c0">7</td><td class="m-text available" data-title="r1c1">8</td><td class="m-text available" data-title="r1c2">9</td><td class="m-text available" data-title="r1c3">10</td><td class="m-text available" data-title="r1c4">11</td><td class="m-text available" data-title="r1c5">12</td><td class="m-text weekend available" data-title="r1c6">13</td></tr><tr><td class="m-text weekend available" data-title="r2c0">14</td><td class="m-text available" data-title="r2c1">15</td><td class="m-text available" data-title="r2c2">16</td><td class="m-text available" data-title="r2c3">17</td><td class="m-text available" data-title="r2c4">18</td><td class="m-text available" data-title="r2c5">19</td><td class="m-text weekend available" data-title="r2c6">20</td></tr><tr><td class="m-text weekend available" data-title="r3c0">21</td><td class="m-text available" data-title="r3c1">22</td><td class="m-text available" data-title="r3c2">23</td><td class="m-text available" data-title="r3c3">24</td><td class="m-text available" data-title="r3c4">25</td><td class="m-text available" data-title="r3c5">26</td><td class="m-text weekend available" data-title="r3c6">27</td></tr><tr><td class="m-text weekend available" data-title="r4c0">28</td><td class="m-text available" data-title="r4c1">29</td><td class="m-text available" data-title="r4c2">30</td><td class="m-text available" data-title="r4c3">31</td><td class="m-text off ends available" data-title="r4c4">1</td><td class="m-text off ends available" data-title="r4c5">2</td><td class="m-text weekend off ends available" data-title="r4c6">3</td></tr><tr><td class="m-text weekend off ends available" data-title="r5c0">4</td><td class="m-text off ends available" data-title="r5c1">5</td><td class="m-text off ends available" data-title="r5c2">6</td><td class="m-text off ends available" data-title="r5c3">7</td><td class="m-text off ends available" data-title="r5c4">8</td><td class="m-text off ends available" data-title="r5c5">9</td><td class="m-text weekend off ends available" data-title="r5c6">10</td></tr></tbody></table></div>
+            <div class="calendar-time"><div class="m-select"><select class="hourselect"><option value="1" selected="selected">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div> : <div class="m-select"><select class="minuteselect"><option value="0">00</option><option value="5">05</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50">50</option><option value="55">55</option></select></div> <div class="m-select"><select class="ampmselect"><option value="AM" selected="selected">AM</option><option value="PM">PM</option></select></div></div>
+        </div>
+        <div class="drp-calendar right">
+            <div class="calendar-table"><table class="table-condensed"><thead><tr><th></th><th colspan="5" class="month m-heading">Aug 2024</th><th></th></tr><tr><th class="m-heading">Su</th><th class="m-heading">Mo</th><th class="m-heading">Tu</th><th class="m-heading">We</th><th class="m-heading">Th</th><th class="m-heading">Fr</th><th class="m-heading">Sa</th></tr></thead><tbody><tr><td class="m-text weekend off ends available" data-title="r0c0">28</td><td class="m-text off ends available" data-title="r0c1">29</td><td class="m-text off ends available" data-title="r0c2">30</td><td class="m-text off ends available" data-title="r0c3">31</td><td class="m-text available" data-title="r0c4">1</td><td class="m-text available" data-title="r0c5">2</td><td class="m-text weekend available" data-title="r0c6">3</td></tr><tr><td class="m-text weekend available" data-title="r1c0">4</td><td class="m-text available" data-title="r1c1">5</td><td class="m-text available" data-title="r1c2">6</td><td class="m-text available" data-title="r1c3">7</td><td class="m-text available" data-title="r1c4">8</td><td class="m-text available" data-title="r1c5">9</td><td class="m-text weekend available" data-title="r1c6">10</td></tr><tr><td class="m-text weekend available" data-title="r2c0">11</td><td class="m-text available" data-title="r2c1">12</td><td class="m-text available" data-title="r2c2">13</td><td class="m-text available" data-title="r2c3">14</td><td class="m-text available" data-title="r2c4">15</td><td class="m-text available" data-title="r2c5">16</td><td class="m-text weekend available" data-title="r2c6">17</td></tr><tr><td class="m-text weekend available" data-title="r3c0">18</td><td class="m-text available" data-title="r3c1">19</td><td class="m-text available" data-title="r3c2">20</td><td class="m-text available" data-title="r3c3">21</td><td class="m-text available" data-title="r3c4">22</td><td class="m-text available" data-title="r3c5">23</td><td class="m-text weekend available" data-title="r3c6">24</td></tr><tr><td class="m-text weekend available" data-title="r4c0">25</td><td class="m-text available" data-title="r4c1">26</td><td class="m-text available" data-title="r4c2">27</td><td class="m-text available" data-title="r4c3">28</td><td class="m-text active start-date available" data-title="r4c4">29</td><td class="m-text today active end-date in-range available" data-title="r4c5">30</td><td class="m-text weekend off disabled" data-title="r4c6">31</td></tr><tr><td class="m-text weekend off ends off disabled" data-title="r5c0">1</td><td class="m-text off ends off disabled" data-title="r5c1">2</td><td class="m-text off ends off disabled" data-title="r5c2">3</td><td class="m-text off ends off disabled" data-title="r5c3">4</td><td class="m-text off ends off disabled" data-title="r5c4">5</td><td class="m-text off ends off disabled" data-title="r5c5">6</td><td class="m-text weekend off ends off disabled" data-title="r5c6">7</td></tr></tbody></table></div>
+            <div class="calendar-time"><div class="m-select"><select class="hourselect"><option value="1" selected="selected">1</option><option value="2" disabled="disabled" class="disabled">2</option><option value="3" disabled="disabled" class="disabled">3</option><option value="4" disabled="disabled" class="disabled">4</option><option value="5" disabled="disabled" class="disabled">5</option><option value="6" disabled="disabled" class="disabled">6</option><option value="7" disabled="disabled" class="disabled">7</option><option value="8" disabled="disabled" class="disabled">8</option><option value="9" disabled="disabled" class="disabled">9</option><option value="10" disabled="disabled" class="disabled">10</option><option value="11" disabled="disabled" class="disabled">11</option><option value="12">12</option></select></div> : <div class="m-select"><select class="minuteselect"><option value="0">00</option><option value="5">05</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50" disabled="disabled" class="disabled">50</option><option value="55" disabled="disabled" class="disabled">55</option></select></div> <div class="m-select"><select class="ampmselect"><option value="AM" selected="selected">AM</option><option value="PM">PM</option></select></div></div>
+        </div>
+        <div class="drp-buttons">
+            <div class="m-stack is-horizontal is-align-center">
+                <span class="drp-selected m-text is-size-s">08/29/2024 1:46am - 08/30/2024 1:46am</span>
+                <div class="m-form-group is-grouped-right">
+                    <button class="cancelBtn m-button is-ghost btn btn-sm btn-default" type="button">Cancel</button>
+                    <button class="applyBtn m-button is-primary btn btn-sm btn-primary" type="button">Apply</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    */
+
+    // Select time frame if it is not selected
+    var waitNextTimeFrameChange = false;
+    if (isScanning) {
+        setInterval(() => {
+            // Find the reportrange element
+            const reportRange = document.getElementById('reportrange');
+
+            // Check if the reportrange element exists
+            if (reportRange) {
+                // Check if the reportrange text content is the same as the scanTimeFrame
+                if (reportRange.textContent.trim() !== scanTimeFrame) {
+                    // Click the reportrange element to open the dropdown
+                    reportRange.click();
+
+                    // Find the date range element
+                    const dateRange = document.querySelector('.daterangepicker');
+
+                    // Check if the date range element exists
+                    if (dateRange) {
+                        // Find the range that matches the scanTimeFrame
+                        const range = dateRange.querySelector(`li[data-range-key="${scanTimeFrame}"]`);
+
+                        // Check if the range exists
+                        if (range) {
+                            // Click the range to select it
+                            waitNextTimeFrameChange = true;
+                            range.click();
+                        }
+                    }
+                }
+            }
+        }, 1); // Change the interval time (in milliseconds) as needed
+    }
 
     var progressFill;
     var scanningText;
     var scanningInterval;
     var percentageText;
+
+    function parsePathData(d) {
+        const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
+        let currentY = 0;
+        let topY = Number.POSITIVE_INFINITY;
+        let bottomY = Number.NEGATIVE_INFINITY;
+        let downCounts = 0;
+        let upCounts = 0;
+        let lastY;
+    
+        commands.forEach(command => {
+            const type = command[0];
+            const values = command.slice(1).trim().split(/[\s,]+/).map(Number);
+            switch (type) {
+                case 'M':
+                case 'L':
+                    currentY = values[1];
+                    break;
+                case 'C':
+                    currentY = values[5];
+                    break;
+            }
+
+            if(currentY !== lastY) {
+                if(currentY > 0) { // Height changes, anything above 0 should always been it is down, since it is a binary on/off and I know 0 has to be on.
+                    downCounts++;
+                }
+                if(currentY === 0) {
+                    upCounts++;
+                }
+            }
+            lastY = currentY;
+        });
+    
+        return { downCounts, upCounts };
+    }
+    
+
+    const upTimeChart = document.querySelector('#uptimeChart');
+    var downCountBox;
+    var lastd = '';
+    const observer = new MutationObserver(() => {
+        const path = upTimeChart.querySelector('[id^="SvgjsPath"]');
+        if (path) {
+            const d = path.getAttribute('d');
+            console.log('d', d);
+
+            if (d === lastd) {
+                return;
+            }
+            lastd = d;
+            const result = parsePathData(d);
+
+            // Check if reportRange.textContent changes
+            const reportRange = document.getElementById('reportrange');
+            const timeSpan = reportRange.textContent.trim();
+
+            // Find the existing data box
+            if (downCountBox) {
+                // Update the range in the box
+                const h3 = downCountBox.querySelector('h3');
+                if (h3) {
+                    h3.textContent = 'Times Down (' + timeSpan + ')';
+                }
+
+                // Update the down times count
+                const p = downCountBox.querySelector('p');
+                if (p) {
+                    p.textContent = result.downCounts;
+                }
+            } else {
+                // Add the new data box to the page
+                downCountBox = addDataBox('Times Down (' + timeSpan + ')', result.downCounts);
+            }
+
+            // We're scanning and the timeSpan is the same as the scanTimeFrame
+            console.log('timeSpan', timeSpan, 'scanTimeFrame', scanTimeFrame);
+            if(isScanning && timeSpan === scanTimeFrame) {
+
+                // See if we should wait for the next time frame change (Fixes the issue where the data wasn't yet loaded correctly since last time frame was different)
+                if (waitNextTimeFrameChange) {
+                    waitNextTimeFrameChange = false;
+                    return;
+                }
+
+                // Test alert
+                //alert('Down Count: ' + result.downCounts);
+
+                // Remove this miner from the list
+                delete minersToSearch[minerID];
+
+                // Save the updated list to local storage
+                GM_SuperValue.set('getDownsFor', JSON.stringify(minersToSearch));
+                
+                // Update the down count
+                const downsCount = JSON.parse(GM_SuperValue.get('downsCount', '{}'));
+                downsCount[minerID] = result.downCounts;
+                GM_SuperValue.set('downsCount', JSON.stringify(downsCount));
+
+                // Recalculate the progress percentage
+                const totalMinersLeft = Object.keys(minersToSearch).length;
+                const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
+
+                // Update the progress bar fill and percentage text
+                progressFill.style.width = progressPercentage + '%';
+                percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + (originalLength - totalMinersLeft) + '/' + originalLength + ')';
+
+                // Open the next miner
+                const nextMinerID = Object.keys(minersToSearch)[0];
+                if (nextMinerID) {
+                    const nextLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + nextMinerID;
+                    window.location.href = nextLink;
+                } else {
+                    // Remove the scanning element
+                    clearInterval(scanningInterval);
+                    
+                    // Set the scanning text to "Finished"
+                    scanningText.textContent = 'Finished';
+
+                    // Close this page
+                    setTimeout(() => {
+
+                        GM_SuperValue.set("errorCount", 0);
+                        window.close();
+                    }, 500);
+                }
+                    
+            }
+        }
+    });
+    
+    observer.observe(upTimeChart, {
+        childList: true,
+        subtree: true
+    });
 
     if(isScanning) {
         // Find and remove ticket-details-column
@@ -1030,7 +1339,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         percentageText.style.fontSize = '1em';
         progressBar.appendChild(percentageText);
 
-
         // Calculate the progress percentage
         const totalMinersLeft = Object.keys(minersToSearch).length;
         const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
@@ -1040,9 +1348,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + (originalLength - totalMinersLeft) + '/' + originalLength + ')';
     }
     
-    // Get the current saved reboot counts
-    var downsCount = JSON.parse(GM_SuperValue.get('downsCount', '{}'));
-
+    
     // Wait for the miner activity list to exist and be fully loaded
     const waitForMinerActivityList = setInterval(() => {
         const minerActivityList = document.getElementById('miner-activity-list-IndividualMiner');
@@ -1054,16 +1360,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
             clearInterval(waitForMinerActivityList);
 
-            if(isScanning) {
-                // Remove this miner from the list
-                delete minersToSearch[minerID];
-
-                // Save the updated list to local storage
-                GM_SuperValue.set('getDownsFor', JSON.stringify(minersToSearch));
-            }
-
             var lastRebootTime;
-            //reboot initiated by dhernandez@foundrydigital.com  9:34:55 AM    8/23/24
             const reboots = [];
             if(!pastMaxErrors) {
                 // Loop through the activity list and find the reboots
@@ -1076,161 +1373,33 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                             const time = cell.textContent.match(/(\d{1,2}:\d{1,2}:\d{1,2} [AP]M)/);
                             const date = cell.textContent.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
                             lastRebootTime = new Date(date[0] + ' ' + time[0]);
-                            console.log(lastRebootTime);
                         }
                     }
                 });
 
-                downsCount[minerID] = reboots.length;
+                //downsCount[minerID] = reboots.length;
             } else {
-                downsCount[minerID] = 'Error';
+                //downsCount[minerID] = 'Error';
             }
+      
+            // Add the reboot count to the page
+            addDataBox('Reboot Count (Activity Log)', reboots.length);
 
-            if(isScanning) {
-                /*
-                // Update the reboot counts
-                GM_SuperValue.set('downsCount', JSON.stringify(downsCount));
-
-                // Recalculate the progress percentage
-                const totalMinersLeft = Object.keys(minersToSearch).length;
-                const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
-
-                // Update the progress bar fill and percentage text
-                progressFill.style.width = progressPercentage + '%';
-                percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + (originalLength - totalMinersLeft) + '/' + originalLength + ')';
-
-                // Open the next miner
-                const nextMinerID = Object.keys(minersToSearch)[0];
-                if (nextMinerID) {
-                    const nextLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + nextMinerID + "&active_tab=Activity";
-                    window.location.href = nextLink;
-                } else {
-                    // Remove the scanning element
-                    clearInterval(scanningInterval);
-                    
-                    // Set the scanning text to "Finished"
-                    scanningText.textContent = 'Finished';
-
-                    // Close this page
-                    setTimeout(() => {
-                        GM_SuperValue.set("errorCount", 0);
-                        window.close();
-                    }, 500);
-                }
-                    */
-            } else {
-
-                // Add the reboot count to the page
-                addDataBox('Reboot Count (Activity Log)', reboots.length);
-
-                // Time since last reboot
-                if(lastRebootTime) {
-                    const timeSinceReboot = Date.now() - lastRebootTime;
-                    const timeSinceRebootElement = addDataBox('Time Since Last Reboot (Activity Log)', timeSinceReboot, (mBox, h3, p) => {
-                        let timeSinceReboot = Date.now() - lastRebootTime;
-                        const days = Math.floor(timeSinceReboot / (1000 * 60 * 60 * 24));
-                        timeSinceReboot = new Date(timeSinceReboot).toISOString().substr(11, 8);
-                        if (days > 0) {
-                            timeSinceReboot = days + 'd ' + timeSinceReboot;
-                        }
-                        p.textContent = timeSinceReboot;
-                    }, 1000);
-                }
+            // Time since last reboot
+            if(lastRebootTime) {
+                const timeSinceReboot = Date.now() - lastRebootTime;
+                const timeSinceRebootElement = addDataBox('Time Since Last Reboot (Activity Log)', timeSinceReboot, (mBox, h3, p) => {
+                    let timeSinceReboot = Date.now() - lastRebootTime;
+                    const days = Math.floor(timeSinceReboot / (1000 * 60 * 60 * 24));
+                    timeSinceReboot = new Date(timeSinceReboot).toISOString().substr(11, 8);
+                    if (days > 0) {
+                        timeSinceReboot = days + 'd ' + timeSinceReboot;
+                    }
+                    p.textContent = timeSinceReboot;
+                }, 1000);
+            }
                 
 
-            }
-        } else if (minerActivityList && minerActivityList.querySelector('.m-table-body') && minerActivityList.querySelector('.m-table-body').textContent === 'Error loading activity...') {
-            // Add text saying there was an error, retrying
-            clearInterval(scanningInterval);
-            scanningText.textContent = 'Error, Retrying...';
-            setTimeout(() => {
-                GM_SuperValue.set("errorCount", GM_SuperValue.get("errorCount", 0) + 1);
-                window.location.reload();
-            }, 500);
         }
     }, 500);
-
-    function parsePathData(d) {
-        const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
-        let currentY = 0;
-        let topY = Number.POSITIVE_INFINITY;
-        let bottomY = Number.NEGATIVE_INFINITY;
-        let downCounts = 0;
-        let upCounts = 0;
-        let lastY;
-    
-        commands.forEach(command => {
-            const type = command[0];
-            const values = command.slice(1).trim().split(/[\s,]+/).map(Number);
-    
-            console.log(type, values);
-
-            switch (type) {
-                case 'M':
-                case 'L':
-                    currentY = values[1];
-                    break;
-                case 'C':
-                    currentY = values[5];
-                    break;
-            }
-
-            if(currentY !== lastY) {
-                if(currentY > 0) { // Height changes, anything above 0 should always been it is down, since it is a binary on/off and I know 0 has to be on.
-                    downCounts++;
-                }
-                if(currentY === 0) {
-                    upCounts++;
-                }
-            }
-            lastY = currentY;
-        });
-    
-        return { downCounts, upCounts };
-    }
-    
-
-    const upTimeChart = document.querySelector('#uptimeChart');
-    var downCountBox;
-    var lastd = '';
-    const observer = new MutationObserver(() => {
-        const path = upTimeChart.querySelector('[id^="SvgjsPath"]');
-        if (path) {
-            const d = path.getAttribute('d');
-
-            if (d === lastd) {
-                return;
-            }
-            lastd = d;
-            const result = parsePathData(d);
-            console.log(result);
-
-            // Check if reportRange.textContent changes
-            const reportRange = document.getElementById('reportrange');
-            const timeSpan = reportRange.textContent.trim();
-
-            // Find the existing data box
-            if (downCountBox) {
-                // Update the range in the box
-                const h3 = downCountBox.querySelector('h3');
-                if (h3) {
-                    h3.textContent = 'Times Down (' + timeSpan + ')';
-                }
-
-                // Update the down times count
-                const p = downCountBox.querySelector('p');
-                if (p) {
-                    p.textContent = result.downCounts;
-                }
-            } else {
-                // Add the new data box to the page
-                downCountBox = addDataBox('Times Down (' + timeSpan + ')', result.downCounts);
-            }
-        }
-    });
-    
-    observer.observe(upTimeChart, {
-        childList: true,
-        subtree: true
-    });
 }
