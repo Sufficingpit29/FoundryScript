@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.8
+// @version      0.8.7
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -15,6 +15,8 @@
 // @grant        GM_xmlhttpRequest
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // ==/UserScript==
+
+const maxScanWindows = 1;
 
 var urlLookupExcel = {
     /*
@@ -785,7 +787,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
     // Function that gets all the miner serial numbers
     var idLookup = false;
-    function getMinerSerialNumbers() {
+    function loopMinersList() {
         idLookup = {};
         const minerGrid = document.querySelector('#minerList');
         if (minerGrid) {
@@ -808,40 +810,14 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 });
             }
         }
-
-        // Save the idLookup object to local storage
-        GM_SuperValue.set('getDownsFor', JSON.stringify(idLookup));
-
-        // Save the length of the idLookup object to local storage
-        GM_SuperValue.set('getDownsForLength', Object.keys(idLookup).length);
-
-        // Clear the previous reboot counts
-        GM_SuperValue.set('downsCount', '{}');
-
-        // Open a new tab to the first miner
-        const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0];
-        window.open(fistLink, 'Collecting Data...');
-
-        function makeHttpObject() {
-            try {return new XMLHttpRequest();}
-            catch (error) {}
-            try {return new ActiveXObject("Msxml2.XMLHTTP");}
-            catch (error) {}
-            try {return new ActiveXObject("Microsoft.XMLHTTP");}
-            catch (error) {}
-            
-            throw new Error("Could not create HTTP request object.");
-        }
-        /*
-        var request = makeHttpObject();
-        request.open("GET", fistLink, true);
-        request.send(null);
-        request.onreadystatechange = function() {
-        if (request.readyState == 4)
-            console.log(request.responseText);
-        };
-        */
     }
+
+    var scanningElement;
+    var progressFill;
+    var scanningText;
+    var scanningInterval;
+    var percentageText;
+    var progressLog;
 
     // Find the issuesActionsDropdown and add a new action
     var checkInterval;
@@ -885,56 +861,270 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             // Put the new dropdown before the original dropdown
             actionsDropdown.before(newActionsDropdown);
 
-            // Add the new scan functions
-            lastHourScan = function() {
+            function downScanCallbackLogic(timeSpan) {
+
                 // Close the dropdown
                 issues.toggleDropdownMenu('newActionsDropdown');
 
-                // Set that we're checking for last hour
-                GM_SuperValue.set('downsForTime', 'Last 1 Hour');
+                // Set the time we're checking for
+                GM_SuperValue.set('scanTimeSpan', timeSpan);
 
-                getMinerSerialNumbers();
+                // Save the idLookup object to local storage
+                GM_SuperValue.set('scanFor', JSON.stringify(idLookup));
+
+                // Save the length of the idLookup object to local storage
+                GM_SuperValue.set('scanTotal', Object.keys(idLookup).length);
+
+                // Open a new tab to the first miner
+                //const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0];
+                //window.open(fistLink, 'Collecting Data...', 'width=800,height=600');
+
+                // Create an element to completely cover the page
+                scanningElement = document.createElement('div');
+                scanningElement.style.position = 'fixed';
+                scanningElement.style.top = '0';
+                scanningElement.style.left = '0';
+                scanningElement.style.width = '100%';
+                scanningElement.style.height = '100%';
+                scanningElement.style.backgroundColor = 'rgba(10, 10, 10, 1)';
+                scanningElement.style.color = 'white';
+                scanningElement.style.display = 'flex';
+                scanningElement.style.flexDirection = 'column'; // Added line
+                scanningElement.style.justifyContent = 'center';
+                scanningElement.style.alignItems = 'center';
+                scanningElement.style.fontSize = '2em';
+                scanningElement.style.zIndex = '9999'; // Set the zIndex to be above everything
+                document.body.appendChild(scanningElement);
+
+                const progressBar = document.createElement('div');
+                progressBar.style.width = '50%';
+                progressBar.style.height = '20px';
+                progressBar.style.backgroundColor = 'gray';
+                progressBar.style.marginTop = '10px';
+                progressBar.style.border = '4px solid black';
+                scanningElement.appendChild(progressBar);
+
+                progressFill = document.createElement('div');
+                progressFill.style.width = '0%';
+                progressFill.style.height = '100%';
+                progressFill.style.backgroundColor = 'green';
+                progressFill.style.borderRight = '1px solid black'; // Modify border style
+                progressBar.appendChild(progressFill);
+                
+                // Add Scanning text below the progress bar
+                scanningText = document.createElement('div');
+                scanningText.textContent = 'Scanning';
+                scanningText.style.marginTop = '10px';
+                scanningText.style.textAlign = 'left';
+                scanningElement.appendChild(scanningText);
+
+                // Animate the dots cycling
+                let dots = 0;
+                scanningInterval = setInterval(() => {
+                    dots = (dots + 1) % 4;
+                    scanningText.textContent = 'Scanning' + '.'.repeat(dots);
+                }, 500);
+
+                // Add percentage text above the progress bar starting from left side
+                percentageText = document.createElement('div');
+                percentageText.textContent = '';
+                percentageText.style.position = 'absolute';
+                percentageText.style.left = '10px';
+                percentageText.style.top = '10px';
+                percentageText.style.color = 'white';
+                percentageText.style.fontSize = '1em';
+                progressBar.appendChild(percentageText);
+
+                setInterval(() => {
+
+                    var minersToSearch = JSON.parse(GM_SuperValue.get('scanFor', '{}'));
+                    var rebootCounts = {};
+                    for (const minerID in minersToSearch) {
+                        const minerReboots = Number(GM_SuperValue.get(`downsCount${minerID}`, -1));
+                        if (minerReboots === -1) {
+                            continue;
+                        }
+                        rebootCounts[minerID] = minerReboots;
+                    }
+
+                    // Calculate the progress percentage
+                    const totalMiners = Object.keys(minersToSearch).length;
+                    const minersScanned = Object.keys(rebootCounts).length;
+                    const progressPercentage = (minersScanned / totalMiners) * 100;
+
+                    // Update the progress bar fill and percentage text
+                    progressFill.style.width = progressPercentage + '%';
+                    percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + minersScanned + '/' + totalMiners + ')';
+                }, 50);
+
+                // Add the progress log on the right side of the screen
+                progressLog = document.createElement('div');
+                progressLog.style.position = 'fixed';
+                progressLog.style.top = '0';
+                progressLog.style.right = '0';
+                progressLog.style.width = '300px';
+                progressLog.style.height = '100%';
+                progressLog.style.backgroundColor = 'rgba(10, 10, 10, 1)';
+                progressLog.style.color = 'white';
+                progressLog.style.fontSize = '1em';
+                progressLog.style.zIndex = '9999'; // Set the zIndex to be above everything
+                progressLog.style.overflow = 'auto';
+                document.body.appendChild(progressLog);
+
+                // Add a message to the progress log
+                const logMessage = document.createElement('div');
+                logMessage.textContent = 'Progress Log';
+                logMessage.style.padding = '10px';
+                logMessage.style.borderBottom = '1px solid white';
+                progressLog.appendChild(logMessage);
+                var logEntries = {};
+
+
+                // Listen for a message to close the iframe
+                window.addEventListener('message', function(event) {
+                    if (event.data.action === 'closeIframe') {
+                        // Find and remove the iframe
+                        const iframe = document.querySelector('iframe'); // Or a more specific selector
+                        if (iframe) {
+                            iframe.parentNode.removeChild(iframe);
+
+                            // Remove the spinning 'loading' icon from the log entry
+                            let logEntry = logEntries[event.data.minerID];
+                            if (logEntry) {
+                                const loadingIcon = logEntry.querySelector('span');
+                                if (loadingIcon) {
+                                    loadingIcon.remove();
+                                }
+                            }
+
+                            // Make it a checkmark
+                            const checkmark = document.createElement('span');
+                            checkmark.textContent = '✓';
+                            checkmark.style.display = 'inline-block';
+                            checkmark.style.position = 'absolute';
+                            checkmark.style.right = '10px';
+                            logEntry.appendChild(checkmark);
+
+                            // Scroll to the bottom of the progress log
+                            progressLog.scrollTop = progressLog.scrollHeight;
+                        }
+                    }
+                }, false);
+
+                // Loop through and open all miners
+                var delayAfter = 0;
+                for (const [index, minerID] of Object.keys(idLookup).entries()) {
+
+                    // Clear the reboot count for the miner
+                    GM_SuperValue.set(`downsCount${minerID}`, -1);
+
+                    // Open a new tab to the miner
+                    const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}&scan=true`;
+                    //window.open(minerLink, '_blank');
+
+                    // Create an iframe to open the miner
+                    const tryOpenMiner = setInterval(() => {
+                        const existingIframes = document.querySelectorAll('iframe');
+                        if (existingIframes.length >= maxScanWindows) {
+                            return;
+                        }
+
+                        const iframe = document.createElement('iframe');
+                        iframe.src = minerLink;
+                        iframe.style.position = 'fixed';
+                        iframe.style.top = '0';
+                        iframe.style.left = '0';
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.style.border = 'none';
+                        iframe.style.zIndex = '9998'; // Set the zIndex to be behind the scanningElement
+                        document.body.appendChild(iframe);
+
+                        // Add to progress log
+                        const logEntry = document.createElement('div');
+                        logEntry.textContent = `Miner ${idLookup[minerID]}`;
+                        logEntry.style.padding = '10px';
+                        logEntry.style.borderBottom = '1px solid white';
+                        progressLog.appendChild(logEntry);
+                        logEntries[minerID] = logEntry;
+
+                        // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
+                        const loadingIcon = document.createElement('span');
+                        loadingIcon.textContent = '↻';
+                        loadingIcon.style.display = 'none';
+                        loadingIcon.style.position = 'absolute';
+                        loadingIcon.style.right = '10px';
+                        logEntry.appendChild(loadingIcon);
+
+                        // Make it spin
+                        let rotation = 0;
+                        setInterval(() => {
+                            rotation = (rotation + 1) % 360;
+                            loadingIcon.style.transform = `rotate(${rotation}deg)`;
+                        }, 1);
+                        loadingIcon.style.display = 'inline-block';
+
+
+                        delayAfter = 1000;
+                        clearInterval(tryOpenMiner);
+                    }, delayAfter);
+                }
+
+            }
+
+            // Add the new scan functions
+            lastHourScan = function() {
+                loopMinersList();
+                downScanCallbackLogic('Last 1 Hour');
             }
 
             last4HourScan = function() {
-                // Close the dropdown
-                issues.toggleDropdownMenu('newActionsDropdown');
-
-                // Set that we're checking for last 4 hours
-                GM_SuperValue.set('downsForTime', 'Last 4 Hours');
-
-                getMinerSerialNumbers();
+                
+                loopMinersList();
+                downScanCallbackLogic('Last 4 Hours');
             }
-        
+
             last24HourScan = function() {
-                // Close the dropdown
-                issues.toggleDropdownMenu('newActionsDropdown');
-
-                // Set that we're checking for last 24 hours
-                GM_SuperValue.set('downsForTime', 'Last 24 Hours');
-
-                getMinerSerialNumbers();
+                loopMinersList();
+                downScanCallbackLogic('Last 24 Hours');
             }
 
             last7DayScan = function() {
-                // Close the dropdown
-                issues.toggleDropdownMenu('newActionsDropdown');
-
-                // Set that we're checking for last 7 days
-                GM_SuperValue.set('downsForTime', 'Last 7 Days');
-
-                getMinerSerialNumbers();
+                loopMinersList();
+                downScanCallbackLogic('Last 7 Days');
             }
 
             last30DayScan = function() {
-                // Close the dropdown
-                issues.toggleDropdownMenu('newActionsDropdown');
-
-                // Set that we're checking for last 30 days
-                GM_SuperValue.set('downsForTime', 'Last 30 Days');
-
-                getMinerSerialNumbers();
+                loopMinersList();
+                downScanCallbackLogic('Last 30 Days');
             }
+
+            /*
+            // Create a auto reboot button to the right of the dropdown
+            const autoRebootButton = document.createElement('button');
+            autoRebootButton.classList.add('m-button');
+            autoRebootButton.style.marginLeft = '10px';
+            autoRebootButton.textContent = 'Auto Reboot';
+            autoRebootButton.onclick = function(event) {
+                event.preventDefault(); // Prevent the default behavior of the button
+                
+                 // Set the time we're checking for
+                 GM_SuperValue.set('scanTimeSpan', timeSpan);
+
+                 // Save the idLookup object to local storage
+                 GM_SuperValue.set('scanFor', JSON.stringify(idLookup));
+ 
+                 // Save the length of the idLookup object to local storage
+                 GM_SuperValue.set('scanTotal', Object.keys(idLookup).length);
+ 
+                 // Open a new tab to the first miner
+                 const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0] + "&autoReboot=true";
+                 //window.open(fistLink, 'Collecting Data...');
+            };
+
+            // Add the auto reboot button to the right of the dropdown
+            actionsDropdown.before(autoRebootButton);
+            */
         }
         
     }, 1000);
@@ -942,16 +1132,43 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     // Repeativly check if getRebootsFor is empty
     var popupResultElement;
     var checkInterval = setInterval(() => {
-        const minersToSearch = JSON.parse(GM_SuperValue.get('getDownsFor', '{}'));
-        const rebootCounts = JSON.parse(GM_SuperValue.get('downsCount', '{}'));
-        if (Object.keys(minersToSearch).length === 0 && Object.keys(rebootCounts).length > 0 && !popupResultElement && idLookup) {
+        const minersToSearch = JSON.parse(GM_SuperValue.get('scanFor', '{}'));
+        const scanTotal = GM_SuperValue.get('scanTotal', false);
+
+        // Get the reboot counts
+        var rebootCounts = {};
+        for (const minerID in minersToSearch) {
+            const minerReboots = Number(GM_SuperValue.get(`downsCount${minerID}`, -1));
+            if (minerReboots === -1) {
+                break;
+            }
+            rebootCounts[minerID] = minerReboots;
+        }
+
+        if (scanTotal && Object.keys(rebootCounts).length === scanTotal && Object.keys(rebootCounts).length > 0 && !popupResultElement && idLookup) {
+
+            // Remove all the iframes
+            const iframes = document.querySelectorAll('iframe');
+            iframes.forEach(iframe => {
+                iframe.remove();
+            });
+
+            // Remove the scanning element
+            scanningElement.remove();
+            progressLog.remove();
+            clearInterval(scanningInterval);
+
+            // Reset the minersToSearch and scanTotal
+            GM_SuperValue.set('scanFor', '{}');
+            GM_SuperValue.set('scanTotal', 0);
 
             // Reset the reboot counts
-            GM_SuperValue.set('downsCount', '{}');
+            for (const minerID in idLookup) {
+                GM_SuperValue.set(`downsCount${minerID}`, -1);
+            }
 
             // Time frame
-            const scanTimeFrame = GM_SuperValue.get('downsForTime', '');
-            
+            const scanTimeFrame = GM_SuperValue.get('scanTimeSpan', '');
             
             // Create a popup element for showing the results
             popupResultElement = document.createElement('div');
@@ -1064,13 +1281,13 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     
     
     const minerID = currentUrl.match(/id=(\d+)/)[1];
-    const minersToSearch = JSON.parse(GM_SuperValue.get('getDownsFor', '{}'));
-    const originalLength = GM_SuperValue.get('getDownsForLength', 0);
+    var minersToSearch = JSON.parse(GM_SuperValue.get('scanFor', '{}'));
+    const originalLength = GM_SuperValue.get('scanTotal', 0);
     const minerSerialNumber = minersToSearch[minerID];
-    const isScanning = minerSerialNumber !== undefined
+    const isScanning = minerSerialNumber !== undefined && currentUrl.includes('scan=true');
 
     // Get the time frame for the scan
-    const scanTimeFrame = GM_SuperValue.get('downsForTime', '');
+    const scanTimeFrame = GM_SuperValue.get('scanTimeSpan', '');
 
     /*
     <div id="reportrange" class="m-box" style="max-width: 22rem; padding: .4rem">
@@ -1103,6 +1320,8 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     </div>
     */
 
+    var lastd = '';
+
     // Select time frame if it is not selected
     var waitNextTimeFrameChange = false;
     if (isScanning) {
@@ -1134,13 +1353,14 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                     }
                 }
             }
+            
         }, 1); // Change the interval time (in milliseconds) as needed
-    }
 
-    var progressFill;
-    var scanningText;
-    var scanningInterval;
-    var percentageText;
+        // Refresh the page every 10 seconds
+        setInterval(() => {
+            location.reload();
+        }, 10000);
+    }
 
     function parsePathData(d) {
         const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
@@ -1181,13 +1401,12 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
     const upTimeChart = document.querySelector('#uptimeChart');
     var downCountBox;
-    var lastd = '';
     const observer = new MutationObserver(() => {
         const path = upTimeChart.querySelector('[id^="SvgjsPath"]');
         if (path) {
             const d = path.getAttribute('d');
-            console.log('d', d);
 
+            // Check if the d attribute has changed
             if (d === lastd) {
                 return;
             }
@@ -1217,7 +1436,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             }
 
             // We're scanning and the timeSpan is the same as the scanTimeFrame
-            console.log('timeSpan', timeSpan, 'scanTimeFrame', scanTimeFrame);
             if(isScanning && timeSpan === scanTimeFrame) {
 
                 // See if we should wait for the next time frame change (Fixes the issue where the data wasn't yet loaded correctly since last time frame was different)
@@ -1228,46 +1446,12 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
                 // Test alert
                 //alert('Down Count: ' + result.downCounts);
-
-                // Remove this miner from the list
-                delete minersToSearch[minerID];
-
-                // Save the updated list to local storage
-                GM_SuperValue.set('getDownsFor', JSON.stringify(minersToSearch));
                 
                 // Update the down count
-                const downsCount = JSON.parse(GM_SuperValue.get('downsCount', '{}'));
-                downsCount[minerID] = result.downCounts;
-                GM_SuperValue.set('downsCount', JSON.stringify(downsCount));
+                GM_SuperValue.set(`downsCount${minerID}`, result.downCounts.toString());
 
-                // Recalculate the progress percentage
-                const totalMinersLeft = Object.keys(minersToSearch).length;
-                const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
-
-                // Update the progress bar fill and percentage text
-                progressFill.style.width = progressPercentage + '%';
-                percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + (originalLength - totalMinersLeft) + '/' + originalLength + ')';
-
-                // Open the next miner
-                const nextMinerID = Object.keys(minersToSearch)[0];
-                if (nextMinerID) {
-                    const nextLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + nextMinerID;
-                    window.location.href = nextLink;
-                } else {
-                    // Remove the scanning element
-                    clearInterval(scanningInterval);
-                    
-                    // Set the scanning text to "Finished"
-                    scanningText.textContent = 'Finished';
-
-                    // Close this page
-                    setTimeout(() => {
-
-                        GM_SuperValue.set("errorCount", 0);
-                        window.close();
-                    }, 500);
-                }
-                    
+                // Send a message to close the iframe
+                window.parent.postMessage({ action: 'closeIframe', minerID }, '*');
             }
         }
     });
@@ -1283,69 +1467,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         if (ticketDetailsColumn) {
             ticketDetailsColumn.remove();
         }
-
-        // Create an element to completely cover the page
-        const scanningElement = document.createElement('div');
-        scanningElement.style.position = 'fixed';
-        scanningElement.style.top = '0';
-        scanningElement.style.left = '0';
-        scanningElement.style.width = '100%';
-        scanningElement.style.height = '100%';
-        scanningElement.style.backgroundColor = 'rgba(10, 10, 10, 1)';
-        scanningElement.style.color = 'white';
-        scanningElement.style.display = 'flex';
-        scanningElement.style.flexDirection = 'column'; // Added line
-        scanningElement.style.justifyContent = 'center';
-        scanningElement.style.alignItems = 'center';
-        scanningElement.style.fontSize = '2em';
-        document.body.appendChild(scanningElement);
-
-        const progressBar = document.createElement('div');
-        progressBar.style.width = '50%';
-        progressBar.style.height = '20px';
-        progressBar.style.backgroundColor = 'gray';
-        progressBar.style.marginTop = '10px';
-        progressBar.style.border = '4px solid black';
-        scanningElement.appendChild(progressBar);
-
-        progressFill = document.createElement('div');
-        progressFill.style.width = '0%';
-        progressFill.style.height = '100%';
-        progressFill.style.backgroundColor = 'green';
-        progressFill.style.borderRight = '1px solid black'; // Modify border style
-        progressBar.appendChild(progressFill);
-        
-        // Add Scanning text below the progress bar
-        scanningText = document.createElement('div');
-        scanningText.textContent = 'Scanning';
-        scanningText.style.marginTop = '10px';
-        scanningText.style.textAlign = 'left';
-        scanningElement.appendChild(scanningText);
-
-        // Animate the dots cycling
-        let dots = 0;
-        scanningInterval = setInterval(() => {
-            dots = (dots + 1) % 4;
-            scanningText.textContent = 'Scanning' + '.'.repeat(dots);
-        }, 500);
-
-        // Add percentage text above the progress bar starting from left side
-        percentageText = document.createElement('div');
-        percentageText.textContent = '0%';
-        percentageText.style.position = 'absolute';
-        percentageText.style.left = '10px';
-        percentageText.style.top = '10px';
-        percentageText.style.color = 'white';
-        percentageText.style.fontSize = '1em';
-        progressBar.appendChild(percentageText);
-
-        // Calculate the progress percentage
-        const totalMinersLeft = Object.keys(minersToSearch).length;
-        const progressPercentage = ((originalLength - totalMinersLeft) / originalLength) * 100;
-
-        // Update the progress bar fill and percentage text
-        progressFill.style.width = progressPercentage + '%';
-        percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + (originalLength - totalMinersLeft) + '/' + originalLength + ')';
     }
     
     
@@ -1376,10 +1497,8 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                         }
                     }
                 });
-
-                //downsCount[minerID] = reboots.length;
             } else {
-                //downsCount[minerID] = 'Error';
+                //'Error';
             }
       
             // Add the reboot count to the page
