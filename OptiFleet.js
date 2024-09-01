@@ -1131,6 +1131,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 startScan('Last 30 Days', scanAmount, scanType, reloadTime);
             }
 
+            /*
             // Create a auto reboot button to the right of the dropdown
             const autoRebootButton = document.createElement('button');
             autoRebootButton.classList.add('m-button');
@@ -1191,6 +1192,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
             // Add the auto reboot button to the right of the dropdown
             actionsDropdown.before(autoRebootButton);
+            */
             
         }
         
@@ -1513,7 +1515,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 }
 
                 if(callback && typeof callback === 'function') {
-                    callback(result);
+                    callback(result, timeSpan);
                 }
 
                 
@@ -1526,7 +1528,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         });
     }
 
-    createChartDataBox('#uptimeChart', 'Times Down', (result) => {
+    createChartDataBox('#uptimeChart', 'Times Down', (result, timeSpan) => {
         // We're scanning and the timeSpan is the same as the scanTimeFrame
         if(isScanning && timeSpan === scanTimeFrame) {
 
@@ -1543,14 +1545,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             window.parent.postMessage({ action: 'closeIframe', minerID: minerID, reload: false }, '*');
         }
     });
-
-    if(isScanning) {
-        // Find and remove ticket-details-column
-        const ticketDetailsColumn = document.querySelector('.ticket-details-column');
-        if (ticketDetailsColumn) {
-            ticketDetailsColumn.remove();
-        }
-    }
     
     
     // Wait for the miner activity list to exist and be fully loaded
