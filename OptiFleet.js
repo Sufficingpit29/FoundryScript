@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.8.7
+// @version      0.9
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -16,7 +16,7 @@
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // ==/UserScript==
 
-const maxScanWindows = 1;
+const maxScanWindows = 3;
 
 var urlLookupExcel = {
     /*
@@ -38,8 +38,71 @@ const urlLookupPlanner = {
     "RAMM": "https://tasks.office.com/foundrydigital.com/Home/Planner/#/plantaskboard?groupId=efbb33a0-825d-4dff-8384-a8b34b58b606&planId=FHYUYbYUfkqd2-oSKLk7xGUAHvRz"
 };
 
-const currentUrl = window.location.href;
+function setAllZones() {
+    // Find ddlZones_listbox and select All Sites
+    var wasAlreadyAllZones = true;
+    const ddlZones = document.querySelector('#ddlZones');
+    if (ddlZones) {
+        ddlZones.click();
+        const animationContainer = document.querySelector('.k-animation-container');
+        const list = animationContainer.querySelector('.k-list');
+        const items = list.querySelectorAll('.k-item');
+        const selectedOption = list.querySelector('.k-state-selected');
+        if (selectedOption.textContent !== 'All Zones') {
+            items[0].click();
+            wasAlreadyAllZones = false;
+        }
+        ddlZones.click();
+    }
 
+    return wasAlreadyAllZones;
+}
+
+function parseMinerDetails(text) {
+    const details = {};
+    const minerDetailsText = text.trim().split('\n');
+
+    var lastKey = "";
+    for (let i = 0; i < minerDetailsText.length; i++) {
+        const key = minerDetailsText[i].trim();
+        if (i + 1 < minerDetailsText.length && key.length > 2 && key != lastKey) {
+
+            let value = minerDetailsText[i + 1];
+            if (key === 'Rack / Row / Position') {
+                value = value.replace(/ \/ /g, '-');
+            }
+            details[key] = value;
+        }
+    }
+
+    return details;
+}
+
+function getMinerDetails() {
+    const container = document.querySelector('.miner-details-section.m-stack');
+    if (!container) return;
+
+    const clone = container.cloneNode(true);
+    const buttons = clone.querySelectorAll('.copyBtn');
+    buttons.forEach(btn => btn.remove());
+
+    let cleanedText = cleanText(clone.innerText);
+    var minerDetailsCrude = parseMinerDetails(cleanedText);
+
+    const minerDetails = {
+        model: minerDetailsCrude['Model'],
+        serialNumber: minerDetailsCrude['Serial Number'],
+        facility: minerDetailsCrude['Facility'],
+        ipAddress: minerDetailsCrude['IpAddress'],
+        locationID: minerDetailsCrude['Rack / Row / Position'],
+        activePool: minerDetailsCrude['Active Pool'],
+    };
+
+    return [cleanedText, minerDetails];
+}
+
+
+const currentUrl = window.location.href;
 if(currentUrl.includes("https://foundryoptifleet.com/")) {
 
     // Check is the user ever inputs something
@@ -93,20 +156,10 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
 
     const savedSerialNumber = GM_SuperValue.get('serialNumberInputted', '');
     if (savedSerialNumber !== '') {
-        // Find ddlZones_listbox and select All Sites
-        const ddlZones = document.querySelector('#ddlZones');
         setTimeout(() => {
-            if (ddlZones) {
-                ddlZones.click();
-                const animationContainer = document.querySelector('.k-animation-container');
-                const list = animationContainer.querySelector('.k-list');
-                const items = list.querySelectorAll('.k-item');
-                const selectedOption = list.querySelector('.k-state-selected');
-                if (selectedOption.textContent !== 'All Zones') {
-                    items[0].click();
-                }
-                ddlZones.click();
-            }
+            
+            // Make sure we're looking in all zones
+            setAllZones();
 
             // Select .op-select-filters clickable
             const moreFilters = document.querySelector('.op-select-filters.clickable');
@@ -268,59 +321,23 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
     }
 
     function copyAllDetailsForSharepoint(issue, log, type) {
-        const container = document.querySelector('.miner-details-section.m-stack');
-        if (!container) return;
-
-        const clone = container.cloneNode(true);
-        const buttons = clone.querySelectorAll('.copyBtn');
-        buttons.forEach(btn => btn.remove());
-
-        let cleanedText = cleanText(clone.innerText);
-
-        function parseMinerDetails(text) {
-            const details = {};
-            const minerDetailsText = text.trim().split('\n');
-
-            var lastKey = "";
-            for (let i = 0; i < minerDetailsText.length; i++) {
-
-                const key = minerDetailsText[i].trim();
-                if (i + 1 < minerDetailsText.length && key.length > 2 && key != lastKey) {
-
-                    let value = minerDetailsText[i + 1];
-                    if (key === 'Rack / Row / Position') {
-                        value = value.replace(/ \/ /g, '-');
-                    }
-                    details[key] = value;
-                }
-            }
-
-            return details;
-        }
-
-        const minerDetails = parseMinerDetails(cleanedText);
+        var [cleanedText, minerDetails] = getMinerDetails();
+        const { model, serialNumber, facility, ipAddress, locationID, activePool } = minerDetails;
 
         minerDetails['type'] = type;
         minerDetails['issue'] = issue;
         minerDetails['log'] = log;
 
-        const {
-            'Model': model,
-            'Serial Number': serialNumber,
-            Facility,
-            IpAddress: ipAddress,
-            'Rack / Row / Position': locationID,
-            'Active Pool': activePool,
-        } = minerDetails;
+        console.log(`${model} - ${serialNumber} - ${issue}`);
+        console.log(cleanedText);
 
-        
         GM_SuperValue.set("taskName", `${model} - ${serialNumber} - ${issue}`);
         GM_SuperValue.set("taskNotes", cleanedText);
         GM_SuperValue.set("taskComment", log);
-        GM_SuperValue.set("detailsData", minerDetails);
+        GM_SuperValue.set("detailsData", JSON.stringify(minerDetails));
 
         const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
-        const textToCopy = `${serialNumber}\t${Facility}\t${ipAddress}\t${Facility}-${locationID}\t${activePool}\t${issue}\t${currentDate}`;
+        const textToCopy = `${serialNumber}\t${facility}\t${ipAddress}\t${facility}-${locationID}\t${activePool}\t${issue}\t${currentDate}`;
 
         copyTextToClipboard(textToCopy);
         //window.open("https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3", 'Paste Data').focus();
@@ -535,11 +552,12 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         addCopyButtonsToElements();
         addMutationObserver();
     });
+
 } else if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
 
     // If there is a taskName/Notes in storage, then create a overlay on the right side of the page that says Go to Planner
     const taskName = GM_SuperValue.get("taskName", "");
-    const detailsData = GM_SuperValue.get("detailsData", {});
+    const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
     
 
     if (taskName !== "") {
@@ -556,9 +574,9 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         overlay.style.outline = '2px solid #333'; // Add outline
         let plannerUrl = urlLookupPlanner[detailsData['type']];
         overlay.innerHTML = `
-            <p>Model: ${detailsData['Model']}</p>
-            <p>Serial Number: ${detailsData['Serial Number']}</p>
-            <p>Slot ID: ${detailsData['Facility']}-${detailsData['Rack / Row / Position']}</p>
+            <p>Model: ${detailsData['model']}</p>
+            <p>Serial Number: ${detailsData['serialNumber']}</p>
+            <p>Slot ID: ${detailsData['facility']}-${detailsData['locationID']}</p>
             <button style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
             <a href="${plannerUrl}" style="color: #fff; text-decoration: none;">Go to Planner</a>
             </button>
@@ -592,7 +610,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         return;
     }
 
-    const detailsData = GM_SuperValue.get("detailsData", {});
+    const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
     if (Object.keys(detailsData).length === 0) {
         console.error('Details data not found in storage.');
         return;
@@ -747,9 +765,9 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
         popup.style.fontWeight = 'bold';
         popup.style.outline = '2px solid #333'; // Add outline
         popup.innerHTML = `
-            <p>Model: ${detailsData['Model']}</p>
-            <p>Serial Number: ${detailsData['Serial Number']}</p>
-            <p>Slot ID: ${detailsData['Facility']}-${detailsData['Rack / Row / Position']}</p>
+            <p>Model: ${detailsData['model']}</p>
+            <p>Serial Number: ${detailsData['serialNumber']}</p>
+            <p>Slot ID: ${detailsData['facility']}-${detailsData['locationID']}</p>
             <button id="autoCreateCardButton" style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
             Auto-Create Card
             </button>
@@ -770,7 +788,7 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
             GM_SuperValue.set('taskName', '');
             GM_SuperValue.set('taskNotes', '');
             GM_SuperValue.set('taskComment', '');
-            GM_SuperValue.set('detailsData', {});
+            GM_SuperValue.set('detailsData', '{}');
             window.close();
         });
 
@@ -816,6 +834,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     var progressFill;
     var scanningText;
     var scanningInterval;
+    var tryOpenMiners;
     var percentageText;
     var progressLog;
 
@@ -861,7 +880,10 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             // Put the new dropdown before the original dropdown
             actionsDropdown.before(newActionsDropdown);
 
-            function downScanCallbackLogic(timeSpan) {
+            function startScan(timeSpan, scanAmount, scanType, reloadTime) {
+
+                // Set the max scan windows
+                maxScanWindows = scanAmount;
 
                 // Close the dropdown
                 issues.toggleDropdownMenu('newActionsDropdown');
@@ -874,6 +896,11 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
                 // Save the length of the idLookup object to local storage
                 GM_SuperValue.set('scanTotal', Object.keys(idLookup).length);
+
+                // Clear any preexisting downsCount values
+                for (const minerID in idLookup) {
+                    GM_SuperValue.set(`downsCount${minerID}`, '-1');
+                }
 
                 // Open a new tab to the first miner
                 //const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0];
@@ -979,7 +1006,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 progressLog.appendChild(logMessage);
                 var logEntries = {};
 
-
                 // Listen for a message to close the iframe
                 window.addEventListener('message', function(event) {
                     if (event.data.action === 'closeIframe') {
@@ -988,22 +1014,25 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                         if (iframe) {
                             iframe.parentNode.removeChild(iframe);
 
-                            // Remove the spinning 'loading' icon from the log entry
-                            let logEntry = logEntries[event.data.minerID];
-                            if (logEntry) {
-                                const loadingIcon = logEntry.querySelector('span');
-                                if (loadingIcon) {
-                                    loadingIcon.remove();
+                            // Only swap to checkmark on successful scan
+                            if(!event.data.reload) {
+                                // Remove the spinning 'loading' icon from the log entry
+                                let logEntry = logEntries[event.data.minerID];
+                                if (logEntry) {
+                                    const loadingIcon = logEntry.querySelector('span');
+                                    if (loadingIcon) {
+                                        loadingIcon.remove();
+                                    }
                                 }
-                            }
 
-                            // Make it a checkmark
-                            const checkmark = document.createElement('span');
-                            checkmark.textContent = '✓';
-                            checkmark.style.display = 'inline-block';
-                            checkmark.style.position = 'absolute';
-                            checkmark.style.right = '10px';
-                            logEntry.appendChild(checkmark);
+                                // Make it a checkmark
+                                const checkmark = document.createElement('span');
+                                checkmark.textContent = '✓';
+                                checkmark.style.display = 'inline-block';
+                                checkmark.style.position = 'absolute';
+                                checkmark.style.right = '10px';
+                                logEntry.appendChild(checkmark);
+                            }
 
                             // Scroll to the bottom of the progress log
                             progressLog.scrollTop = progressLog.scrollHeight;
@@ -1013,22 +1042,22 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
                 // Loop through and open all miners
                 var delayAfter = 0;
-                for (const [index, minerID] of Object.keys(idLookup).entries()) {
+                tryOpenMiners = setInterval(() => {
+                    for (const [index, minerID] of Object.keys(idLookup).entries()) {
 
-                    // Clear the reboot count for the miner
-                    GM_SuperValue.set(`downsCount${minerID}`, -1);
-
-                    // Open a new tab to the miner
-                    const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}&scan=true`;
-                    //window.open(minerLink, '_blank');
-
-                    // Create an iframe to open the miner
-                    const tryOpenMiner = setInterval(() => {
+                        // Link to the miner
+                        const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}&scan=true&scanType=${scanType}&reloadTime=${reloadTime}`;
+        
+                        // Check if there are too many iframes open or this miner is already open or scanned
                         const existingIframes = document.querySelectorAll('iframe');
-                        if (existingIframes.length >= maxScanWindows) {
-                            return;
+                        const tooManyOpen = existingIframes.length >= maxScanWindows;
+                        const minerAlreadyOpen = [...existingIframes].some(iframe => iframe.src === minerLink);
+                        const minerAlreadyScanned = Number(GM_SuperValue.get(`downsCount${minerID}`, -1)) !== -1;
+                        if (tooManyOpen || minerAlreadyOpen || minerAlreadyScanned) {
+                            continue;
                         }
 
+                        // Create an iframe to open the miner
                         const iframe = document.createElement('iframe');
                         iframe.src = minerLink;
                         iframe.style.position = 'fixed';
@@ -1040,66 +1069,68 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                         iframe.style.zIndex = '9998'; // Set the zIndex to be behind the scanningElement
                         document.body.appendChild(iframe);
 
-                        // Add to progress log
-                        const logEntry = document.createElement('div');
-                        logEntry.textContent = `Miner ${idLookup[minerID]}`;
-                        logEntry.style.padding = '10px';
-                        logEntry.style.borderBottom = '1px solid white';
-                        progressLog.appendChild(logEntry);
-                        logEntries[minerID] = logEntry;
+                        // Don't add log if one already exists
+                        if (!logEntries[minerID]) {
+                            // Add to progress log
+                            const logEntry = document.createElement('div');
+                            logEntry.textContent = `Miner ${idLookup[minerID]}`;
+                            logEntry.style.padding = '10px';
+                            logEntry.style.borderBottom = '1px solid white';
+                            progressLog.appendChild(logEntry);
+                            logEntries[minerID] = logEntry;
 
-                        // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
-                        const loadingIcon = document.createElement('span');
-                        loadingIcon.textContent = '↻';
-                        loadingIcon.style.display = 'none';
-                        loadingIcon.style.position = 'absolute';
-                        loadingIcon.style.right = '10px';
-                        logEntry.appendChild(loadingIcon);
+                            // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
+                            const loadingIcon = document.createElement('span');
+                            loadingIcon.textContent = '↻';
+                            loadingIcon.style.display = 'none';
+                            loadingIcon.style.position = 'absolute';
+                            loadingIcon.style.right = '10px';
+                            logEntry.appendChild(loadingIcon);
 
-                        // Make it spin
-                        let rotation = 0;
-                        setInterval(() => {
-                            rotation = (rotation + 1) % 360;
-                            loadingIcon.style.transform = `rotate(${rotation}deg)`;
-                        }, 1);
-                        loadingIcon.style.display = 'inline-block';
-
-
-                        delayAfter = 1000;
-                        clearInterval(tryOpenMiner);
-                    }, delayAfter);
-                }
-
+                            // Make it spin
+                            let rotation = 0;
+                            setInterval(() => {
+                                rotation = (rotation + 1) % 360;
+                                loadingIcon.style.transform = `rotate(${rotation}deg)`;
+                            }, 1);
+                            loadingIcon.style.display = 'inline-block';  
+                        }
+                    }
+                    
+                }, delayAfter);
+                delayAfter = 1000;
             }
+
+            const scanAmount = 3;
+            const scanType = 'getdowns';
+            const reloadTime = 15000;
 
             // Add the new scan functions
             lastHourScan = function() {
                 loopMinersList();
-                downScanCallbackLogic('Last 1 Hour');
+                startScan('Last 1 Hour', scanAmount, scanType, reloadTime);
             }
 
             last4HourScan = function() {
-                
                 loopMinersList();
-                downScanCallbackLogic('Last 4 Hours');
+                startScan('Last 4 Hours', scanAmount, scanType, reloadTime);
             }
 
             last24HourScan = function() {
                 loopMinersList();
-                downScanCallbackLogic('Last 24 Hours');
+                startScan('Last 24 Hours', scanAmount, scanType, reloadTime);
             }
 
             last7DayScan = function() {
                 loopMinersList();
-                downScanCallbackLogic('Last 7 Days');
+                startScan('Last 7 Days', scanAmount, scanType, reloadTime);
             }
 
             last30DayScan = function() {
                 loopMinersList();
-                downScanCallbackLogic('Last 30 Days');
+                startScan('Last 30 Days', scanAmount, scanType, reloadTime);
             }
 
-            /*
             // Create a auto reboot button to the right of the dropdown
             const autoRebootButton = document.createElement('button');
             autoRebootButton.classList.add('m-button');
@@ -1107,24 +1138,60 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             autoRebootButton.textContent = 'Auto Reboot';
             autoRebootButton.onclick = function(event) {
                 event.preventDefault(); // Prevent the default behavior of the button
-                
-                 // Set the time we're checking for
-                 GM_SuperValue.set('scanTimeSpan', timeSpan);
 
-                 // Save the idLookup object to local storage
-                 GM_SuperValue.set('scanFor', JSON.stringify(idLookup));
- 
-                 // Save the length of the idLookup object to local storage
-                 GM_SuperValue.set('scanTotal', Object.keys(idLookup).length);
- 
-                 // Open a new tab to the first miner
-                 const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0] + "&autoReboot=true";
-                 //window.open(fistLink, 'Collecting Data...');
+                // Set to all zones
+                var wasAlreadyAllZones = setAllZones();
+
+                const pagerWrap = document.querySelector('.k-pager-wrap');
+                var selector = pagerWrap.querySelector('.k-select');
+                var timeoutId; // Variable to store the timeout identifier
+
+                function Set5000Size() {
+                    // Find what the current size is in the k-input element
+                    const currentSize = pagerWrap.querySelector('.k-input').textContent;
+                    if(currentSize === '5000') {
+                        return;
+                    }
+
+                    selector.click();
+
+                    // Find and click on the 5000 items per page if not already selected
+                    const animationContainers = document.querySelectorAll('.k-animation-container');
+                    for (const container of animationContainers) {
+                        const list = container.querySelector('.k-list');
+                        const items = list.querySelectorAll('.k-item');
+                        for (const item of items) {
+                            if (item.textContent === '5000') {
+                                item.click();
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Set the size to 5000
+                if(wasAlreadyAllZones) {
+                    Set5000Size();
+                } else {
+                    loopMinersList();
+                    var lastIDLookupLength = Object.keys(idLookup).length;
+
+                    // Wait for the miner list to load
+                    timeoutId = setInterval(() => {
+                        loopMinersList();
+                        if(Object.keys(idLookup).length !== lastIDLookupLength) {
+                            clearInterval(timeoutId);
+                            Set5000Size();
+                        }
+                    }, 500);
+                }
+                
+                //startScan('Last 4 Hours', 1, 'autoreboot', reloadTime);
             };
 
             // Add the auto reboot button to the right of the dropdown
             actionsDropdown.before(autoRebootButton);
-            */
+            
         }
         
     }, 1000);
@@ -1147,7 +1214,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
         if (scanTotal && Object.keys(rebootCounts).length === scanTotal && Object.keys(rebootCounts).length > 0 && !popupResultElement && idLookup) {
 
-            // Remove all the iframes
+            // Remove all the iframes (Just in case)
             const iframes = document.querySelectorAll('iframe');
             iframes.forEach(iframe => {
                 iframe.remove();
@@ -1157,6 +1224,7 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             scanningElement.remove();
             progressLog.remove();
             clearInterval(scanningInterval);
+            clearInterval(tryOpenMiners);
 
             // Reset the minersToSearch and scanTotal
             GM_SuperValue.set('scanFor', '{}');
@@ -1279,12 +1347,13 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         return mBox;
     }
     
-    
     const minerID = currentUrl.match(/id=(\d+)/)[1];
     var minersToSearch = JSON.parse(GM_SuperValue.get('scanFor', '{}'));
     const originalLength = GM_SuperValue.get('scanTotal', 0);
     const minerSerialNumber = minersToSearch[minerID];
     const isScanning = minerSerialNumber !== undefined && currentUrl.includes('scan=true');
+    const scanType = new URLSearchParams(window.location.search).get('scanType');
+    const reloadTime = new URLSearchParams(window.location.search).get('reloadTime');
 
     // Get the time frame for the scan
     const scanTimeFrame = GM_SuperValue.get('scanTimeSpan', '');
@@ -1319,8 +1388,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         </div>
     </div>
     */
-
-    var lastd = '';
 
     // Select time frame if it is not selected
     var waitNextTimeFrameChange = false;
@@ -1358,8 +1425,11 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
         // Refresh the page every 10 seconds
         setInterval(() => {
-            location.reload();
-        }, 10000);
+            console.log('Reloading page...');
+            
+            // Send a message to close the iframe, so we can then reopen and try again
+            window.parent.postMessage({ action: 'closeIframe', minerID: minerID, reload: true }, '*');
+        }, reloadTime);
     }
 
     function parsePathData(d) {
@@ -1397,68 +1467,81 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     
         return { downCounts, upCounts };
     }
+
+    function getGraphData(chart) {
+        const path = chart.querySelector('[id^="SvgjsPath"]');
+        const d = path.getAttribute('d');
+        return parsePathData(d);
+    }
     
+    function createChartDataBox(chartID, title, callback) {
+        const chart = document.querySelector(chartID);
+        var lastChartd = '';
+        var downCountBox;
+        const observer = new MutationObserver(() => {
+            const path = chart.querySelector('[id^="SvgjsPath"]');
+            if (path) {
+                const d = path.getAttribute('d');
 
-    const upTimeChart = document.querySelector('#uptimeChart');
-    var downCountBox;
-    const observer = new MutationObserver(() => {
-        const path = upTimeChart.querySelector('[id^="SvgjsPath"]');
-        if (path) {
-            const d = path.getAttribute('d');
-
-            // Check if the d attribute has changed
-            if (d === lastd) {
-                return;
-            }
-            lastd = d;
-            const result = parsePathData(d);
-
-            // Check if reportRange.textContent changes
-            const reportRange = document.getElementById('reportrange');
-            const timeSpan = reportRange.textContent.trim();
-
-            // Find the existing data box
-            if (downCountBox) {
-                // Update the range in the box
-                const h3 = downCountBox.querySelector('h3');
-                if (h3) {
-                    h3.textContent = 'Times Down (' + timeSpan + ')';
-                }
-
-                // Update the down times count
-                const p = downCountBox.querySelector('p');
-                if (p) {
-                    p.textContent = result.downCounts;
-                }
-            } else {
-                // Add the new data box to the page
-                downCountBox = addDataBox('Times Down (' + timeSpan + ')', result.downCounts);
-            }
-
-            // We're scanning and the timeSpan is the same as the scanTimeFrame
-            if(isScanning && timeSpan === scanTimeFrame) {
-
-                // See if we should wait for the next time frame change (Fixes the issue where the data wasn't yet loaded correctly since last time frame was different)
-                if (waitNextTimeFrameChange) {
-                    waitNextTimeFrameChange = false;
+                // Check if the d attribute has changed
+                if (d === lastChartd) {
                     return;
                 }
+                lastChartd = d;
+                const result = getGraphData(chart);
 
-                // Test alert
-                //alert('Down Count: ' + result.downCounts);
+                // Check if reportRange.textContent changes
+                const reportRange = document.getElementById('reportrange');
+                const timeSpan = reportRange.textContent.trim();
+
+                // Find the existing data box
+                if (downCountBox) {
+                    // Update the range in the box
+                    const h3 = downCountBox.querySelector('h3');
+                    if (h3) {
+                        h3.textContent = `${title} (${timeSpan})`;
+                    }
+
+                    // Update the down times count
+                    const p = downCountBox.querySelector('p');
+                    if (p) {
+                        p.textContent = result.downCounts;
+                    }
+                } else {
+                    // Add the new data box to the page
+                    downCountBox = addDataBox(`${title} (${timeSpan})`, result.downCounts);
+                }
+
+                if(callback && typeof callback === 'function') {
+                    callback(result);
+                }
+
                 
-                // Update the down count
-                GM_SuperValue.set(`downsCount${minerID}`, result.downCounts.toString());
-
-                // Send a message to close the iframe
-                window.parent.postMessage({ action: 'closeIframe', minerID }, '*');
             }
+        });
+        
+        observer.observe(chart, {
+            childList: true,
+            subtree: true
+        });
+    }
+
+    createChartDataBox('#uptimeChart', 'Times Down', (result) => {
+        // We're scanning and the timeSpan is the same as the scanTimeFrame
+        if(isScanning && timeSpan === scanTimeFrame) {
+
+            // See if we should wait for the next time frame change (Fixes the issue where the data wasn't yet loaded correctly since last time frame was different)
+            if (waitNextTimeFrameChange) {
+                waitNextTimeFrameChange = false;
+                return;
+            }
+            
+            // Update the down count
+            GM_SuperValue.set(`downsCount${minerID}`, result.downCounts.toString());
+
+            // Send a message to close the iframe
+            window.parent.postMessage({ action: 'closeIframe', minerID: minerID, reload: false }, '*');
         }
-    });
-    
-    observer.observe(upTimeChart, {
-        childList: true,
-        subtree: true
     });
 
     if(isScanning) {
@@ -1521,4 +1604,24 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
         }
     }, 500);
+
+    function createBreakerNumBox() {
+        
+        // Check if the details were loaded
+        var detailsLoadedInterval = setInterval(() => {
+            var [cleanedText, minerDetails] = getMinerDetails();
+            var locationID = minerDetails['locationID']; // Rack-Row-Col
+            var splitLocationID = locationID.split('-');
+            console.log(splitLocationID);
+            var row = Number(splitLocationID[1]);
+            var col = Number(splitLocationID[2]);
+            var rowWidth = 4;
+            var breakerNum = (row-1)*rowWidth + col;
+            if (row > 0 && col > 0) {
+                clearInterval(detailsLoadedInterval);
+                addDataBox("Breaker Number", breakerNum);
+            }
+        }, 500);
+    }
+    createBreakerNumBox();
 }
