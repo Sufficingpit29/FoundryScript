@@ -16,7 +16,7 @@
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // ==/UserScript==
 
-const maxScanWindows = 3;
+var maxScanWindows = 3;
 
 var urlLookupExcel = {
     /*
