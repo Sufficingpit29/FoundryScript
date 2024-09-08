@@ -2,7 +2,7 @@
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
 // @version      1.2.7
-// @description  Adds various features to the OptiFleet website to add various aditional functionalities.
+// @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
 // @match        *://tasks.office.com/foundrydigital.com/*
