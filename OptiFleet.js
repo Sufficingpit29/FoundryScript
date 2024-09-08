@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.2.7
+// @version      1.2.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -279,22 +279,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverv
         return (hashRate * hashRateFrom) / hashRateTo;
     }
 
-    /*
-    To do -
-    - Add a element showing that it is loading and checking miners, then pop in with all the hash rate info
-    - Add a look up table for the hash rate potential of each miner model (make it a nested table in a base miner type table)
-    - Reload miners and recalulate hash rate on refresh of base hash rate info box
-    - Reload/Recalculate hash rate on site change
-    - Fully check through all pages and not just first 5000 miners
-    - Figure out a way to optimize so it doesn't try to crash the browser
-
-    OptiFleetPage.prototype.getSelectedSiteId = function () {
-            return OptiFleetPage.selectedSiteId;
-        };
-        OptiFleetPage.prototype.getSelectedSiteName = function () {
-            return OptiFleetPage.selectedSiteName;
-        };
-    */
     // Function to add another hash rate info element to the page
     function addHashRateInfoElement(title, totalHashRate, totalHashRatePotential, totalMiners) {
 
@@ -1112,6 +1096,88 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
 //--------------------------------------------
 // Scan Logic/Down Time Counter
 if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
+
+    // -- Add Breaker Number to Slot ID --
+
+    var minersListTableLookup = {};
+
+    function getCurrentMinerList(baseDocument) {
+        if(!baseDocument) {
+            baseDocument = document;
+        }
+
+        idLookup = {}; // < To do, remove this and rework to only use the minersDataLookup
+        minersDataLookup = {};
+
+        var minerGrid = baseDocument.querySelector('#minerList');
+        if (!minerGrid) {
+            minerGrid = baseDocument.querySelector('#minerGrid');
+        }
+
+        if (minerGrid) {
+            // Loop through all the columns and store the index for each column & name
+            var columnIndexes = {};
+            const columns = minerGrid.querySelectorAll('.k-header');
+            columns.forEach((column, index) => {
+                const title = column.getAttribute('data-title');
+                columnIndexes[title] = index;
+            });
+
+            const rows = minerGrid.querySelectorAll('tr.k-master-row');
+            rows.forEach(row => {
+                const uid = row.getAttribute('data-uid');
+
+                // Loop through columnIndexes and get the data for each column
+                for (const [key, colIndex] of Object.entries(columnIndexes)) {
+                    let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
+                    let colRowElement = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(colIndex+1)) + ')');
+                    if (minerLinkElement && colRowElement) {
+                        // Store the data in the minersListTableLookup
+                        let minerID = minerLinkElement.getAttribute('data-miner-id');
+                        minersListTableLookup[minerID] = minersListTableLookup[minerID] || {};
+                        minersListTableLookup[minerID][key] = colRowElement;
+                    }
+                }
+            });
+        }
+    }
+    
+    // Wait until HTML element with #minerList is loaded
+    const minerListCheck = setInterval(() => {
+        const minerList = document.querySelector('#minerList');
+        if (minerList) {
+            clearInterval(minerListCheck);
+
+            // Add mutation observer to the minerList
+            const observer = new MutationObserver(() => {
+                getCurrentMinerList();
+
+                // Loop through all the Slot ID elements and add the Breaker Number
+                for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
+                    console.log(minerID);
+                    const slotID = minerData['Slot ID'].textContent;
+                    var splitSlotID = slotID.split('-');
+                    console.log(splitSlotID);
+                    var row = Number(splitSlotID[2]);
+                    var col = Number(splitSlotID[3]);
+                    var rowWidth = 4;
+                    var breakerNum = (row-1)*rowWidth + col;
+                    console.log(breakerNum);
+
+                    // if breakerNum isn't NAN
+                    if (!isNaN(breakerNum)) {
+                        var newElement = document.createElement('div');
+                        newElement.textContent = 'Breaker Number:  (' + breakerNum + ')';
+                        newElement.style.marginLeft = '10px';
+                        minerData['Slot ID'].appendChild(newElement);
+                    }
+                }
+            });
+            observer.observe(minerList, { childList: true, subtree: true });
+        }
+    }, 500);
+
+    // -- Scan Logic --
     var scanningElement;
     var progressFill;
     var scanningText;
@@ -1121,7 +1187,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     var progressLog;
 
     // Find the issuesActionsDropdown and add a new action
-    var checkInterval;
     const interval = setInterval(() => {
 
         // Make a second Actions button for different scan times
