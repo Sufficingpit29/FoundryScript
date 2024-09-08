@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.2.6
+// @version      1.2.7
 // @description  Adds various features to the OptiFleet website to add various aditional functionalities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -17,173 +17,178 @@
 // ==/UserScript==
 
 
-// Get  uptime data
-(function (OptiFleet) {
-    var MinerMetricsPanel = /** @class */ (function (_super) {
-        __extends(MinerMetricsPanel, _super);
-        function MinerMetricsPanel(minerId, hackyWorkaround = false) {
-            var _this = _super.call(this) || this;
-            _this.minerId = minerId;
-            _this.hashrateUrl = "/MinerHashrate";
-            _this.expectedhashrateQuery = "/MinerTheoreticalHashrate";
-            _this.fanspeedUrl = "/MinerFanSpeed/Graph";
-            _this.chipTempUrl = "/MinerTemperature";
-            _this.uptimeUrl = "/MinerOnline";
-            if(!hackyWorkaround){
-                _this.hashrateChart = new OptiFleet.StyledLineChart("hashrateChart", "Hash Rate");
-                _this.hashrateChart.formatter = function (val) { return OptiFleet.HashrateUtil.parseHashrate(val, 1); };
-                _this.fanSpeedChart = new OptiFleet.StyledLineChart("fanSpeedChart", "Fan Speed", { withLegend: true });
-                _this.fanSpeedChart.formatter = function (val) { return "".concat(val, " rpm"); };
-                _this.chipTempChart = new OptiFleet.StyledLineChart("pcbTempChart", "Hashboard Temperature", { withLegend: true });
-                _this.chipTempChart.formatter = function (val) { return "".concat(val, " \u00B0C"); };
-                _this.uptimeChart = new OptiFleet.StyledLineChart("uptimeChart", "Uptime");
-                _this.uptimeChart.formatter = function (val) { return val > 0 ? "Online" : "Offline"; };
-                _this.datePicker = new OptiFleet.DatePicker("#datePicker", _this.loadCharts.bind(_this));
+const currentUrl = window.location.href;
+
+// Only run on the OptiFleet website
+if(currentUrl.includes("https://foundryoptifleet.com")) {
+
+    // Get  uptime data
+    (function (OptiFleet) {
+        var MinerMetricsPanel = /** @class */ (function (_super) {
+            __extends(MinerMetricsPanel, _super);
+            function MinerMetricsPanel(minerId, hackyWorkaround = false) {
+                var _this = _super.call(this) || this;
+                _this.minerId = minerId;
+                _this.hashrateUrl = "/MinerHashrate";
+                _this.expectedhashrateQuery = "/MinerTheoreticalHashrate";
+                _this.fanspeedUrl = "/MinerFanSpeed/Graph";
+                _this.chipTempUrl = "/MinerTemperature";
+                _this.uptimeUrl = "/MinerOnline";
+                if(!hackyWorkaround){
+                    _this.hashrateChart = new OptiFleet.StyledLineChart("hashrateChart", "Hash Rate");
+                    _this.hashrateChart.formatter = function (val) { return OptiFleet.HashrateUtil.parseHashrate(val, 1); };
+                    _this.fanSpeedChart = new OptiFleet.StyledLineChart("fanSpeedChart", "Fan Speed", { withLegend: true });
+                    _this.fanSpeedChart.formatter = function (val) { return "".concat(val, " rpm"); };
+                    _this.chipTempChart = new OptiFleet.StyledLineChart("pcbTempChart", "Hashboard Temperature", { withLegend: true });
+                    _this.chipTempChart.formatter = function (val) { return "".concat(val, " \u00B0C"); };
+                    _this.uptimeChart = new OptiFleet.StyledLineChart("uptimeChart", "Uptime");
+                    _this.uptimeChart.formatter = function (val) { return val > 0 ? "Online" : "Offline"; };
+                    _this.datePicker = new OptiFleet.DatePicker("#datePicker", _this.loadCharts.bind(_this));
+                }
+                return _this;
             }
-            return _this;
-        }
 
-        MinerMetricsPanel.prototype.loadCharts = function (params) {
-            this.loadHashrate(params);
-            this.loadFanSpeed(params);
-            this.loadChipTemp(params);
-            this.loadUptime(params);
+            MinerMetricsPanel.prototype.loadCharts = function (params) {
+                this.loadHashrate(params);
+                this.loadFanSpeed(params);
+                this.loadChipTemp(params);
+                this.loadUptime(params);
+            };
+
+            MinerMetricsPanel.prototype.loadHashrate = function (params) {
+                var _this = this;
+                var hrPromise = this.post(this.hashrateUrl, __assign({ id: this.minerId }, params));
+                var expectedHrPromise = this.post(this.expectedhashrateQuery, __assign({ id: this.minerId }, params));
+                Promise.all([hrPromise, expectedHrPromise]).then(function (res) {
+                    _this.hashrateChart.populateChartData(res);
+                });
+            };
+
+            MinerMetricsPanel.prototype.loadFanSpeed = function (params) {
+                var _this = this;
+                this.post(this.fanspeedUrl, __assign({ minerIds: [this.minerId] }, params)).then(function (res) {
+                    _this.fanSpeedChart.populateChartData([res]);
+                });
+            };
+
+            MinerMetricsPanel.prototype.loadChipTemp = function (params) {
+                var _this = this;
+                this.post(this.chipTempUrl, __assign({ id: this.minerId }, params)).then(function (res) {
+                    _this.chipTempChart.populateChartData([res]);
+                });
+            };
+
+            MinerMetricsPanel.prototype.loadUptime = function (params) {
+                var _this = this;
+                this.post(this.uptimeUrl, __assign({ id: this.minerId }, params)).then(function (res) {
+                    _this.uptimeChart.populateChartData([res]);
+                });
+            };
+
+            MinerMetricsPanel.prototype.getUptimeData = function (params) {
+                return this.post(this.uptimeUrl, __assign({ id: this.minerId }, params));
+            };
+
+            return MinerMetricsPanel;
+        }(OptiFleet.OptiFleetService));
+        OptiFleet.MinerMetricsPanel = MinerMetricsPanel;
+    })(OptiFleet || (OptiFleet = {}));
+
+    var minerUpTimes = {};
+    function retrieveMinerUpTime(minerID, timeFrame, callback) {
+        // Reset the miner uptime data
+        minerUpTimes[minerID] = null;
+
+        // Create new instance of MinerMetricsPanel
+        var minerMetricsPanel = new OptiFleet.MinerMetricsPanel(minerID, true);
+        var params = {
+            start: Math.floor(((new Date()).getTime() / 1000) - timeFrame),
+            end: Math.floor((new Date()).getTime() / 1000),
+            step: 300
         };
 
-        MinerMetricsPanel.prototype.loadHashrate = function (params) {
-            var _this = this;
-            var hrPromise = this.post(this.hashrateUrl, __assign({ id: this.minerId }, params));
-            var expectedHrPromise = this.post(this.expectedhashrateQuery, __assign({ id: this.minerId }, params));
-            Promise.all([hrPromise, expectedHrPromise]).then(function (res) {
-                _this.hashrateChart.populateChartData(res);
-            });
-        };
+        // Get uptime data
+        minerMetricsPanel.getUptimeData(params).then(function(uptimeData) {
+            // Sanitize the data to only include the uptime values
+            uptimeData = uptimeData['data']['result'][0]['values']
+            
+            // Store the uptime data
+            minerUpTimes[minerID] = uptimeData;
 
-        MinerMetricsPanel.prototype.loadFanSpeed = function (params) {
-            var _this = this;
-            this.post(this.fanspeedUrl, __assign({ minerIds: [this.minerId] }, params)).then(function (res) {
-                _this.fanSpeedChart.populateChartData([res]);
-            });
-        };
-
-        MinerMetricsPanel.prototype.loadChipTemp = function (params) {
-            var _this = this;
-            this.post(this.chipTempUrl, __assign({ id: this.minerId }, params)).then(function (res) {
-                _this.chipTempChart.populateChartData([res]);
-            });
-        };
-
-        MinerMetricsPanel.prototype.loadUptime = function (params) {
-            var _this = this;
-            this.post(this.uptimeUrl, __assign({ id: this.minerId }, params)).then(function (res) {
-                _this.uptimeChart.populateChartData([res]);
-            });
-        };
-
-        MinerMetricsPanel.prototype.getUptimeData = function (params) {
-            return this.post(this.uptimeUrl, __assign({ id: this.minerId }, params));
-        };
-
-        return MinerMetricsPanel;
-    }(OptiFleet.OptiFleetService));
-    OptiFleet.MinerMetricsPanel = MinerMetricsPanel;
-})(OptiFleet || (OptiFleet = {}));
-
-var minerUpTimes = {};
-function retrieveMinerUpTime(minerID, timeFrame, callback) {
-    // Reset the miner uptime data
-    minerUpTimes[minerID] = null;
-
-    // Create new instance of MinerMetricsPanel
-    var minerMetricsPanel = new OptiFleet.MinerMetricsPanel(minerID, true);
-    var params = {
-        start: Math.floor(((new Date()).getTime() / 1000) - timeFrame),
-        end: Math.floor((new Date()).getTime() / 1000),
-        step: 300
-    };
-
-    // Get uptime data
-    minerMetricsPanel.getUptimeData(params).then(function(uptimeData) {
-        // Sanitize the data to only include the uptime values
-        uptimeData = uptimeData['data']['result'][0]['values']
-        
-        // Store the uptime data
-        minerUpTimes[minerID] = uptimeData;
-
-        // Call the callback function for the uptime data
-        if (callback) {
-            callback(minerID, uptimeData);
-        }
-    }).catch(function(error) {
-        console.error("Failed to retrieve uptime data:", error);
-    });
-}
-
-var allMinersData = {};
-var allMinersLookup = {};
-var pageInstance = new OptiFleet.OptiFleetPage();
-var minerViewServiceInstance = new OptiFleet.MinerViewService();
-var siteId = pageInstance.getSelectedSiteId();
-var companyId = pageInstance.getSelectedCompanyId();
-var lastSiteId = siteId;
-var lastCompanyId = companyId;
-var lastMinerDataUpdate = 0;
-var reloadCards = false;
-
-
-function updateAllMinersData(keepTrying = false) {
-    // Reset allMinersLookup
-    const lastMinersLookup = allMinersLookup;
-    allMinersLookup = {};
-
-    // Get the current site and company ID
-    lastSiteId = siteId;
-    lastCompanyId = companyId;
-    siteId = pageInstance.getSelectedSiteId();
-    companyId = pageInstance.getSelectedCompanyId();
-
-    // Call the getMiners method
-    minerViewServiceInstance.getMiners(companyId, siteId).then(function(miners) {
-
-        // Get first miner in the list and if it existed before/changed any
-        const firstMiner = miners.miners[0];
-        if (miners.miners.length > 0) {
-            console.log("First Miner:", !lastMinersLookup[firstMiner.id]);
-            console.log("Last Site ID:", lastSiteId, "Current Site ID:", siteId);
-            console.log(lastSiteId === '-1' || siteId === '-1', Object.keys(lastMinersLookup).length, miners.miners.length);
-            // Either the a miner no longer exists or we've swaped from/to an all sites and the length changed, if either of those are true we can assume the data has changed
-            if (!lastMinersLookup[firstMiner.id] || (lastSiteId === '-1' || siteId === '-1') && Object.keys(lastMinersLookup).length !== miners.miners.length) {
-                lastMinerDataUpdate = Date.now();
-                reloadCards = true;
-                console.log("Miner data updated");
+            // Call the callback function for the uptime data
+            if (callback) {
+                callback(minerID, uptimeData);
             }
-        }
-
-        if(keepTrying && Date.now() - lastMinerDataUpdate > 1000) {
-            console.log("Retrying to get miner data");
-            setTimeout(function() {
-                updateAllMinersData(true);
-            }, 500);
-        }
-
-        // Sets up a lookup table
-        miners.miners.forEach(miner => {
-            allMinersLookup[miner.id] = miner;
+        }).catch(function(error) {
+            console.error("Failed to retrieve uptime data:", error);
         });
+    }
 
-        // Get the miners data
-        allMinersData = miners.miners;
-    }).catch(function(error) {
-        console.error("Error fetching miners data:", error);
-    });
+    var allMinersData = {};
+    var allMinersLookup = {};
+    var pageInstance = new OptiFleet.OptiFleetPage();
+    var minerViewServiceInstance = new OptiFleet.MinerViewService();
+    var siteId = pageInstance.getSelectedSiteId();
+    var companyId = pageInstance.getSelectedCompanyId();
+    var lastSiteId = siteId;
+    var lastCompanyId = companyId;
+    var lastMinerDataUpdate = 0;
+    var reloadCards = false;
+
+
+    function updateAllMinersData(keepTrying = false) {
+        // Reset allMinersLookup
+        const lastMinersLookup = allMinersLookup;
+        allMinersLookup = {};
+
+        // Get the current site and company ID
+        lastSiteId = siteId;
+        lastCompanyId = companyId;
+        siteId = pageInstance.getSelectedSiteId();
+        companyId = pageInstance.getSelectedCompanyId();
+
+        // Call the getMiners method
+        minerViewServiceInstance.getMiners(companyId, siteId).then(function(miners) {
+
+            // Get first miner in the list and if it existed before/changed any
+            const firstMiner = miners.miners[0];
+            if (miners.miners.length > 0) {
+                console.log("First Miner:", !lastMinersLookup[firstMiner.id]);
+                console.log("Last Site ID:", lastSiteId, "Current Site ID:", siteId);
+                console.log(lastSiteId === '-1' || siteId === '-1', Object.keys(lastMinersLookup).length, miners.miners.length);
+                // Either the a miner no longer exists or we've swaped from/to an all sites and the length changed, if either of those are true we can assume the data has changed
+                if (!lastMinersLookup[firstMiner.id] || (lastSiteId === '-1' || siteId === '-1') && Object.keys(lastMinersLookup).length !== miners.miners.length) {
+                    lastMinerDataUpdate = Date.now();
+                    reloadCards = true;
+                    console.log("Miner data updated");
+                }
+            }
+
+            if(keepTrying && Date.now() - lastMinerDataUpdate > 1000) {
+                console.log("Retrying to get miner data");
+                setTimeout(function() {
+                    updateAllMinersData(true);
+                }, 500);
+            }
+
+            // Sets up a lookup table
+            miners.miners.forEach(miner => {
+                allMinersLookup[miner.id] = miner;
+            });
+
+            // Get the miners data
+            allMinersData = miners.miners;
+        }).catch(function(error) {
+            console.error("Error fetching miners data:", error);
+        });
+    }
+    updateAllMinersData();
+
+    function getMinerData(minerId) {
+        return allMinersLookup[minerId];
+    }
+
 }
-updateAllMinersData();
-
-function getMinerData(minerId) {
-    return allMinersLookup[minerId];
-}
-
-var maxScanWindows = 3;
 
 var urlLookupExcel = {
     /*
@@ -249,8 +254,6 @@ function getMinerDetails() {
 }
 
 //-----------------
-
-const currentUrl = window.location.href;
 
 // Non-Bitcoin Hash Rate Logic
 if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
