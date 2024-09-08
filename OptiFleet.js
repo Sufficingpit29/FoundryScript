@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Copy Details (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      0.9
+// @version      1.2.6
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -15,6 +15,173 @@
 // @grant        GM_xmlhttpRequest
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // ==/UserScript==
+
+
+// Get  uptime data
+(function (OptiFleet) {
+    var MinerMetricsPanel = /** @class */ (function (_super) {
+        __extends(MinerMetricsPanel, _super);
+        function MinerMetricsPanel(minerId, hackyWorkaround = false) {
+            var _this = _super.call(this) || this;
+            _this.minerId = minerId;
+            _this.hashrateUrl = "/MinerHashrate";
+            _this.expectedhashrateQuery = "/MinerTheoreticalHashrate";
+            _this.fanspeedUrl = "/MinerFanSpeed/Graph";
+            _this.chipTempUrl = "/MinerTemperature";
+            _this.uptimeUrl = "/MinerOnline";
+            if(!hackyWorkaround){
+                _this.hashrateChart = new OptiFleet.StyledLineChart("hashrateChart", "Hash Rate");
+                _this.hashrateChart.formatter = function (val) { return OptiFleet.HashrateUtil.parseHashrate(val, 1); };
+                _this.fanSpeedChart = new OptiFleet.StyledLineChart("fanSpeedChart", "Fan Speed", { withLegend: true });
+                _this.fanSpeedChart.formatter = function (val) { return "".concat(val, " rpm"); };
+                _this.chipTempChart = new OptiFleet.StyledLineChart("pcbTempChart", "Hashboard Temperature", { withLegend: true });
+                _this.chipTempChart.formatter = function (val) { return "".concat(val, " \u00B0C"); };
+                _this.uptimeChart = new OptiFleet.StyledLineChart("uptimeChart", "Uptime");
+                _this.uptimeChart.formatter = function (val) { return val > 0 ? "Online" : "Offline"; };
+                _this.datePicker = new OptiFleet.DatePicker("#datePicker", _this.loadCharts.bind(_this));
+            }
+            return _this;
+        }
+
+        MinerMetricsPanel.prototype.loadCharts = function (params) {
+            this.loadHashrate(params);
+            this.loadFanSpeed(params);
+            this.loadChipTemp(params);
+            this.loadUptime(params);
+        };
+
+        MinerMetricsPanel.prototype.loadHashrate = function (params) {
+            var _this = this;
+            var hrPromise = this.post(this.hashrateUrl, __assign({ id: this.minerId }, params));
+            var expectedHrPromise = this.post(this.expectedhashrateQuery, __assign({ id: this.minerId }, params));
+            Promise.all([hrPromise, expectedHrPromise]).then(function (res) {
+                _this.hashrateChart.populateChartData(res);
+            });
+        };
+
+        MinerMetricsPanel.prototype.loadFanSpeed = function (params) {
+            var _this = this;
+            this.post(this.fanspeedUrl, __assign({ minerIds: [this.minerId] }, params)).then(function (res) {
+                _this.fanSpeedChart.populateChartData([res]);
+            });
+        };
+
+        MinerMetricsPanel.prototype.loadChipTemp = function (params) {
+            var _this = this;
+            this.post(this.chipTempUrl, __assign({ id: this.minerId }, params)).then(function (res) {
+                _this.chipTempChart.populateChartData([res]);
+            });
+        };
+
+        MinerMetricsPanel.prototype.loadUptime = function (params) {
+            var _this = this;
+            this.post(this.uptimeUrl, __assign({ id: this.minerId }, params)).then(function (res) {
+                _this.uptimeChart.populateChartData([res]);
+            });
+        };
+
+        MinerMetricsPanel.prototype.getUptimeData = function (params) {
+            return this.post(this.uptimeUrl, __assign({ id: this.minerId }, params));
+        };
+
+        return MinerMetricsPanel;
+    }(OptiFleet.OptiFleetService));
+    OptiFleet.MinerMetricsPanel = MinerMetricsPanel;
+})(OptiFleet || (OptiFleet = {}));
+
+var minerUpTimes = {};
+function retrieveMinerUpTime(minerID, timeFrame, callback) {
+    // Reset the miner uptime data
+    minerUpTimes[minerID] = null;
+
+    // Create new instance of MinerMetricsPanel
+    var minerMetricsPanel = new OptiFleet.MinerMetricsPanel(minerID, true);
+    var params = {
+        start: Math.floor(((new Date()).getTime() / 1000) - timeFrame),
+        end: Math.floor((new Date()).getTime() / 1000),
+        step: 300
+    };
+
+    // Get uptime data
+    minerMetricsPanel.getUptimeData(params).then(function(uptimeData) {
+        // Sanitize the data to only include the uptime values
+        uptimeData = uptimeData['data']['result'][0]['values']
+        
+        // Store the uptime data
+        minerUpTimes[minerID] = uptimeData;
+
+        // Call the callback function for the uptime data
+        if (callback) {
+            callback(minerID, uptimeData);
+        }
+    }).catch(function(error) {
+        console.error("Failed to retrieve uptime data:", error);
+    });
+}
+
+var allMinersData = {};
+var allMinersLookup = {};
+var pageInstance = new OptiFleet.OptiFleetPage();
+var minerViewServiceInstance = new OptiFleet.MinerViewService();
+var siteId = pageInstance.getSelectedSiteId();
+var companyId = pageInstance.getSelectedCompanyId();
+var lastSiteId = siteId;
+var lastCompanyId = companyId;
+var lastMinerDataUpdate = 0;
+var reloadCards = false;
+
+
+function updateAllMinersData(keepTrying = false) {
+    // Reset allMinersLookup
+    const lastMinersLookup = allMinersLookup;
+    allMinersLookup = {};
+
+    // Get the current site and company ID
+    lastSiteId = siteId;
+    lastCompanyId = companyId;
+    siteId = pageInstance.getSelectedSiteId();
+    companyId = pageInstance.getSelectedCompanyId();
+
+    // Call the getMiners method
+    minerViewServiceInstance.getMiners(companyId, siteId).then(function(miners) {
+
+        // Get first miner in the list and if it existed before/changed any
+        const firstMiner = miners.miners[0];
+        if (miners.miners.length > 0) {
+            console.log("First Miner:", !lastMinersLookup[firstMiner.id]);
+            console.log("Last Site ID:", lastSiteId, "Current Site ID:", siteId);
+            console.log(lastSiteId === '-1' || siteId === '-1', Object.keys(lastMinersLookup).length, miners.miners.length);
+            // Either the a miner no longer exists or we've swaped from/to an all sites and the length changed, if either of those are true we can assume the data has changed
+            if (!lastMinersLookup[firstMiner.id] || (lastSiteId === '-1' || siteId === '-1') && Object.keys(lastMinersLookup).length !== miners.miners.length) {
+                lastMinerDataUpdate = Date.now();
+                reloadCards = true;
+                console.log("Miner data updated");
+            }
+        }
+
+        if(keepTrying && Date.now() - lastMinerDataUpdate > 1000) {
+            console.log("Retrying to get miner data");
+            setTimeout(function() {
+                updateAllMinersData(true);
+            }, 500);
+        }
+
+        // Sets up a lookup table
+        miners.miners.forEach(miner => {
+            allMinersLookup[miner.id] = miner;
+        });
+
+        // Get the miners data
+        allMinersData = miners.miners;
+    }).catch(function(error) {
+        console.error("Error fetching miners data:", error);
+    });
+}
+updateAllMinersData();
+
+function getMinerData(minerId) {
+    return allMinersLookup[minerId];
+}
 
 var maxScanWindows = 3;
 
@@ -37,26 +204,6 @@ const urlLookupPlanner = {
     "Fortitude": "https://tasks.office.com/foundrydigital.com/Home/Planner/#/plantaskboard?groupId=efbb33a0-825d-4dff-8384-a8b34b58b606&planId=TbJIxx_byEKhuMp-C4tXLGUAD3Tb",
     "RAMM": "https://tasks.office.com/foundrydigital.com/Home/Planner/#/plantaskboard?groupId=efbb33a0-825d-4dff-8384-a8b34b58b606&planId=FHYUYbYUfkqd2-oSKLk7xGUAHvRz"
 };
-
-function setAllZones() {
-    // Find ddlZones_listbox and select All Sites
-    var wasAlreadyAllZones = true;
-    const ddlZones = document.querySelector('#ddlZones');
-    if (ddlZones) {
-        ddlZones.click();
-        const animationContainer = document.querySelector('.k-animation-container');
-        const list = animationContainer.querySelector('.k-list');
-        const items = list.querySelectorAll('.k-item');
-        const selectedOption = list.querySelector('.k-state-selected');
-        if (selectedOption.textContent !== 'All Zones') {
-            items[0].click();
-            wasAlreadyAllZones = false;
-        }
-        ddlZones.click();
-    }
-
-    return wasAlreadyAllZones;
-}
 
 function parseMinerDetails(text) {
     const details = {};
@@ -101,8 +248,243 @@ function getMinerDetails() {
     return [cleanedText, minerDetails];
 }
 
+//-----------------
 
 const currentUrl = window.location.href;
+
+// Non-Bitcoin Hash Rate Logic
+if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
+
+    
+    // Hash Rate Types
+    const hashRateTypes = {
+        'H': 1,
+        'KH': 1e3,
+        'MH': 1e6,
+        'GH': 1e9,
+        'TH': 1e12,
+        'PH': 1e15,
+        'EH': 1e18,
+        'ZH': 1e21,
+    };
+
+    // Function to convert hash rates between types
+    function convertRates(hashRate, fromType, toType) {
+        const hashRateFrom = hashRateTypes[fromType];
+        const hashRateTo = hashRateTypes[toType];
+
+        return (hashRate * hashRateFrom) / hashRateTo;
+    }
+
+    /*
+    To do -
+    - Add a element showing that it is loading and checking miners, then pop in with all the hash rate info
+    - Add a look up table for the hash rate potential of each miner model (make it a nested table in a base miner type table)
+    - Reload miners and recalulate hash rate on refresh of base hash rate info box
+    - Reload/Recalculate hash rate on site change
+    - Fully check through all pages and not just first 5000 miners
+    - Figure out a way to optimize so it doesn't try to crash the browser
+
+    OptiFleetPage.prototype.getSelectedSiteId = function () {
+            return OptiFleetPage.selectedSiteId;
+        };
+        OptiFleetPage.prototype.getSelectedSiteName = function () {
+            return OptiFleetPage.selectedSiteName;
+        };
+    */
+    // Function to add another hash rate info element to the page
+    function addHashRateInfoElement(title, totalHashRate, totalHashRatePotential, totalMiners) {
+
+        // Run through the hash rate types until we find the best one to display
+        var hashType = 'H';
+        for (const [key, value] of Object.entries(hashRateTypes)) {
+            if (totalHashRate > value) {
+                hashType = key;
+            }
+        }
+
+        // Convert the hash rates to PHs
+        totalHashRate = convertRates(totalHashRate, 'H', hashType).toFixed(2);
+        totalHashRatePotential = convertRates(totalHashRatePotential, 'H', hashType).toFixed(2);
+
+        // Get average hash rate per miner
+        var averageHashRate = totalHashRate / totalMiners;
+
+        // Calculate the efficiency
+        var efficiency = (totalHashRate / totalHashRatePotential) * 100;
+        efficiency = efficiency.toFixed(1);
+        
+        // Calculate the percentage of the total hash rate
+        var totalHashRatePercentage = (totalHashRate / totalHashRatePotential) * 100;
+        totalHashRatePercentage = totalHashRatePercentage.toFixed(1);
+
+        const hashRateCard = document.createElement('div');
+        hashRateCard.className = 'bar-chart-card m-box custom';
+        hashRateCard.innerHTML = `
+            <div class="m-stack has-space-m">
+            <div class="bar-chart-card-title">
+                <h3 class="m-heading is-size-l">${title}</h3>
+                <div>
+                <div class="green-dot"></div>
+                &nbsp;
+                <span class="m-text">Realtime</span>
+                </div>
+            </div>
+            <div class="bar-chart-section">
+                <h4 class="bar-chart-title m-heading is-size-xs">Total Hash Rate / Hash Rate Potential</h4>
+                <div class="bar-chart-row">
+                <div class="bar-chart-container">
+                    <div class="bar-chart" id="hashRateBar_${title}" style="width: ${totalHashRatePercentage}%;">
+                    <div class="bar-chart-text">
+                        <span class="m-heading is-size-xs" id="hashRateBarVal_${title}">${totalHashRate}</span>
+                        <span class="m-heading is-size-xs" id="hashRateBarValUnits_${title}">${hashType}s</span>
+                    </div>
+                    </div>
+                </div>
+                <div class="bar-chart-total">
+                    <span class="m-heading is-size-xs" id="hashRatePotential_${title}">${totalHashRatePotential}</span>
+                    <span class="m-heading is-size-xs is-muted" id="hashRatePotentialUnit_${title}s">${hashType}s</span>
+                </div>
+                </div>
+            </div>
+            <div class="metric-row">
+                <m-icon name="activity-square" size="xl"></m-icon>
+                &nbsp;&nbsp;
+                <span class="m-heading is-size-l is-muted">Efficiency:</span>&nbsp;&nbsp;
+                <span class="m-code is-size-l" id="hashRateEfficiency_${title}">${efficiency}%</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                <span class="m-heading is-size-l is-muted">Average:</span>&nbsp;&nbsp;
+                <span class="m-code is-size-l" id="hashRateAverage_${title}">${averageHashRate.toFixed(2)} ${hashType}s</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                <span class="m-heading is-size-l is-muted">Miners:</span>&nbsp;&nbsp;
+                <span class="m-code is-size-l" id="hashRateMiners_${title}">${totalMiners}</span>
+            </div>
+            </div>
+        `;
+        
+        // Find all 'bar-chart-card m-box' elements and add after the last one
+        const lastCard = document.querySelectorAll('.bar-chart-card.m-box')[document.querySelectorAll('.bar-chart-card.m-box').length - 1];
+        if (lastCard) {
+            lastCard.after(hashRateCard);
+        } else {
+            document.body.appendChild(hashRateCard);
+        }
+        console.log("Added Hash Rate Info Element");
+    }
+
+    const unsupportedModels = {
+        ["EquiHash"]:   ["Antminer Z15", "Antminer Z15j", "Antminer Z15e"],
+        ["Scrypt"] :    ["L7 9500M"] 
+    };
+
+    function removeAllHashRateElements() {
+        const hashRateCards = document.querySelectorAll('.bar-chart-card.m-box.custom');
+        hashRateCards.forEach(card => {
+            console.log("Deleted card:", card);
+            card.remove();
+        });
+    }
+
+    // Function to loop through all miners, find the non-supported miners, calculate the hash rate and add the hash rate info element
+    function createHashRateElements() {
+
+        // Update the miner data
+        updateAllMinersData();
+
+        // Keep checking until the miner data is updated
+        if (!reloadCards) {
+            return;
+        }
+        reloadCards = false;
+
+        var totalHashRates = {};
+        /* Basic sudo structure
+        {
+            "EquiHash": {
+                "totalHashRate": 0,
+                "totalHashRatePotential": 0,
+                "totalMiners": 0
+            },
+            "Scrypt": {
+                "totalHashRate": 0,
+                "totalHashRatePotential": 0,
+                "totalMiners": 0
+            }
+        }
+        */
+
+        // Loop through all miners
+        for (const [index, minerData] of Object.entries(allMinersData)) {
+
+            // Check if the miner is in the hash rate types
+            for (const [hashRateType, minerModels] of Object.entries(unsupportedModels)) {
+                if (minerModels.includes(minerData.model)) {
+                    // Check if the miner is in the hash rate types
+                    if (!totalHashRates[hashRateType]) {
+                        totalHashRates[hashRateType] = {
+                            "totalHashRate": 0,
+                            "totalHashRatePotential": 0,
+                            "totalMiners": 0
+                        };
+                    }
+
+                    // Add the hash rate to the total hash rate
+                    totalHashRates[hashRateType].totalHashRate += minerData.currentHashRate;
+                    totalHashRates[hashRateType].totalHashRatePotential += minerData.expectedHashRate;
+                    totalHashRates[hashRateType].totalMiners++;
+                }
+            }
+        }
+
+        if (Object.keys(totalHashRates).length === 0) {
+            console.log("No miners found for hash rate types");
+            return;
+        }
+
+        // Find and delete all bar-chart-card m-box custom
+        removeAllHashRateElements();
+
+        // Loop through the total hash rates and add the hash rate info elements
+        for (const [hashRateType, hashRateData] of Object.entries(totalHashRates)) {
+            addHashRateInfoElement("Hash Rate [" + hashRateType +"]", hashRateData.totalHashRate, hashRateData.totalHashRatePotential, hashRateData.totalMiners);
+        }
+    }
+
+    // Call the function to create the hash rate elements
+    createHashRateElements();
+    
+    // Looks for refreshing and then updates the hash rate elements
+    var hasRefreshed = false;
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if(hasRefreshed && mutation.target.innerText !== "Refreshing...") {
+                hasRefreshed = false;
+                createHashRateElements();
+            }
+            if(mutation.target.innerText === "Refreshing...") {
+                hasRefreshed = true;
+            }
+        });
+    });
+
+    var config = { attributes: true, childList: true, characterData: true };   
+    observer.observe(document.querySelector('div[c-id="siteOverview_autoRefreshChip"]'), config);
+
+    
+    setInterval(function() {
+        // Check if reloadCards is true and if so, run the createHashRateElements function
+        if (reloadCards) {
+            createHashRateElements();
+        }
+
+        // Constantly checks if there siteId or companyId changes and updates the hash rate elements
+        if(pageInstance.getSelectedSiteId() !== siteId || pageInstance.getSelectedCompanyId() !== companyId) {
+            removeAllHashRateElements();
+            updateAllMinersData(true);
+            console.log("Site ID or Company ID has changed.");
+        }
+    }, 500);
+}
+
+// Scan Miner SN Logic
 if(currentUrl.includes("https://foundryoptifleet.com/")) {
 
     // Check is the user ever inputs something
@@ -144,99 +526,24 @@ if(currentUrl.includes("https://foundryoptifleet.com/")) {
                     return;
                 }
 
-                // Save the serial number to the storage
-                GM_SuperValue.set('serialNumberInputted', serialInputted);
+                // Update to make sure we have the latest miner data
+                updateAllMinersData();
+                
+                // Find the miner with the serial number
+                var minerID = false;
+                for (const [index, minerData] of Object.entries(allMinersData)) {
+                    if(minerData.serialNumber === serialInputted) {
+                        minerID = minerData.id;
+                        break;
+                    }
+                }
 
-                // Redirect to https://foundryoptifleet.com/Content/Dashboard/Miners/List
-                window.location.href = "https://foundryoptifleet.com/Content/Dashboard/Miners/List";
+                // If we found the miner, open the miner page
+                window.location.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
             }, 500);
         }
         lastInputTime = Date.now();
     });
-
-    const savedSerialNumber = GM_SuperValue.get('serialNumberInputted', '');
-    if (savedSerialNumber !== '') {
-        setTimeout(() => {
-            
-            // Make sure we're looking in all zones
-            setAllZones();
-
-            // Select .op-select-filters clickable
-            const moreFilters = document.querySelector('.op-select-filters.clickable');
-            if (moreFilters) {
-                moreFilters.click();
-            }
-
-            // Now select and enable Serial Number and click apply
-            const serialNumberOption = document.querySelector('.option.m-menu-item input[c-id="serialNumberOption"]');
-            
-            // If it exists and is not checked, click on it
-            if (serialNumberOption && !serialNumberOption.checked) {
-                serialNumberOption.click();
-
-                // Now click on Apply
-                const moreFiltersApplyBtn = document.querySelector('[c-id="moreFiltersApplyBtn"]');
-                if (moreFiltersApplyBtn) {
-                    moreFiltersApplyBtn.click();
-                }
-            } else {
-                moreFilters.click();
-            }
-
-            // Now click on the serial number filter
-            const serialNumberFilter = document.querySelector('[c-id="serialNumberFilter"]');
-            if (serialNumberFilter) {
-                serialNumberFilter.click();
-            }
-
-            // Now enter number in serialNumberInput
-            const serialNumberInput = document.querySelector('[c-id="serialNumberInput"]');
-            if (serialNumberInput) {
-                serialNumberInput.value = savedSerialNumber;
-            }
-
-            // Now apply serialNumberApplyBtn
-            const serialNumberApplyBtn = document.querySelector('[c-id="serialNumberApplyBtn"]');
-            if (serialNumberApplyBtn) {
-                serialNumberApplyBtn.click();
-            }
-
-            // Repeativly check for menu-wrapper for 6 seconds
-            var counter = 0;
-            var intervalId = setInterval(function() {
-                const minerGrid = document.querySelector('#minerGrid');
-                if (minerGrid) {
-                    const rows = minerGrid.querySelectorAll('tr.k-master-row');
-                    rows.forEach(row => {
-                        const serialNumber = row.querySelector('td[role="gridcell"]:nth-child(2)');
-                        const uid = row.getAttribute('data-uid');
-
-                        if (serialNumber && uid) {
-                            //console.log(serialNumber.textContent);
-                            //console.log(uid);
-                            //menu-wrapper
-                            let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
-                            if (minerLinkElement) {
-                                let minerID = minerLinkElement.getAttribute('data-miner-id');
-                                clearInterval(intervalId);
-
-                                // Open link in new tab
-                                GM_SuperValue.set("serialNumberInputted", "");
-                                window.location.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                                return;
-                            }
-                        }
-                    });
-                }
-                counter++;
-                if (counter === 12) {
-                    clearInterval(intervalId);
-                }
-            }, 1000);
-
-            serialInputted = "";
-        }, 500);
-    }
 }
 
 // Check if on the source website
@@ -800,41 +1107,13 @@ if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) 
 }
 
 //--------------------------------------------
-// Reboot Counter
+// Scan Logic/Down Time Counter
 if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
-
-    // Function that gets all the miner serial numbers
-    var idLookup = false;
-    function loopMinersList() {
-        idLookup = {};
-        const minerGrid = document.querySelector('#minerList');
-        if (minerGrid) {
-            const serialNumberColElement = document.querySelector('.k-header[data-title="Serial Number"]');
-            if (serialNumberColElement) {
-                var serialNumberColIndex = serialNumberColElement.getAttribute('data-index');
-                const rows = minerGrid.querySelectorAll('tr.k-master-row');
-                rows.forEach(row => {
-                    const serialNumber = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(serialNumberColIndex) + 1) + ')');
-                    const uid = row.getAttribute('data-uid');
-
-                    if (serialNumber && uid) {
-                        //menu-wrapper
-                        let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
-                        if (minerLinkElement) {
-                            let minerID = minerLinkElement.getAttribute('data-miner-id');
-                            idLookup[minerID] = serialNumber.textContent;
-                        }
-                    }
-                });
-            }
-        }
-    }
-
     var scanningElement;
     var progressFill;
     var scanningText;
     var scanningInterval;
-    var tryOpenMiners;
+    var scanTimeFrameText;
     var percentageText;
     var progressLog;
 
@@ -880,31 +1159,11 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             // Put the new dropdown before the original dropdown
             actionsDropdown.before(newActionsDropdown);
 
-            function startScan(timeSpan, scanAmount, scanType, reloadTime) {
-
-                // Set the max scan windows
-                maxScanWindows = scanAmount;
+            function startScan(timeFrame) {
+                var minersDownCount = {};
 
                 // Close the dropdown
                 issues.toggleDropdownMenu('newActionsDropdown');
-
-                // Set the time we're checking for
-                GM_SuperValue.set('scanTimeSpan', timeSpan);
-
-                // Save the idLookup object to local storage
-                GM_SuperValue.set('scanFor', JSON.stringify(idLookup));
-
-                // Save the length of the idLookup object to local storage
-                GM_SuperValue.set('scanTotal', Object.keys(idLookup).length);
-
-                // Clear any preexisting downsCount values
-                for (const minerID in idLookup) {
-                    GM_SuperValue.set(`downsCount${minerID}`, '-1');
-                }
-
-                // Open a new tab to the first miner
-                //const fistLink = "https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=" + Object.keys(idLookup)[0];
-                //window.open(fistLink, 'Collecting Data...', 'width=800,height=600');
 
                 // Create an element to completely cover the page
                 scanningElement = document.createElement('div');
@@ -963,20 +1222,9 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 progressBar.appendChild(percentageText);
 
                 setInterval(() => {
-
-                    var minersToSearch = JSON.parse(GM_SuperValue.get('scanFor', '{}'));
-                    var rebootCounts = {};
-                    for (const minerID in minersToSearch) {
-                        const minerReboots = Number(GM_SuperValue.get(`downsCount${minerID}`, -1));
-                        if (minerReboots === -1) {
-                            continue;
-                        }
-                        rebootCounts[minerID] = minerReboots;
-                    }
-
                     // Calculate the progress percentage
-                    const totalMiners = Object.keys(minersToSearch).length;
-                    const minersScanned = Object.keys(rebootCounts).length;
+                    var totalMiners = OptiFleet.Issues.miners.length;
+                    var minersScanned = Object.keys(minersDownCount).length;
                     const progressPercentage = (minersScanned / totalMiners) * 100;
 
                     // Update the progress bar fill and percentage text
@@ -998,6 +1246,9 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 progressLog.style.overflow = 'auto';
                 document.body.appendChild(progressLog);
 
+                // Spin rotation to be used in the loading icon
+                let rotation = 0;
+
                 // Add a message to the progress log
                 const logMessage = document.createElement('div');
                 logMessage.textContent = 'Progress Log';
@@ -1006,129 +1257,185 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
                 progressLog.appendChild(logMessage);
                 var logEntries = {};
 
-                // Listen for a message to close the iframe
-                window.addEventListener('message', function(event) {
-                    if (event.data.action === 'closeIframe') {
-                        // Find and remove the iframe
-                        const iframe = document.querySelector('iframe'); // Or a more specific selector
-                        if (iframe) {
-                            iframe.parentNode.removeChild(iframe);
+                // Loop through allMinersData and get the uptime
+                var issueMiners = OptiFleet.Issues.miners;
+                var currentMiner = issueMiners[0];
+                var currentMinerIndex = 0;
+                function parseMinerUpTimeData(minerID, timeFrame) {
 
-                            // Only swap to checkmark on successful scan
-                            if(!event.data.reload) {
-                                // Remove the spinning 'loading' icon from the log entry
-                                let logEntry = logEntries[event.data.minerID];
-                                if (logEntry) {
-                                    const loadingIcon = logEntry.querySelector('span');
-                                    if (loadingIcon) {
-                                        loadingIcon.remove();
-                                    }
-                                }
+                    // Add to progress log
+                    const logEntry = document.createElement('div');
+                    logEntry.textContent = `Miner ${minerID}`;
+                    logEntry.style.padding = '10px';
+                    logEntry.style.borderBottom = '1px solid white';
+                    progressLog.appendChild(logEntry);
+                    logEntries[minerID] = logEntry;
 
-                                // Make it a checkmark
-                                const checkmark = document.createElement('span');
-                                checkmark.textContent = '✓';
-                                checkmark.style.display = 'inline-block';
-                                checkmark.style.position = 'absolute';
-                                checkmark.style.right = '10px';
-                                logEntry.appendChild(checkmark);
+                    // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
+                    const loadingIcon = document.createElement('span');
+                    loadingIcon.textContent = '↻';
+                    loadingIcon.style.display = 'none';
+                    loadingIcon.style.position = 'absolute';
+                    loadingIcon.style.right = '10px';
+                    logEntry.appendChild(loadingIcon);
+
+                    // Make it spin
+                    loadingIcon.loadingIconInterval = setInterval(() => {
+                        rotation = (rotation + 0.5) % 360;
+                        loadingIcon.style.transform = `rotate(${rotation}deg)`;
+                    }, 1);
+                    loadingIcon.style.display = 'inline-block';  // Show the icon
+
+                    // Scroll to the bottom of the progress log
+                    progressLog.scrollTop = progressLog.scrollHeight;
+
+                    retrieveMinerUpTime(minerID, timeFrame, function(minerID, minerUptime) {
+                        // Remove the spinning 'loading' icon from the log entry
+                        let logEntry = logEntries[minerID];
+                        if (logEntry) {
+                            const loadingIcon = logEntry.querySelector('span');
+                            if (loadingIcon) {
+                                clearInterval(loadingIcon.loadingIconInterval);
+                                loadingIcon.remove();
                             }
-
-                            // Scroll to the bottom of the progress log
-                            progressLog.scrollTop = progressLog.scrollHeight;
                         }
+
+                        // Make it a checkmark
+                        const checkmark = document.createElement('span');
+                        checkmark.textContent = '✓';
+                        checkmark.style.display = 'inline-block';
+                        checkmark.style.position = 'absolute';
+                        checkmark.style.right = '10px';
+                        logEntry.appendChild(checkmark);
+
+                        // Loop through the uptime and check for any downtime
+                        var minerDownTimes = 0;
+                        var previousState = '1';
+                        for (const [timestamp, data] of Object.entries(minerUptime)) {
+                            var state = data[1];
+                            if (state === '0' && previousState === '1') {
+                                minerDownTimes++;
+                            }
+                            previousState = state;
+                        }
+
+                        // Add the miner to the minersDownCount object
+                        minersDownCount[minerID] = minerDownTimes;
+
+                        // Run the next miner
+                        console.log("currentMinerIndex: " + currentMinerIndex);
+                        console.log("allMinersData.length: " + Object.keys(issueMiners).length);
+                        currentMinerIndex++;
+                        if (currentMinerIndex < Object.keys(issueMiners).length) {
+                            currentMiner = issueMiners[currentMinerIndex];
+                            parseMinerUpTimeData(currentMiner.id, timeFrame);
+                        }
+                    });
+                }
+                parseMinerUpTimeData(currentMiner.id, timeFrame);
+
+                const waitTillDone = setInterval(() => {
+                    if (Object.keys(minersDownCount).length === Object.keys(issueMiners).length) {
+                        clearInterval(waitTillDone);
+
+                        // Remove the scanning element
+                        scanningElement.remove();
+                        progressLog.remove();
+                        clearInterval(scanningInterval);
+
+                        // Create a popup element for showing the results
+                        popupResultElement = document.createElement('div');
+                        popupResultElement.innerHTML = `
+                            <div style="
+                                position: fixed;
+                                top: 50%;
+                                left: 50%;
+                                transform: translate(-50%, -50%);
+                                background-color: #333;
+                                color: white;
+                                padding: 20px;
+                                font-family: Arial, sans-serif;
+                                border-radius: 5px;
+                                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+                            ">
+                                <h1 style="text-align: center; margin-bottom: 20px;">Offline Count List (${scanTimeFrameText})</h1>
+                                <div style="max-height: 400px; overflow-y: auto;">
+                                    <table style="width: 100%;">
+                                        <thead>
+                                            <tr>
+                                                <th style="padding: 10px;">Offline Count</th>
+                                                <th style="padding: 10px;">Miner Link</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <button id="closePopup" style="
+                                    padding: 10px 20px;
+                                    background-color: #555;
+                                    color: white;
+                                    border: none;
+                                    cursor: pointer;
+                                    margin-top: 10px;
+                                    border-radius: 3px;
+                                ">Close</button>
+                            </div>
+                        `;
+
+                        const closePopupButton = popupResultElement.querySelector('#closePopup');
+                        closePopupButton.onclick = function() {
+                            popupResultElement.remove();
+                            popupResultElement = null;
+                        };
+
+                        document.body.appendChild(popupResultElement);
+
+                        // Order the reboot counts by the count
+                        const orderedRebootCounts = Object.entries(minersDownCount).sort((a, b) => b[1] - a[1]);
+
+                        // Loop through the ordered reboot counts and add them to the popup
+                        const popupTableBody = popupResultElement.querySelector('tbody');
+                        orderedRebootCounts.forEach(([minerID, rebootCount]) => {
+                            const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td style="padding: 10px; color: white;">${rebootCount}</td>
+                                <td style="padding: 10px;"><a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID}</a></td>
+                            `;
+                            popupTableBody.appendChild(row);
+                        });
                     }
-                }, false);
-
-                // Loop through and open all miners
-                var delayAfter = 0;
-                tryOpenMiners = setInterval(() => {
-                    for (const [index, minerID] of Object.keys(idLookup).entries()) {
-
-                        // Link to the miner
-                        const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}&scan=true&scanType=${scanType}&reloadTime=${reloadTime}`;
-        
-                        // Check if there are too many iframes open or this miner is already open or scanned
-                        const existingIframes = document.querySelectorAll('iframe');
-                        const tooManyOpen = existingIframes.length >= maxScanWindows;
-                        const minerAlreadyOpen = [...existingIframes].some(iframe => iframe.src === minerLink);
-                        const minerAlreadyScanned = Number(GM_SuperValue.get(`downsCount${minerID}`, -1)) !== -1;
-                        if (tooManyOpen || minerAlreadyOpen || minerAlreadyScanned) {
-                            continue;
-                        }
-
-                        // Create an iframe to open the miner
-                        const iframe = document.createElement('iframe');
-                        iframe.src = minerLink;
-                        iframe.style.position = 'fixed';
-                        iframe.style.top = '0';
-                        iframe.style.left = '0';
-                        iframe.style.width = '100%';
-                        iframe.style.height = '100%';
-                        iframe.style.border = 'none';
-                        iframe.style.zIndex = '9998'; // Set the zIndex to be behind the scanningElement
-                        document.body.appendChild(iframe);
-
-                        // Don't add log if one already exists
-                        if (!logEntries[minerID]) {
-                            // Add to progress log
-                            const logEntry = document.createElement('div');
-                            logEntry.textContent = `Miner ${idLookup[minerID]}`;
-                            logEntry.style.padding = '10px';
-                            logEntry.style.borderBottom = '1px solid white';
-                            progressLog.appendChild(logEntry);
-                            logEntries[minerID] = logEntry;
-
-                            // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
-                            const loadingIcon = document.createElement('span');
-                            loadingIcon.textContent = '↻';
-                            loadingIcon.style.display = 'none';
-                            loadingIcon.style.position = 'absolute';
-                            loadingIcon.style.right = '10px';
-                            logEntry.appendChild(loadingIcon);
-
-                            // Make it spin
-                            let rotation = 0;
-                            setInterval(() => {
-                                rotation = (rotation + 1) % 360;
-                                loadingIcon.style.transform = `rotate(${rotation}deg)`;
-                            }, 1);
-                            loadingIcon.style.display = 'inline-block';  
-                        }
-                    }
-                    
-                }, delayAfter);
-                delayAfter = 1000;
+                }, 500);
             }
 
-            const scanAmount = 3;
-            const scanType = 'getdowns';
-            const reloadTime = 15000;
+            updateAllMinersData();
 
             // Add the new scan functions
             lastHourScan = function() {
-                loopMinersList();
-                startScan('Last 1 Hour', scanAmount, scanType, reloadTime);
+                startScan(60*60);
+                scanTimeFrameText = 'Last Hour';
             }
 
             last4HourScan = function() {
-                loopMinersList();
-                startScan('Last 4 Hours', scanAmount, scanType, reloadTime);
+                startScan(60*60*4);
+                scanTimeFrameText = 'Last 4 Hours';
             }
 
             last24HourScan = function() {
-                loopMinersList();
-                startScan('Last 24 Hours', scanAmount, scanType, reloadTime);
+                startScan(60*60*24);
+                scanTimeFrameText = 'Last 24 Hours';
             }
 
             last7DayScan = function() {
-                loopMinersList();
-                startScan('Last 7 Days', scanAmount, scanType, reloadTime);
+                startScan(60*60*24*7);
+                scanTimeFrameText = 'Last 7 Days';
             }
 
             last30DayScan = function() {
-                loopMinersList();
-                startScan('Last 30 Days', scanAmount, scanType, reloadTime);
+                startScan(60*60*24*30);
+                scanTimeFrameText = 'Last 30 Days';
             }
 
             /*
@@ -1139,55 +1446,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
             autoRebootButton.textContent = 'Auto Reboot';
             autoRebootButton.onclick = function(event) {
                 event.preventDefault(); // Prevent the default behavior of the button
-
-                // Set to all zones
-                var wasAlreadyAllZones = setAllZones();
-
-                const pagerWrap = document.querySelector('.k-pager-wrap');
-                var selector = pagerWrap.querySelector('.k-select');
-                var timeoutId; // Variable to store the timeout identifier
-
-                function Set5000Size() {
-                    // Find what the current size is in the k-input element
-                    const currentSize = pagerWrap.querySelector('.k-input').textContent;
-                    if(currentSize === '5000') {
-                        return;
-                    }
-
-                    selector.click();
-
-                    // Find and click on the 5000 items per page if not already selected
-                    const animationContainers = document.querySelectorAll('.k-animation-container');
-                    for (const container of animationContainers) {
-                        const list = container.querySelector('.k-list');
-                        const items = list.querySelectorAll('.k-item');
-                        for (const item of items) {
-                            if (item.textContent === '5000') {
-                                item.click();
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Set the size to 5000
-                if(wasAlreadyAllZones) {
-                    Set5000Size();
-                } else {
-                    loopMinersList();
-                    var lastIDLookupLength = Object.keys(idLookup).length;
-
-                    // Wait for the miner list to load
-                    timeoutId = setInterval(() => {
-                        loopMinersList();
-                        if(Object.keys(idLookup).length !== lastIDLookupLength) {
-                            clearInterval(timeoutId);
-                            Set5000Size();
-                        }
-                    }, 500);
-                }
-                
-                //startScan('Last 4 Hours', 1, 'autoreboot', reloadTime);
             };
 
             // Add the auto reboot button to the right of the dropdown
@@ -1197,115 +1455,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
         }
         
     }, 1000);
-
-    // Repeativly check if getRebootsFor is empty
-    var popupResultElement;
-    var checkInterval = setInterval(() => {
-        const minersToSearch = JSON.parse(GM_SuperValue.get('scanFor', '{}'));
-        const scanTotal = GM_SuperValue.get('scanTotal', false);
-
-        // Get the reboot counts
-        var rebootCounts = {};
-        for (const minerID in minersToSearch) {
-            const minerReboots = Number(GM_SuperValue.get(`downsCount${minerID}`, -1));
-            if (minerReboots === -1) {
-                break;
-            }
-            rebootCounts[minerID] = minerReboots;
-        }
-
-        if (scanTotal && Object.keys(rebootCounts).length === scanTotal && Object.keys(rebootCounts).length > 0 && !popupResultElement && idLookup) {
-
-            // Remove all the iframes (Just in case)
-            const iframes = document.querySelectorAll('iframe');
-            iframes.forEach(iframe => {
-                iframe.remove();
-            });
-
-            // Remove the scanning element
-            scanningElement.remove();
-            progressLog.remove();
-            clearInterval(scanningInterval);
-            clearInterval(tryOpenMiners);
-
-            // Reset the minersToSearch and scanTotal
-            GM_SuperValue.set('scanFor', '{}');
-            GM_SuperValue.set('scanTotal', 0);
-
-            // Reset the reboot counts
-            for (const minerID in idLookup) {
-                GM_SuperValue.set(`downsCount${minerID}`, -1);
-            }
-
-            // Time frame
-            const scanTimeFrame = GM_SuperValue.get('scanTimeSpan', '');
-            
-            // Create a popup element for showing the results
-            popupResultElement = document.createElement('div');
-            popupResultElement.innerHTML = `
-                <div style="
-                    position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background-color: #333;
-                    color: white;
-                    padding: 20px;
-                    font-family: Arial, sans-serif;
-                    border-radius: 5px;
-                    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-                ">
-                    <h1 style="text-align: center; margin-bottom: 20px;">Offline Count List (${scanTimeFrame})</h1>
-                    <div style="max-height: 400px; overflow-y: auto;">
-                        <table style="width: 100%;">
-                            <thead>
-                                <tr>
-                                    <th style="padding: 10px;">Offline Count</th>
-                                    <th style="padding: 10px;">Serial Number</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <button id="closePopup" style="
-                        padding: 10px 20px;
-                        background-color: #555;
-                        color: white;
-                        border: none;
-                        cursor: pointer;
-                        margin-top: 10px;
-                        border-radius: 3px;
-                    ">Close</button>
-                </div>
-            `;
-
-            const closePopupButton = popupResultElement.querySelector('#closePopup');
-            closePopupButton.onclick = function() {
-                popupResultElement.remove();
-                popupResultElement = null;
-            };
-
-            document.body.appendChild(popupResultElement);
-
-            // Order the reboot counts by the count
-            const orderedRebootCounts = Object.entries(rebootCounts).sort((a, b) => b[1] - a[1]);
-
-            // Loop through the ordered reboot counts and add them to the popup
-            const popupTableBody = popupResultElement.querySelector('tbody');
-            orderedRebootCounts.forEach(([minerID, rebootCount]) => {
-                const serialNumber = idLookup[minerID];
-                const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td style="padding: 10px; color: white;">${rebootCount}</td>
-                    <td style="padding: 10px;"><a href="${minerLink}" target="_blank" style="color: white;">${serialNumber}</a></td>
-                `;
-                popupTableBody.appendChild(row);
-            });
-        }
-    }, 500);
 } else if(currentUrl.includes("https://foundryoptifleet.com/Content/Miners/IndividualMiner")) {
     
     function addDataBox(title, data, updateFunc, updateInterval) {
@@ -1350,90 +1499,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     }
     
     const minerID = currentUrl.match(/id=(\d+)/)[1];
-    var minersToSearch = JSON.parse(GM_SuperValue.get('scanFor', '{}'));
-    const originalLength = GM_SuperValue.get('scanTotal', 0);
-    const minerSerialNumber = minersToSearch[minerID];
-    const isScanning = minerSerialNumber !== undefined && currentUrl.includes('scan=true');
-    const scanType = new URLSearchParams(window.location.search).get('scanType');
-    const reloadTime = new URLSearchParams(window.location.search).get('reloadTime');
-
-    // Get the time frame for the scan
-    const scanTimeFrame = GM_SuperValue.get('scanTimeSpan', '');
-
-    /*
-    <div id="reportrange" class="m-box" style="max-width: 22rem; padding: .4rem">
-        <div class="m-stack is-horizontal has-space-between">
-            <m-icon name="calendar" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-            <span class="text m-text is-accent">Last 24 Hours</span>
-            <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-        </div>
-    </div>
-
-    <div class="daterangepicker ltr show-ranges show-calendar opensleft" style="display: block; top: 32.2786px; left: auto; right: -0.0211092px;">
-            <div class="ranges"><ul><li data-range-key="Last 15 minutes" class="m-text is-size-xs">Last 15 minutes</li><li data-range-key="Last 30 minutes" class="m-text is-size-xs">Last 30 minutes</li><li data-range-key="Last 1 Hour" class="m-text is-size-xs">Last 1 Hour</li><li data-range-key="Last 4 Hours" class="m-text is-size-xs">Last 4 Hours</li><li data-range-key="Last 24 Hours" class="m-text is-size-xs active">Last 24 Hours</li><li data-range-key="Last 7 Days" class="m-text is-size-xs">Last 7 Days</li><li data-range-key="Last 30 Days" class="m-text is-size-xs">Last 30 Days</li><li data-range-key="Custom Range" class="m-text is-size-xs">Custom Range</li></ul></div>
-            <div class="drp-calendar left">
-            <div class="calendar-table"><table class="table-condensed"><thead><tr><th class="prev available"><m-icon class="m-button-icon" name="chevron-left" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon></th><th colspan="5" class="month m-heading">Jul 2024</th><th></th></tr><tr><th class="m-heading">Su</th><th class="m-heading">Mo</th><th class="m-heading">Tu</th><th class="m-heading">We</th><th class="m-heading">Th</th><th class="m-heading">Fr</th><th class="m-heading">Sa</th></tr></thead><tbody><tr><td class="m-text weekend off ends available" data-title="r0c0">30</td><td class="m-text available" data-title="r0c1">1</td><td class="m-text available" data-title="r0c2">2</td><td class="m-text available" data-title="r0c3">3</td><td class="m-text available" data-title="r0c4">4</td><td class="m-text available" data-title="r0c5">5</td><td class="m-text weekend available" data-title="r0c6">6</td></tr><tr><td class="m-text weekend available" data-title="r1c0">7</td><td class="m-text available" data-title="r1c1">8</td><td class="m-text available" data-title="r1c2">9</td><td class="m-text available" data-title="r1c3">10</td><td class="m-text available" data-title="r1c4">11</td><td class="m-text available" data-title="r1c5">12</td><td class="m-text weekend available" data-title="r1c6">13</td></tr><tr><td class="m-text weekend available" data-title="r2c0">14</td><td class="m-text available" data-title="r2c1">15</td><td class="m-text available" data-title="r2c2">16</td><td class="m-text available" data-title="r2c3">17</td><td class="m-text available" data-title="r2c4">18</td><td class="m-text available" data-title="r2c5">19</td><td class="m-text weekend available" data-title="r2c6">20</td></tr><tr><td class="m-text weekend available" data-title="r3c0">21</td><td class="m-text available" data-title="r3c1">22</td><td class="m-text available" data-title="r3c2">23</td><td class="m-text available" data-title="r3c3">24</td><td class="m-text available" data-title="r3c4">25</td><td class="m-text available" data-title="r3c5">26</td><td class="m-text weekend available" data-title="r3c6">27</td></tr><tr><td class="m-text weekend available" data-title="r4c0">28</td><td class="m-text available" data-title="r4c1">29</td><td class="m-text available" data-title="r4c2">30</td><td class="m-text available" data-title="r4c3">31</td><td class="m-text off ends available" data-title="r4c4">1</td><td class="m-text off ends available" data-title="r4c5">2</td><td class="m-text weekend off ends available" data-title="r4c6">3</td></tr><tr><td class="m-text weekend off ends available" data-title="r5c0">4</td><td class="m-text off ends available" data-title="r5c1">5</td><td class="m-text off ends available" data-title="r5c2">6</td><td class="m-text off ends available" data-title="r5c3">7</td><td class="m-text off ends available" data-title="r5c4">8</td><td class="m-text off ends available" data-title="r5c5">9</td><td class="m-text weekend off ends available" data-title="r5c6">10</td></tr></tbody></table></div>
-            <div class="calendar-time"><div class="m-select"><select class="hourselect"><option value="1" selected="selected">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option><option value="11">11</option><option value="12">12</option></select></div> : <div class="m-select"><select class="minuteselect"><option value="0">00</option><option value="5">05</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50">50</option><option value="55">55</option></select></div> <div class="m-select"><select class="ampmselect"><option value="AM" selected="selected">AM</option><option value="PM">PM</option></select></div></div>
-        </div>
-        <div class="drp-calendar right">
-            <div class="calendar-table"><table class="table-condensed"><thead><tr><th></th><th colspan="5" class="month m-heading">Aug 2024</th><th></th></tr><tr><th class="m-heading">Su</th><th class="m-heading">Mo</th><th class="m-heading">Tu</th><th class="m-heading">We</th><th class="m-heading">Th</th><th class="m-heading">Fr</th><th class="m-heading">Sa</th></tr></thead><tbody><tr><td class="m-text weekend off ends available" data-title="r0c0">28</td><td class="m-text off ends available" data-title="r0c1">29</td><td class="m-text off ends available" data-title="r0c2">30</td><td class="m-text off ends available" data-title="r0c3">31</td><td class="m-text available" data-title="r0c4">1</td><td class="m-text available" data-title="r0c5">2</td><td class="m-text weekend available" data-title="r0c6">3</td></tr><tr><td class="m-text weekend available" data-title="r1c0">4</td><td class="m-text available" data-title="r1c1">5</td><td class="m-text available" data-title="r1c2">6</td><td class="m-text available" data-title="r1c3">7</td><td class="m-text available" data-title="r1c4">8</td><td class="m-text available" data-title="r1c5">9</td><td class="m-text weekend available" data-title="r1c6">10</td></tr><tr><td class="m-text weekend available" data-title="r2c0">11</td><td class="m-text available" data-title="r2c1">12</td><td class="m-text available" data-title="r2c2">13</td><td class="m-text available" data-title="r2c3">14</td><td class="m-text available" data-title="r2c4">15</td><td class="m-text available" data-title="r2c5">16</td><td class="m-text weekend available" data-title="r2c6">17</td></tr><tr><td class="m-text weekend available" data-title="r3c0">18</td><td class="m-text available" data-title="r3c1">19</td><td class="m-text available" data-title="r3c2">20</td><td class="m-text available" data-title="r3c3">21</td><td class="m-text available" data-title="r3c4">22</td><td class="m-text available" data-title="r3c5">23</td><td class="m-text weekend available" data-title="r3c6">24</td></tr><tr><td class="m-text weekend available" data-title="r4c0">25</td><td class="m-text available" data-title="r4c1">26</td><td class="m-text available" data-title="r4c2">27</td><td class="m-text available" data-title="r4c3">28</td><td class="m-text active start-date available" data-title="r4c4">29</td><td class="m-text today active end-date in-range available" data-title="r4c5">30</td><td class="m-text weekend off disabled" data-title="r4c6">31</td></tr><tr><td class="m-text weekend off ends off disabled" data-title="r5c0">1</td><td class="m-text off ends off disabled" data-title="r5c1">2</td><td class="m-text off ends off disabled" data-title="r5c2">3</td><td class="m-text off ends off disabled" data-title="r5c3">4</td><td class="m-text off ends off disabled" data-title="r5c4">5</td><td class="m-text off ends off disabled" data-title="r5c5">6</td><td class="m-text weekend off ends off disabled" data-title="r5c6">7</td></tr></tbody></table></div>
-            <div class="calendar-time"><div class="m-select"><select class="hourselect"><option value="1" selected="selected">1</option><option value="2" disabled="disabled" class="disabled">2</option><option value="3" disabled="disabled" class="disabled">3</option><option value="4" disabled="disabled" class="disabled">4</option><option value="5" disabled="disabled" class="disabled">5</option><option value="6" disabled="disabled" class="disabled">6</option><option value="7" disabled="disabled" class="disabled">7</option><option value="8" disabled="disabled" class="disabled">8</option><option value="9" disabled="disabled" class="disabled">9</option><option value="10" disabled="disabled" class="disabled">10</option><option value="11" disabled="disabled" class="disabled">11</option><option value="12">12</option></select></div> : <div class="m-select"><select class="minuteselect"><option value="0">00</option><option value="5">05</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50" disabled="disabled" class="disabled">50</option><option value="55" disabled="disabled" class="disabled">55</option></select></div> <div class="m-select"><select class="ampmselect"><option value="AM" selected="selected">AM</option><option value="PM">PM</option></select></div></div>
-        </div>
-        <div class="drp-buttons">
-            <div class="m-stack is-horizontal is-align-center">
-                <span class="drp-selected m-text is-size-s">08/29/2024 1:46am - 08/30/2024 1:46am</span>
-                <div class="m-form-group is-grouped-right">
-                    <button class="cancelBtn m-button is-ghost btn btn-sm btn-default" type="button">Cancel</button>
-                    <button class="applyBtn m-button is-primary btn btn-sm btn-primary" type="button">Apply</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    */
-
-    // Select time frame if it is not selected
-    var waitNextTimeFrameChange = false;
-    if (isScanning) {
-        setInterval(() => {
-            // Find the reportrange element
-            const reportRange = document.getElementById('reportrange');
-
-            // Check if the reportrange element exists
-            if (reportRange) {
-                // Check if the reportrange text content is the same as the scanTimeFrame
-                if (reportRange.textContent.trim() !== scanTimeFrame) {
-                    // Click the reportrange element to open the dropdown
-                    reportRange.click();
-
-                    // Find the date range element
-                    const dateRange = document.querySelector('.daterangepicker');
-
-                    // Check if the date range element exists
-                    if (dateRange) {
-                        // Find the range that matches the scanTimeFrame
-                        const range = dateRange.querySelector(`li[data-range-key="${scanTimeFrame}"]`);
-
-                        // Check if the range exists
-                        if (range) {
-                            // Click the range to select it
-                            waitNextTimeFrameChange = true;
-                            range.click();
-                        }
-                    }
-                }
-            }
-            
-        }, 1); // Change the interval time (in milliseconds) as needed
-
-        // Refresh the page every 10 seconds
-        setInterval(() => {
-            console.log('Reloading page...');
-            
-            // Send a message to close the iframe, so we can then reopen and try again
-            window.parent.postMessage({ action: 'closeIframe', minerID: minerID, reload: true }, '*');
-        }, reloadTime);
-    }
-
     function parsePathData(d) {
         const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
         let currentY = 0;
@@ -1529,21 +1594,6 @@ if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
     }
 
     createChartDataBox('#uptimeChart', 'Times Down', (result, timeSpan) => {
-        // We're scanning and the timeSpan is the same as the scanTimeFrame
-        if(isScanning && timeSpan === scanTimeFrame) {
-
-            // See if we should wait for the next time frame change (Fixes the issue where the data wasn't yet loaded correctly since last time frame was different)
-            if (waitNextTimeFrameChange) {
-                waitNextTimeFrameChange = false;
-                return;
-            }
-            
-            // Update the down count
-            GM_SuperValue.set(`downsCount${minerID}`, result.downCounts.toString());
-
-            // Send a message to close the iframe
-            window.parent.postMessage({ action: 'closeIframe', minerID: minerID, reload: false }, '*');
-        }
     });
     
     
