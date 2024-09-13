@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         OptiFleet Copy Details (Dev)
+// @name         OptiFleet Copy Details (Temp Roll Back)
 // @namespace    http://tampermonkey.net/
-// @version      Temp Roll back to 0.9
+// @version      1.2.9
 // @description  Adds copy buttons for grabbing details in the OptiFleet Control Panel
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
