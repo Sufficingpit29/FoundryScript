@@ -18484,14 +18484,6 @@ class Issues extends OptiFleetPage {
                 res.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
                 this.hashingFilterMiners = res.miners;
                 Issues.miners = res.miners;
-                this.applyFilters(view);
-                const nonhashers = res.miners.filter(miner => miner.issueType === "Non Hashing" && miner.ipAddress !== null).length;
-                const lowhashers = res.miners.filter(miner => miner.issueType === "Low Hashing").length;
-                const errors = res.miners.filter(miner => miner.errorList.length > 0).length;
-                $(".non-hashing-count-value").text(nonhashers);
-                $(".low-hashing-count-value").text(lowhashers);
-                $(".error-count-value").text(errors);
-                this.toggleBusy(false);
             });
         });
     }
