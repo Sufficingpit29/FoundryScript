@@ -19507,7 +19507,7 @@ class MinerLinkModal extends OptiFleetPage {
 }
 
 class MinerMetricsPanel extends OptiFleetService {
-    constructor(minerId) {
+    constructor(minerId, getOnly) {
         super();
         this.minerId = minerId;
         this.hashrateUrl = "/MinerHashrate";
@@ -19515,15 +19515,17 @@ class MinerMetricsPanel extends OptiFleetService {
         this.fanspeedUrl = "/MinerFanSpeed/Graph";
         this.chipTempUrl = "/MinerTemperature";
         this.uptimeUrl = "/MinerOnline";
-        this.hashrateChart = new StyledLineChart("hashrateChart", "Hash Rate");
-        this.hashrateChart.formatter = (val) => HashrateUtil.parseHashrate(val, 1);
-        this.fanSpeedChart = new StyledLineChart("fanSpeedChart", "Fan Speed", { withLegend: true });
-        this.fanSpeedChart.formatter = (val) => `${val} rpm`;
-        this.chipTempChart = new StyledLineChart("pcbTempChart", "Hashboard Temperature", { withLegend: true });
-        this.chipTempChart.formatter = (val) => `${val} Â°C`;
-        this.uptimeChart = new StyledLineChart("uptimeChart", "Uptime");
-        this.uptimeChart.formatter = (val) => val > 0 ? "Online" : "Offline";
-        this.datePicker = new DatePicker("#datePicker", this.loadCharts.bind(this));
+        if(!getOnly) {
+            this.hashrateChart = new StyledLineChart("hashrateChart", "Hash Rate");
+            this.hashrateChart.formatter = (val) => HashrateUtil.parseHashrate(val, 1);
+            this.fanSpeedChart = new StyledLineChart("fanSpeedChart", "Fan Speed", { withLegend: true });
+            this.fanSpeedChart.formatter = (val) => `${val} rpm`;
+            this.chipTempChart = new StyledLineChart("pcbTempChart", "Hashboard Temperature", { withLegend: true });
+            this.chipTempChart.formatter = (val) => `${val} Â°C`;
+            this.uptimeChart = new StyledLineChart("uptimeChart", "Uptime");
+            this.uptimeChart.formatter = (val) => val > 0 ? "Online" : "Offline";
+            this.datePicker = new DatePicker("#datePicker", this.loadCharts.bind(this));
+        }
     }
     loadCharts(params) {
         this.loadHashrate(params);
