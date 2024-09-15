@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.3.5
+// @version      1.3.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -48,7 +48,7 @@ const urlLookupPlanner = {
 function OptiFleetSpecificLogic() {
     var allMinersData = {};
     var allMinersLookup = {};
-    
+
     var serviceInstance = new OptiFleetService();
     var pageInstance = new OptiFleetPage();
     var viewServiceInstance = new MinerViewService();
@@ -82,7 +82,7 @@ function OptiFleetSpecificLogic() {
         serviceInstance.post("/MinerOnline", Object.assign({ id: minerID }, params)).then((res) => {
             // Sanitize the data to only include the uptime values
             var uptimeData = res['data']['result'][0]['values']
-            
+
             // Store the uptime data
             minerUpTimes[minerID] = uptimeData;
 
@@ -148,7 +148,7 @@ function OptiFleetSpecificLogic() {
     }
 
     // ------------------------------
-    
+
     function parseMinerDetails(text) {
         const details = {};
         const minerDetailsText = text.trim().split('\n');
@@ -236,7 +236,7 @@ function OptiFleetSpecificLogic() {
             // Calculate the efficiency
             var efficiency = (totalHashRate / totalHashRatePotential) * 100;
             efficiency = efficiency.toFixed(1);
-            
+
             // Calculate the percentage of the total hash rate
             var totalHashRatePercentage = (totalHashRate / totalHashRatePotential) * 100;
             totalHashRatePercentage = totalHashRatePercentage.toFixed(1);
@@ -284,7 +284,7 @@ function OptiFleetSpecificLogic() {
             // Add a bit of margin to the top
             hashRateCard.style.marginTop = '10px';
             hashRateCard.style.marginBottom = '10px';
-            
+
             // Find all 'bar-chart-card m-box' elements and add after the last one
             const lastCard = document.querySelectorAll('.bar-chart-card')[document.querySelectorAll('.bar-chart-card').length - 1];
             if (lastCard) {
@@ -374,7 +374,7 @@ function OptiFleetSpecificLogic() {
 
         // Call the function to create the hash rate elements
         createHashRateElements();
-        
+
         // Looks for refreshing and then updates the hash rate elements
         var startedRefresh = false;
         var observer = new MutationObserver(function(mutations) {
@@ -391,10 +391,10 @@ function OptiFleetSpecificLogic() {
             });
         });
 
-        var config = { attributes: true, childList: true, characterData: true };   
+        var config = { attributes: true, childList: true, characterData: true };
 
 
- 
+
         const observerInterval = setInterval(() => {
             const autoRefreshChip = document.querySelector('m-chip[c-id="siteOverview_autoRefreshChip"]');
             if (autoRefreshChip) {
@@ -402,7 +402,7 @@ function OptiFleetSpecificLogic() {
                 clearInterval(observerInterval);
             }
         }, 100);
-        
+
         setInterval(function() {
             // Check if reloadCards is true and if so, run the createHashRateElements function
             if (reloadCards) {
@@ -429,7 +429,7 @@ function OptiFleetSpecificLogic() {
 
             // Get the focused element
             var activeElement = document.activeElement;
-            
+
             // If the element contains editable or input in the class or has contenteditable, stop
             console.log(activeElement.tagName);
             if (activeElement && (activeElement.tagName === 'INPUT' ||
@@ -477,7 +477,7 @@ function OptiFleetSpecificLogic() {
 
                     // Update to make sure we have the latest miner data
                     updateAllMinersData();
-                    
+
                     // Find the miner with the serial number
                     var minerID = false;
                     for (const [index, minerData] of Object.entries(allMinersData)) {
@@ -640,14 +640,14 @@ function OptiFleetSpecificLogic() {
                 const issue = document.getElementById("issue").value;
                 const log = document.getElementById("log").value;
                 const type = document.getElementById("type").value;
-        
+
                 // Remove the popup element
                 popupElement.remove();
-        
+
                 // Copy the details for Quick Sharepoint & Planner and set the taskName and taskNotes
                 copyAllDetailsForSharepoint(issue, log, type);
             }
-        
+
             // Function to cancel Issue and Log
             function cancelIssueLog() {
                 // Remove the popup element
@@ -704,7 +704,7 @@ function OptiFleetSpecificLogic() {
                     const bitmainLink = document.getElementById("bitmain").value;
                     const fortitudeLink = document.getElementById("fortitude").value;
                     const rammLink = document.getElementById("ramm").value;
-                    
+
                     GM_SuperValue.set("bitmainLink", bitmainLink !== "" ? bitmainLink : defaultExcelLink);
                     GM_SuperValue.set("fortitudeLink", fortitudeLink !== "" ? fortitudeLink : defaultExcelLink);
                     GM_SuperValue.set("rammLink", rammLink !== "" ? rammLink : defaultExcelLink);
@@ -720,16 +720,16 @@ function OptiFleetSpecificLogic() {
                     sidePanel.remove();
                 });
             }
-        
+
             // Append the popup element to the document body
             document.body.appendChild(popupElement);
-        
+
             // Attach event listeners to the buttons
             document.getElementById('submitBtn').addEventListener('click', submitIssueLog);
             document.getElementById('cancelBtn').addEventListener('click', cancelIssueLog);
             document.getElementById('linksBtn').addEventListener('click', editLinks);
         }
-        
+
         function addCopyButton(element, textToCopy) {
             if (element.querySelector('.copyBtn')) return;
 
@@ -861,37 +861,47 @@ function OptiFleetSpecificLogic() {
                 });
             }
         }
-        
+
         // Wait until HTML element with #minerList is loaded
-        const minerListCheck = setInterval(() => {
-            const minerList = document.querySelector('#minerList');
-            if (minerList) {
-                clearInterval(minerListCheck);
+        function addBreakerNumberToSlotID() {
+            const minerListCheck = setInterval(() => {
+                const minerList = document.querySelector('#minerList');
+                if (minerList) {
+                    //clearInterval(minerListCheck);
 
-                // Add mutation observer to the minerList
-                const observer = new MutationObserver(() => {
-                    getCurrentMinerList();
+                    // Add mutation observer to the minerList
+                    const observer = new MutationObserver(() => {
+                        getCurrentMinerList();
 
-                    // Loop through all the Slot ID elements and add the Breaker Number
-                    for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
-                        const slotID = minerData['Slot ID'].textContent;
-                        var splitSlotID = slotID.split('-');
-                        var row = Number(splitSlotID[2]);
-                        var col = Number(splitSlotID[3]);
-                        var rowWidth = 4;
-                        var breakerNum = (row-1)*rowWidth + col;
+                        // Loop through all the Slot ID elements and add the Breaker Number
+                        for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
+                            const slotID = minerData['Slot ID'].textContent;
 
-                        // if breakerNum isn't NAN
-                        if (!isNaN(breakerNum)) {
-                            var newElement = document.createElement('div');
-                            newElement.textContent = 'Breaker Number: ' + breakerNum;
-                            minerData['Slot ID'].appendChild(newElement);
+                            // Check if slotID has minden in it
+                            if (!slotID.includes('Minden')) {
+                                continue;
+                            }
+
+                            var splitSlotID = slotID.split('-');
+                            var row = Number(splitSlotID[2]);
+                            var col = Number(splitSlotID[3]);
+                            var rowWidth = 4;
+                            var breakerNum = (row-1)*rowWidth + col;
+
+                            // if breakerNum isn't NAN
+                            if (!isNaN(breakerNum)) {
+                                var newElement = document.createElement('div');
+                                newElement.textContent = 'Breaker Number: ' + breakerNum;
+                                minerData['Slot ID'].appendChild(newElement);
+                                console.log('Breaker Number: ' + breakerNum);
+                            }
                         }
-                    }
-                });
-                observer.observe(minerList, { childList: true, subtree: true });
-            }
-        }, 500);
+                    });
+                    observer.observe(minerList, { childList: true, subtree: true });
+                }
+            }, 500);
+        }
+        addBreakerNumberToSlotID();
 
         // -- Scan Logic --
         var scanningElement;
@@ -980,7 +990,7 @@ function OptiFleetSpecificLogic() {
                     progressFill.style.backgroundColor = 'green';
                     progressFill.style.borderRight = '1px solid black'; // Modify border style
                     progressBar.appendChild(progressFill);
-                    
+
                     // Add Scanning text below the progress bar
                     scanningText = document.createElement('div');
                     scanningText.textContent = 'Scanning';
@@ -1233,12 +1243,12 @@ function OptiFleetSpecificLogic() {
                 // Add the auto reboot button to the right of the dropdown
                 actionsDropdown.before(autoRebootButton);
                 */
-                
+
             }
-            
+
         }, 1000);
     } else if(currentUrl.includes("https://foundryoptifleet.com/Content/Miners/IndividualMiner")) {
-        
+
         function addDataBox(title, data, updateFunc, updateInterval) {
             // Add new m-box to m-grid-list
             const mGridList = document.querySelector('.m-grid-list');
@@ -1279,7 +1289,7 @@ function OptiFleetSpecificLogic() {
             // Return the m-box element
             return mBox;
         }
-        
+
         const minerID = currentUrl.match(/id=(\d+)/)[1];
         function parsePathData(d) {
             const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
@@ -1289,7 +1299,7 @@ function OptiFleetSpecificLogic() {
             let downCounts = 0;
             let upCounts = 0;
             let lastY;
-        
+
             commands.forEach(command => {
                 const type = command[0];
                 const values = command.slice(1).trim().split(/[\s,]+/).map(Number);
@@ -1313,7 +1323,7 @@ function OptiFleetSpecificLogic() {
                 }
                 lastY = currentY;
             });
-        
+
             return { downCounts, upCounts };
         }
 
@@ -1322,7 +1332,7 @@ function OptiFleetSpecificLogic() {
             const d = path.getAttribute('d');
             return parsePathData(d);
         }
-        
+
         function createChartDataBox(chartID, title, callback) {
             const chart = document.querySelector(chartID);
             if (!chart) {
@@ -1371,10 +1381,10 @@ function OptiFleetSpecificLogic() {
                         callback(result, timeSpan);
                     }
 
-                    
+
                 }
             });
-            
+
             observer.observe(chart, {
                 childList: true,
                 subtree: true
@@ -1383,8 +1393,8 @@ function OptiFleetSpecificLogic() {
 
         createChartDataBox('#uptimeChart', 'Times Down', (result, timeSpan) => {
         });
-        
-        
+
+
         // Wait for the miner activity list to exist and be fully loaded
         const waitForMinerActivityList = setInterval(() => {
             const minerActivityList = document.getElementById('miner-activity-list-IndividualMiner');
@@ -1415,7 +1425,7 @@ function OptiFleetSpecificLogic() {
                 } else {
                     //'Error';
                 }
-        
+
                 // Add the reboot count to the page
                 addDataBox('Reboot Count (Activity Log)', reboots.length);
 
@@ -1432,16 +1442,23 @@ function OptiFleetSpecificLogic() {
                         p.textContent = timeSinceReboot;
                     }, 1000);
                 }
-                    
+
 
             }
         }, 500);
 
         function createBreakerNumBox() {
-            
+
             // Check if the details were loaded
             var detailsLoadedInterval = setInterval(() => {
                 var [cleanedText, minerDetails] = getMinerDetails();
+
+                // Make sure this is a minden miner
+                var facility = minerDetails['facility'];
+                if (!facility.includes('Minden')) {
+                    return;
+                }
+
                 var locationID = minerDetails['locationID']; // Rack-Row-Col
                 var splitLocationID = locationID.split('-');
                 console.log(splitLocationID);
@@ -1503,8 +1520,8 @@ if(currentUrl.includes("https://foundryoptifleet.com")) {
     */
 
     // Hacky workaround for OptiFleet stuff
-    
-    
+
+
 }
 
 console.log("Is loading script...");
@@ -1575,7 +1592,7 @@ if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
 
     // Function to simulate real typing using execCommand
     function setupTask(inputElement) {
-        
+
         inputElement.focus();
 
         let i = 0;
