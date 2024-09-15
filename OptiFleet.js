@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.4.2
+// @version      1.4.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1020,6 +1020,11 @@ function OptiFleetSpecificLogic() {
                     scanningText.style.textAlign = 'left';
                     scanningElement.appendChild(scanningText);
 
+                    // Set the webpage title
+                    var orginalTitle = document.title;
+                    document.title = orginalTitle + ' | Retrieving Miner Data...';
+
+
                     updateAllMinersData(false, allMinersData => {
                         retrieveIssueMiners((issueMiners) => {
                             var minersScanData = {};
@@ -1050,6 +1055,9 @@ function OptiFleetSpecificLogic() {
                                 // Update the progress bar fill and percentage text
                                 progressFill.style.width = progressPercentage + '%';
                                 percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + minersScanned + '/' + totalMiners + ')';
+
+                                // Update the title
+                                document.title = orginalTitle + ' | ' + percentageText.textContent;
                             }, 50);
 
                             // Add the progress log on the right side of the screen
@@ -1342,22 +1350,24 @@ function OptiFleetSpecificLogic() {
                                         popupTableBody.appendChild(row);
                                     });
 
+                                    document.title = orginalTitle;
+
                                     // Ensure jQuery, DataTables, and ColResize are loaded before initializing the table
                                     $(document).ready(function() {
-                                        /*
+                                        
                                         // Custom sorting function for slot IDs
                                         $.fn.dataTable.ext.type.order['miner-id'] = function(d) {
                                             // Split something "C05-10-3-4" into an array of just the numbers that aren't seperated by anything at all
                                             console.log(d);
                                             let numbers = d.match(/\d+/g).map(Number);
-                                            numbers.shift(); // Remove the first number since it is the miner ID
+                                            //numbers.shift(); // Remove the first number since it is the miner ID
                                             console.log(numbers);
                                             // Convert the array of numbers into a single comparable value
                                             // For example, [10, 3, 4] becomes 100304
                                             let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
                                             return comparableValue;
                                         };
-                                        */
+                                        
 
                                         $('#minerTable').DataTable({
                                             paging: false,       // Disable pagination
@@ -1384,7 +1394,6 @@ function OptiFleetSpecificLogic() {
                                         }).index();
 
                                         $('#minerTable').DataTable().order([offlineCountIndex, 'desc']).draw();
-
                                     });
                                 }
                             }, 500);
