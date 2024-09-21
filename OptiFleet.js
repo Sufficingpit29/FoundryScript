@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.6.5
+// @version      1.6.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -991,7 +991,7 @@ function OptiFleetSpecificLogic() {
                                 const containerTemp = containerTempData[containerNum].temp.toFixed(2);
                                 const curTextContent = minerData['Temp.'].textContent; 
                                 if (containerTemp && !curTextContent.includes('C')) { // doesn't contain added text already
-                                    //minerData['Temp.'].textContent = "Boards: " + minerData['Temp.'].textContent;
+                                    minerData['Temp.'].textContent = "Boards: " + minerData['Temp.'].textContent;
 
                                     var newElement = document.createElement('div');
                                     newElement.innerHTML = `C${containerText}: <span>${containerTemp}</span>`;
