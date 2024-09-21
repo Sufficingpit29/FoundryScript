@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.4.3
+// @version      1.6.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -62,6 +62,7 @@ function OptiFleetSpecificLogic() {
     var pageInstance = new OptiFleetPage();
     var viewServiceInstance = new MinerViewService();
     var siteId = pageInstance.getSelectedSiteId();
+    var siteName = pageInstance.getSelectedSiteName();
     var companyId = pageInstance.getSelectedCompanyId();
     var lastSiteId = siteId;
     var lastCompanyId = companyId;
@@ -71,12 +72,13 @@ function OptiFleetSpecificLogic() {
 
     function retrieveIssueMiners(callback) {
         // In case we swap company/site (Not actually sure if it matters for site, but might as well)
-        var newServiceInstance = new OptiFleetService();
-        var newPageInstance = new OptiFleetPage();
+        serviceInstance = new OptiFleetService();
+        pageInstance = new OptiFleetPage();
 
-        __awaiter(newServiceInstance, void 0, void 0, function* () {
-            siteId = newPageInstance.getSelectedSiteId();
-            newServiceInstance.get(`/Issues?siteId=${siteId}&zoneId=-1`).then(res => {
+        __awaiter(serviceInstance, void 0, void 0, function* () {
+            siteId = pageInstance.getSelectedSiteId();
+            siteName = pageInstance.getSelectedSiteName();
+            serviceInstance.get(`/Issues?siteId=${siteId}&zoneId=-1`).then(res => {
                 res.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
                 if (callback) {
                     callback(res.miners);
@@ -121,6 +123,7 @@ function OptiFleetSpecificLogic() {
         pageInstance = new OptiFleetPage();
         viewServiceInstance = new MinerViewService();
         siteId = pageInstance.getSelectedSiteId();
+        siteName = pageInstance.getSelectedSiteName();
         companyId = pageInstance.getSelectedCompanyId();
 
         // Call the getMiners method
@@ -166,11 +169,56 @@ function OptiFleetSpecificLogic() {
     }
     updateAllMinersData();
 
+    function retrieveContainerTempData(callback) {
+        pageInstance.get(`/sensors?siteId=${siteId}`)
+            .then((resp) => __awaiter(this, void 0, void 0, function* () {
+            const sensors = resp.sensors;
+
+            // Loop through all the sensors and get the average for each container
+            /*
+            {
+                "sensorId": 666,
+                "sensorName": "Container 1 Rack 12-13",
+                "facility": "Minden_C01",
+                "lastSample": "2024-09-20T03:03:22Z",
+                "temp": 69.23,
+                "humidity": 50.85,
+                "voltage": 3.01,
+                "isOnline": false
+            }*/
+            var containerTempData = {};
+            for (const [index, sensor] of Object.entries(sensors)) {
+                var containerName = sensor.sensorName.split(' ')[1];
+                containerTempData[containerName] = containerTempData[containerName] || {
+                    "temp": 0,
+                    "count": 0
+                };
+
+                containerTempData[containerName].temp += sensor.temp;
+                containerTempData[containerName].count++;
+            }
+
+            // Loop through the containerTempData and get the average for each container
+            for (const [containerName, data] of Object.entries(containerTempData)) {
+                containerTempData[containerName].temp = data.temp / data.count;
+            }
+
+            // Call the callback function for the container data
+            if (callback) {
+                callback(containerTempData);
+            }
+        }));
+    }
+
     setInterval(function() {
         // Constantly checks if there siteId or companyId changes
+        pageInstance = new OptiFleetPage();
         if(pageInstance.getSelectedSiteId() !== siteId || pageInstance.getSelectedCompanyId() !== companyId) {
-            updateAllMinersData(true);
+            //updateAllMinersData(true);
             console.log("Site ID or Company ID has changed.");
+
+            // Reload the page (Just far easier than trying to update the data and handle all the edge cases)
+            window.location.reload();
         }
     }, 500);
 
@@ -798,7 +846,7 @@ function OptiFleetSpecificLogic() {
                     container.insertBefore(copyAllButton, container.firstChild);
                 }
 
-                if (!container.querySelector('.sharepointPasteBtn')) {
+                if (!container.querySelector('.sharepointPasteBtn') && siteName.includes("Minden")) {
                     const sharepointPasteButton = document.createElement('button');
                     sharepointPasteButton.innerText = 'Quick Sharepoint & Planner';
                     sharepointPasteButton.className = 'copyBtn sharepointPasteBtn';
@@ -902,7 +950,7 @@ function OptiFleetSpecificLogic() {
                     const observer = new MutationObserver(() => {
                         getCurrentMinerList();
 
-                        // Loop through all the Slot ID elements and add the Breaker Number
+                        // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
                         for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
                             const slotID = minerData['Slot ID'].textContent;
 
@@ -924,7 +972,43 @@ function OptiFleetSpecificLogic() {
                                 minerData['Slot ID'].appendChild(newElement);
                                 console.log('Breaker Number: ' + breakerNum);
                             }
+
+                            
                         }
+
+                        // Container Temp
+                        retrieveContainerTempData((containerTempData) => {
+                            for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
+                                const slotID = minerData['Slot ID'].textContent;
+                                var containerText = slotID.split("_")[1].split("-")[0].replace(/\D/g, '');
+                                var containerNum = containerText.replace(/^0+/, '');
+    
+                                // Check if slotID has minden in it
+                                if (!slotID.includes('Minden')) {
+                                    continue;
+                                }
+    
+                                const containerTemp = containerTempData[containerNum].temp.toFixed(2);
+                                const curTextContent = minerData['Temp.'].textContent; 
+                                if (containerTemp && !curTextContent.includes('C')) { // doesn't contain added text already
+                                    //minerData['Temp.'].textContent = "Boards: " + minerData['Temp.'].textContent;
+
+                                    var newElement = document.createElement('div');
+                                    newElement.innerHTML = `C${containerText}: <span>${containerTemp}</span>`;
+                                    minerData['Temp.'].appendChild(newElement);
+
+                                    // Set the text color of the temp based on the container temp
+                                    const tempSpan = newElement.querySelector('span');
+                                    if (containerTemp > 80) {
+                                        tempSpan.style.color = 'red';
+                                    } else if (containerTemp > 70) {
+                                        tempSpan.style.color = 'yellow';
+                                    } else {
+                                        tempSpan.style.color = 'white';
+                                    }
+                                }
+                            }
+                        });  
                     });
                     observer.observe(minerList, { childList: true, subtree: true });
                 }
@@ -949,7 +1033,7 @@ function OptiFleetSpecificLogic() {
                 newActionsDropdown.style.display = 'inline-block';
                 newActionsDropdown.innerHTML = `
                     <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('newActionsDropdown'); return false;">
-                        Down Scans (WIP)
+                        Down Scans
                         <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
                     </button>
                     <div id="newActionsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
@@ -976,7 +1060,106 @@ function OptiFleetSpecificLogic() {
                 // Put the new dropdown before the original dropdown
                 actionsDropdown.before(newActionsDropdown);
 
-                function startScan(timeFrame) {
+                function createPopUpTable(title, cols, parent, callback) {
+                    let popupResultElement = document.createElement('div');
+                    popupResultElement.innerHTML = `
+                        <div style="
+                            position: fixed;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            background-color: #333;
+                            color: white;
+                            padding: 20px;
+                            font-family: Arial, sans-serif;
+                            border-radius: 5px;
+                            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+                            width: 80%;
+                            height: 80%;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                            align-items: center;
+                            z-index: 9999;
+                        ">
+                            <h1 style="text-align: center; margin-bottom: 20px;">${title}</h1>
+                            <div style="flex: 1; width: 100%; max-height: 80%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #555 #333;">
+                                <table id="minerTable" style="width: 100%; color: white;" class="display responsive nowrap">
+                                    <thead>
+                                        <tr>
+                                            ${cols.map(col => `<th style="border: 2px solid gray; padding: 10px;">${col}</th>`).join('')}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+
+                    // Ensure this popup is on top of everything
+                    popupResultElement.style.zIndex = '9999';
+
+                    // Append popup to the body first, then assign the event listeners
+                    if (parent) {
+                        parent.appendChild(popupResultElement);
+                    } else {
+                        document.body.appendChild(popupResultElement);
+                    }
+
+                    // Add additional styling for the table using CSS
+                    const tableStyle = document.createElement('style');
+                    tableStyle.textContent = `
+                        #minerTable {
+                            border-collapse: collapse;
+                            margin-top: 20px;
+                        }
+
+                        #minerTable th,
+                        #minerTable td {
+                            border: 1px solid gray;
+                            padding: 10px;
+                        }
+
+                        #minerTable th {
+                            background-color: #444;
+                            color: white;
+                        }
+
+                        #minerTable td {
+                            text-align: center;
+                            transition: background-color 0.2s ease;
+                        }
+
+                        #minerTable tr:hover td {
+                            background-color: #555;
+                        }
+
+                        #minerTable th:hover {
+                            cursor: pointer; /* indicates that the column can be reordered */
+                        }
+
+                        // When hovering between columns, show the resize cursor
+                        #minerTable th.ui-resizable-column:hover {
+                            cursor: col-resize;
+                        }
+                    `;
+                    document.head.appendChild(tableStyle);
+
+                    if (callback) {
+                        callback(popupResultElement);
+                    }
+                }
+
+                
+                function startScan(timeFrame, autoreboot, stage) {
+                    var rebootData = {};
+
+                    // Get saved last reboot times
+                    var lastRebootTimes = GM_SuperValue.get('lastRebootTimes', {});
+
+                    var totalRebooted = 0;
+                    var reachedScanEnd = false;
 
                     // Close the dropdown
                     issues.toggleDropdownMenu('newActionsDropdown');
@@ -995,7 +1178,7 @@ function OptiFleetSpecificLogic() {
                     scanningElement.style.justifyContent = 'center';
                     scanningElement.style.alignItems = 'center';
                     scanningElement.style.fontSize = '2em';
-                    scanningElement.style.zIndex = '9999'; // Set the zIndex to be above everything
+                    scanningElement.style.zIndex = '9998'; // Set the zIndex to be above everything
                     document.body.appendChild(scanningElement);
 
                     const progressBar = document.createElement('div');
@@ -1024,131 +1207,154 @@ function OptiFleetSpecificLogic() {
                     var orginalTitle = document.title;
                     document.title = orginalTitle + ' | Retrieving Miner Data...';
 
-
                     updateAllMinersData(false, allMinersData => {
-                        retrieveIssueMiners((issueMiners) => {
-                            var minersScanData = {};
+                        retrieveContainerTempData((containerTempData) => {
+                            retrieveIssueMiners((issueMiners) => {
+                                // If we are in auto reboot mode, remove any miner that isn't completely non-hashing
+                                if (autoreboot) {
+                                    issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                                }
 
-                            // Animate the dots cycling
-                            let dots = 0;
-                            var scanningInterval = setInterval(() => {
-                                dots = (dots + 1) % 4;
-                                scanningText.textContent = 'Scanning' + '.'.repeat(dots);
-                            }, 500);
+                                var minersScanData = {};
+                                var maxRebootAllowed = 100;
 
-                            // Add percentage text above the progress bar starting from left side
-                            var percentageText = document.createElement('div');
-                            percentageText.textContent = '';
-                            percentageText.style.position = 'absolute';
-                            percentageText.style.left = '10px';
-                            percentageText.style.top = '10px';
-                            percentageText.style.color = 'white';
-                            percentageText.style.fontSize = '1em';
-                            progressBar.appendChild(percentageText);
+                                // Animate the dots cycling
+                                let dots = 0;
+                                var scanningInterval = setInterval(() => {
+                                    dots = (dots + 1) % 4;
+                                    scanningText.textContent = 'Scanning' + '.'.repeat(dots);
+                                }, 500);
 
-                            setInterval(() => {
-                                // Calculate the progress percentage
-                                var totalMiners = issueMiners.length;
-                                var minersScanned = Object.keys(minersScanData).length;
-                                const progressPercentage = (minersScanned / totalMiners) * 100;
+                                // Add percentage text above the progress bar starting from left side
+                                var percentageText = document.createElement('div');
+                                percentageText.textContent = '';
+                                percentageText.style.position = 'absolute';
+                                percentageText.style.left = '10px';
+                                percentageText.style.top = '10px';
+                                percentageText.style.color = 'white';
+                                percentageText.style.fontSize = '1em';
+                                progressBar.appendChild(percentageText);
 
-                                // Update the progress bar fill and percentage text
-                                progressFill.style.width = progressPercentage + '%';
-                                percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + minersScanned + '/' + totalMiners + ')';
+                                var currentMiner = issueMiners[0];
+                                var currentMinerIndex = 0;
+                                setInterval(() => {
+                                    // Calculate the progress percentage
+                                    var totalMiners = issueMiners.length;
+                                    var minersScanned = currentMinerIndex;
+                                    const progressPercentage = (minersScanned / totalMiners) * 100;
 
-                                // Update the title
-                                document.title = orginalTitle + ' | ' + percentageText.textContent;
-                            }, 50);
+                                    // Update the progress bar fill and percentage text
+                                    progressFill.style.width = progressPercentage + '%';
+                                    percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + minersScanned + '/' + totalMiners + ')';
 
-                            // Add the progress log on the right side of the screen
-                            var progressLog = document.createElement('div');
-                            progressLog.style.position = 'fixed';
-                            progressLog.style.top = '0';
-                            progressLog.style.right = '0';
-                            progressLog.style.width = '300px';
-                            progressLog.style.height = '100%';
-                            progressLog.style.backgroundColor = 'rgba(10, 10, 10, 1)';
-                            progressLog.style.color = 'white';
-                            progressLog.style.fontSize = '1em';
-                            progressLog.style.zIndex = '9999'; // Set the zIndex to be above everything
-                            progressLog.style.overflow = 'auto';
-                            document.body.appendChild(progressLog);
+                                    // Update the title
+                                    document.title = orginalTitle + ' | ' + percentageText.textContent;
+                                }, 50);
 
-                            // Spin rotation to be used in the loading icon
-                            let rotation = 0;
-
-                            // Add a message to the progress log
-                            const logMessage = document.createElement('div');
-                            logMessage.textContent = 'Progress Log';
-                            logMessage.style.padding = '10px';
-                            logMessage.style.borderBottom = '1px solid white';
-                            progressLog.appendChild(logMessage);
-                            var logEntries = {};
-
-                            // Loop through allMinersData and get the uptime
-                            var currentMiner = issueMiners[0];
-                            var currentMinerIndex = 0;
-                            function parseMinerUpTimeData(minerID, timeFrame) {
-
-                                // Add to progress log
-                                const logEntry = document.createElement('div');
-                                logEntry.textContent = `Miner ${minerID}`;
-                                logEntry.style.padding = '10px';
-                                logEntry.style.borderBottom = '1px solid white';
-                                progressLog.appendChild(logEntry);
-                                logEntries[minerID] = logEntry;
-
-                                // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
-                                const loadingIcon = document.createElement('span');
-                                loadingIcon.textContent = '↻';
-                                loadingIcon.style.display = 'none';
-                                loadingIcon.style.position = 'absolute';
-                                loadingIcon.style.right = '10px';
-                                logEntry.appendChild(loadingIcon);
-
-                                // Make it spin
-                                loadingIcon.loadingIconInterval = setInterval(() => {
-                                    rotation = (rotation + 0.5) % 360;
-                                    loadingIcon.style.transform = `rotate(${rotation}deg)`;
-                                }, 1);
-                                loadingIcon.style.display = 'inline-block';  // Show the icon
-
-                                // Scroll to the bottom of the progress log
-                                progressLog.scrollTop = progressLog.scrollHeight;
-
-                                var expectedHashRate = allMinersLookup[minerID].expectedHashRate;
-
-                                retrieveMinerData("MinerHashrate", minerID, timeFrame, function(minerID, minerHashData) {
-
-                                    // Loop through the hash data and check for any times it is below 80% of the expected hash rate
-                                    var belowCount = 0;
-                                    var totalExpectedHash = 0;
-                                    var totalActualHash = 0;
-                                    var hashRateDataTimeLookup = {};
-                                    for (const [index, data] of Object.entries(minerHashData)) {
-                                        var timestamp = data[0];
-                                        var curHash = Number(data[1]);
-                                        totalExpectedHash += expectedHashRate;
-                                        totalActualHash += curHash;
-                                        hashRateDataTimeLookup[timestamp] = curHash;
-                                        if (data[1] < expectedHashRate * 0.8) {
-                                            belowCount++;
+                                // Add rebooting text below the progress bar
+                                var rebootingText;
+                                var totalRebootedText;
+                                if (stage === 1) {
+                                    rebootingText = document.createElement('div');
+                                    rebootingText.textContent = 'Rebooting: 0/100';
+                                    rebootingText.style.marginTop = '10px';
+                                    rebootingText.style.textAlign = 'left';
+                                    scanningElement.appendChild(rebootingText);
+                                    setInterval(() => {
+                                        // Calculate the progress percentage
+                                        var minersRebooting = 0;
+                                        for (const [minerID, data] of Object.entries(rebootData)) {
+                                            if (data.isRebooting) {
+                                                minersRebooting++;
+                                            }
                                         }
-                                    }
 
-                                    var overallHashRate = Math.round((totalActualHash / totalExpectedHash) * 100);
-                                    console.log("Actual Hash Rate: " + totalActualHash);
-                                    console.log("Expected Hash Rate: " + totalExpectedHash);
-                                    console.log("Overall Hash Rate: " + overallHashRate);
+                                        // Update the rebooting text
+                                        rebootingText.textContent = 'Rebooting: ' + minersRebooting + '/' + maxRebootAllowed;
+                                    }, 50);
 
-                                    var totalOnlineActualHashRate = 0;
-                                    var totalOnlineExpectedHashRate = 0;
-                                    var onlineHashRate;
+                                    // Add text below the percentage text
+                                    totalRebootedText = document.createElement('div');
+                                    totalRebootedText.textContent = 'Total Rebooted: 0';
+                                    totalRebootedText.style.marginTop = '10px';
+                                    totalRebootedText.style.textAlign = 'left';
+                                    scanningElement.appendChild(totalRebootedText);
 
-                                    // Now that we have the minerHashData, we can retrieve the uptime data
-                                    retrieveMinerData("MinerOnline", minerID, timeFrame, function(minerID, minerUptime) {
+                                    setInterval(() => {
+                                        // Update the rebooting text
+                                        totalRebootedText.textContent = 'Total Sent Reboots: ' + totalRebooted;
+                                    }, 50);
+                                }
+
+                                // Add the progress log on the right side of the screen
+                                var progressLog = document.createElement('div');
+                                progressLog.style.position = 'fixed';
+                                progressLog.style.top = '0';
+                                progressLog.style.right = '0';
+                                progressLog.style.width = '300px';
+                                progressLog.style.height = '100%';
+                                progressLog.style.backgroundColor = 'rgba(10, 10, 10, 1)';
+                                progressLog.style.color = 'white';
+                                progressLog.style.fontSize = '1em';
+                                progressLog.style.zIndex = '9998'; // Set the zIndex to be above everything
+                                progressLog.style.overflow = 'auto';
+                                document.body.appendChild(progressLog);
+
+                                // Spin rotation to be used in the loading icon
+                                let rotation = 0;
+
+                                // Add a message to the progress log
+                                const logMessage = document.createElement('div');
+                                logMessage.textContent = 'Progress Log';
+                                logMessage.style.padding = '10px';
+                                logMessage.style.borderTop = '1px solid white';
+                                progressLog.appendChild(logMessage);
+                                var logEntries = {};
+
+                                // Loop through allMinersData and get the uptime
+                                function parseMinerUpTimeData(minerID, timeFrame) {
+
+                                    // Add to progress log
+                                    const logEntry = document.createElement('div');
+                                    const logLink = document.createElement('a');
+                                    const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                                    logLink.textContent = `Miner ${minerID}`;
+                                    logLink.href = minerLink; // Make it clickable
+                                    logLink.target = '_blank'; // Open in a new tab
+                                    logLink.style.color = 'inherit'; // To keep the link color same as text color
+                                    //logLink.style.textDecoration = 'none'; // To remove underline from the link
+
+                                    logEntry.style.borderTop = '1px solid white';
+                                    logEntry.style.padding = '10px';
+                                    logEntry.appendChild(logLink);
+
+                                    logEntries[minerID] = logEntry;
+                                    progressLog.appendChild(logEntry);
+
+                                    // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
+                                    const loadingIcon = document.createElement('span');
+                                    loadingIcon.textContent = '↻';
+                                    loadingIcon.style.display = 'none';
+                                    loadingIcon.style.position = 'absolute';
+                                    loadingIcon.style.right = '10px';
+                                    logEntry.appendChild(loadingIcon);
+
+                                    // Make it spin
+                                    loadingIcon.loadingIconInterval = setInterval(() => {
+                                        rotation = (rotation + 0.5) % 360;
+                                        loadingIcon.style.transform = `rotate(${rotation}deg)`;
+                                    }, 1);
+                                    loadingIcon.style.display = 'inline-block';  // Show the icon
+
+                                    // Scroll to the bottom of the progress log
+                                    progressLog.scrollTop = progressLog.scrollHeight;
+
+                                    function runNextMiner() {
+                                        // Stop if we have reached the end of the scan
+                                        console.log("Runnin Next Miner");
+                                        
                                         // Remove the spinning 'loading' icon from the log entry
-                                        let logEntry = logEntries[minerID];
+                                        let logEntry = logEntries[currentMiner.id];
                                         if (logEntry) {
                                             const loadingIcon = logEntry.querySelector('span');
                                             if (loadingIcon) {
@@ -1164,34 +1370,52 @@ function OptiFleetSpecificLogic() {
                                         checkmark.style.position = 'absolute';
                                         checkmark.style.right = '10px';
                                         logEntry.appendChild(checkmark);
-            
-                                        // Loop through the uptime and check for any downtime
-                                        var minerDownTimes = 0;
-                                        var previousState = '1';
-                                        for (const [index, data] of Object.entries(minerUptime)) {
-                                            var timestamp = data[0];
-                                            var state = data[1];
-                                            if (state === '0' && previousState === '1') {
-                                                minerDownTimes++;
-                                            }
-                                            previousState = state;
 
-                                            // Get the hashrate for when we are online
-                                            if (state === '1') {
-                                                totalOnlineActualHashRate += hashRateDataTimeLookup[timestamp];
-                                                totalOnlineExpectedHashRate += expectedHashRate;
+                                        // Add if it sent reboot or skipped
+                                        if(autoreboot) {
+                                            if(stage === 1) {
+                                                var sentReboot = rebootData[currentMiner.id].sentReboot || false;
+                                                var moreThanOneHour = rebootData[currentMiner.id].moreThanOneHour || false;
+                                                var belowMaxTemp = rebootData[currentMiner.id].belowMaxTemp || false;
+
+                                                if(sentReboot) {
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `Sent Reboot`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.paddingTop = '0';
+                                                    logEntry.style.paddingLeft = '20px';
+                                                    progressLog.appendChild(logEntry);
+                                                } else {
+                                                    if(!moreThanOneHour) {
+                                                        const logEntry = document.createElement('div');
+                                                        logEntry.textContent = `Less Than 1 Hour Uptime`;
+                                                        logEntry.style.padding = '10px';
+                                                        logEntry.style.paddingTop = '0';
+                                                        logEntry.style.paddingLeft = '20px';
+                                                        progressLog.appendChild(logEntry);
+                                                    }
+                                                    if(!belowMaxTemp) {
+                                                        const logEntry = document.createElement('div');
+                                                        logEntry.textContent = `Above Max Temp`;
+                                                        logEntry.style.padding = '10px';
+                                                        logEntry.style.paddingTop = '0';
+                                                        logEntry.style.paddingLeft = '20px';
+                                                        progressLog.appendChild(logEntry);
+                                                    }
+                                                }
+                                            } else if(stage === 2) {
+                                                var shouldHardReboot = rebootData[currentMiner.id].shouldHardReboot || false;
+                                                if(shouldHardReboot) {
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `Should Hard Reboot`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.paddingTop = '0';
+                                                    logEntry.style.paddingLeft = '20px';
+                                                    progressLog.appendChild(logEntry);
+                                                }
                                             }
                                         }
 
-                                        // Calculate the online hashrate
-                                        onlineHashRate = Math.round((totalOnlineActualHashRate / totalOnlineExpectedHashRate) * 100);
-
-                                        // Add the miner to the minersScanData object
-                                        minersScanData[minerID] = minersScanData[minerID] || {};
-                                        minersScanData[minerID].downTimes = minerDownTimes;
-                                        minersScanData[minerID].overallHashRate = overallHashRate;
-                                        minersScanData[minerID].onlineHashRate = onlineHashRate;
-            
                                         // Run the next miner
                                         console.log("currentMinerIndex: " + currentMinerIndex);
                                         currentMinerIndex++;
@@ -1199,62 +1423,641 @@ function OptiFleetSpecificLogic() {
                                             currentMiner = issueMiners[currentMinerIndex];
                                             parseMinerUpTimeData(currentMiner.id, timeFrame);
                                         }
-                                    });
-                                });
-                                
-                                
-                            }
-                            parseMinerUpTimeData(currentMiner.id, timeFrame);
 
-                            const waitTillDone = setInterval(() => {
-                                if (Object.keys(minersScanData).length === Object.keys(issueMiners).length) {
-                                    clearInterval(waitTillDone);
+                                        // If we are done with all the miners, then add a log entry
+                                        if(reachedScanEnd) {
+                                            console.log("Reached the end of the scan");
+                                            return;
+                                        }
 
-                                    // Remove the scanning element
-                                    scanningElement.remove();
-                                    progressLog.remove();
-                                    clearInterval(scanningInterval);
+                                        if (currentMinerIndex === Object.keys(issueMiners).length) {
+                                            reachedScanEnd = true;
+                                            
+                                            // Save the rebootData
+                                            GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
 
-                                    // Create a popup element for showing the results
-                                    let popupResultElement = document.createElement('div');
-                                    popupResultElement.innerHTML = `
-                                        <div style="
-                                            position: fixed;
-                                            top: 50%;
-                                            left: 50%;
-                                            transform: translate(-50%, -50%);
-                                            background-color: #333;
-                                            color: white;
-                                            padding: 20px;
-                                            font-family: Arial, sans-serif;
-                                            border-radius: 5px;
-                                            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-                                            width: 80%;
-                                            height: 80%;
-                                            display: flex;
-                                            flex-direction: column;
-                                            justify-content: center;
-                                            align-items: center;
-                                        ">
-                                            <h1 style="text-align: center; margin-bottom: 20px;">Offline Count List (${scanTimeFrameText})</h1>
-                                            <div style="flex: 1; width: 100%; max-height: 80%; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #555 #333;">
-                                                <table id="minerTable" style="width: 100%; color: white;" class="display responsive nowrap">
-                                                    <thead>
-                                                        <tr>
-                                                            <th style="border: 2px solid gray; padding: 10px;">Link</th>
-                                                            <th style="border: 2px solid gray; padding: 10px;">Offline Count</th>
-                                                            <th style="border: 2px solid gray; padding: 10px;">Overall Hash Efficiency</th>
-                                                            <th style="border: 2px solid gray; padding: 10px;">Online Hash Efficiency</th>
-                                                            <th style="border: 2px solid gray; padding: 10px;">Slot ID</th>
-                                                            <th style="border: 2px solid gray; padding: 10px;">Serial Number</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                    </tbody>
-                                                </table>
-                                            </div>
+                                            // Stop the scanning interval
+                                            clearInterval(scanningInterval);
 
-                                            <button id="closePopup" style="
+                                            if(autoreboot) {
+                                                // Add a log entry for the rebooting stage
+                                                const logEntry = document.createElement('div');
+                                                logEntry.textContent = `Rebooting Stage ` + stage + `/3 Completed`;
+                                                logEntry.style.padding = '10px';
+                                                logEntry.style.borderTop = '1px solid white';
+                                                progressLog.appendChild(logEntry);
+
+                                                // Remove the rebooting text
+                                                if(rebootingText) {
+                                                    rebootingText.remove();
+                                                }
+                                                if(scanningText) {
+                                                    scanningText.remove();
+                                                }
+
+                                                if(stage === 1) {
+                                                    // Loop through the rebootData and check for any miners that weren't rebooted
+                                                    var lessThanOneHourCount = 0;
+                                                    var tooHotCount = 0;
+
+                                                    for (const [minerID, data] of Object.entries(rebootData)) {
+                                                        if(!data.moreThanOneHour) {
+                                                            lessThanOneHourCount++;
+                                                        }
+                                                        if(!data.belowMaxTemp) {
+                                                            tooHotCount++;
+                                                        }
+                                                    }
+
+                                                    // Add text below the percentage text
+                                                    var notRebootedText = document.createElement('div');
+                                                    notRebootedText.textContent = `Total Reboots Skipped: ${Object.keys(rebootData).length - totalRebooted}`;
+                                                    notRebootedText.style.marginTop = '10px';
+                                                    notRebootedText.style.textAlign = 'left';
+                                                    notRebootedText.style.position = 'absolute';
+                                                    notRebootedText.style.left = '10px';
+                                                    notRebootedText.style.bottom = '10px';
+                                                    scanningElement.appendChild(notRebootedText);
+                                                    
+
+                                                    var lessThanOneHourText = document.createElement('div');
+                                                    lessThanOneHourText.textContent = `Less Than 1 Hour Uptime: ${lessThanOneHourCount} `;
+                                                    lessThanOneHourText.style.marginTop = '10px';
+                                                    lessThanOneHourText.style.textAlign = 'left';
+                                                    lessThanOneHourText.style.position = 'absolute';
+                                                    lessThanOneHourText.style.left = '10px';
+                                                    lessThanOneHourText.style.bottom = '50px';
+                                                    scanningElement.appendChild(lessThanOneHourText);
+
+                                                    var tooHotText = document.createElement('div');
+                                                    tooHotText.textContent = `Above Max Temp: ${tooHotCount}`;
+                                                    tooHotText.style.marginTop = '10px';
+                                                    tooHotText.style.textAlign = 'left';
+                                                    tooHotText.style.position = 'absolute';
+                                                    tooHotText.style.left = '10px';
+                                                    tooHotText.style.bottom = '90px';
+                                                    scanningElement.appendChild(tooHotText);
+
+                                                    if(totalRebooted > 0){
+                                                        // Add a timer countdown for the next stage 15 minutes
+                                                        var countdown = 15*60;
+                                                        var countdownText = document.createElement('div');
+                                                        countdownText.textContent = `Next Stage in ${Math.floor(countdown / 60)} minutes and ${countdown % 60} seconds`;
+                                                        countdownText.style.padding = '10px';
+                                                        progressLog.appendChild(countdownText);
+
+                                                        // Update the countdown every second
+                                                        var countdownInterval = setInterval(() => {
+                                                            countdown--;
+                                                            countdownText.textContent = `Next Stage in ${Math.floor(countdown / 60)} minutes and ${countdown % 60} seconds`;
+
+                                                            if(countdown === 0) {
+                                                                clearInterval(countdownInterval);
+
+                                                                // Remove the scanning element
+                                                                scanningElement.remove();
+                                                                progressLog.remove();
+                                                                clearInterval(scanningInterval);
+                                                                
+                                                                // Start the next stage
+                                                                startScan(timeFrame, true, stage+1);
+                                                            }
+                                                        }, 1000);
+                                                    } else {
+                                                        // Add log saying that no miners were rebooted
+                                                        const logEntry = document.createElement('div');
+                                                        logEntry.textContent = `No Miners Rebooted`;
+                                                        logEntry.style.padding = '10px';
+                                                        logEntry.style.borderTop = '1px solid white';
+                                                        progressLog.appendChild(logEntry);
+
+                                                        // Add a timer countdown for the next stage 15 minutes
+                                                        var countdown = 5;
+                                                        var countdownText = document.createElement('div');
+                                                        countdownText.textContent = `Next Stage in ${countdown % 60} seconds`;
+                                                        countdownText.style.padding = '10px';
+                                                        progressLog.appendChild(countdownText);
+
+                                                        // Update the countdown every second
+                                                        var countdownInterval = setInterval(() => {
+                                                            countdown--;
+                                                            countdownText.textContent = `Next Stage in ${countdown % 60} seconds`;
+
+                                                            if(countdown === 0) {
+                                                                clearInterval(countdownInterval);
+
+                                                                // Remove the scanning element
+                                                                scanningElement.remove();
+                                                                progressLog.remove();
+                                                                clearInterval(scanningInterval);
+                                                                
+                                                                // Start the next stage
+                                                                startScan(timeFrame, true, stage+1);
+                                                            }
+                                                        }, 1000);
+
+                                                        /*
+                                                        // Add a button to close the scanning element
+                                                        const finishedButton = document.createElement('button');
+                                                        finishedButton.id = 'finishedReboots';
+                                                        finishedButton.style.cssText = `
+                                                            padding: 10px 20px;
+                                                            background-color: #ff5e57;
+                                                            color: white;
+                                                            border: none;
+                                                            cursor: pointer;
+                                                            margin-top: 10px;
+                                                            border-radius: 5px;
+                                                            transition: background-color 0.3s;
+                                                        `;
+                                                        finishedButton.textContent = 'Close Auto Reboot Scan';
+                                                        scanningElement.appendChild(finishedButton);
+
+                                                        // Add button hover effect
+                                                        finishedButton.addEventListener('mouseenter', function() {
+                                                            this.style.backgroundColor = '#ff3b30';
+                                                        });
+
+                                                        finishedButton.addEventListener('mouseleave', function() {
+                                                            this.style.backgroundColor = '#ff5e57';
+                                                        });
+
+                                                        // Close button functionality
+                                                        finishedButton.onclick = function() {
+                                                            scanningElement.remove();
+                                                            progressLog.remove();
+                                                            clearInterval(scanningInterval);
+                                                        };
+                                                        */
+                                                    }
+                                                } else if(stage === 2) {
+                                                    console.log("Creating Hard Reboot Table");
+                                                    // Create table for the miners that should be hard rebooted
+                                                    const cols = ['Miner', 'Slot ID', 'Breaker Number', 'Serial Number'];
+                                                    createPopUpTable(`Recommended Hard Reboot Miners`, cols, false, (popupResultElement) => {
+                                                            
+                                                        // Add the "Finished Hard Reboots" button
+                                                        const finishedButton = document.createElement('button');
+                                                        finishedButton.id = 'finishedHardReboots';
+                                                        finishedButton.style.cssText = `
+                                                            padding: 10px 20px;
+                                                            background-color: #4CAF50;
+                                                            color: white;
+                                                            border: none;
+                                                            cursor: pointer;
+                                                            margin-top: 10px;
+                                                            border-radius: 5px;
+                                                            transition: background-color 0.3s;
+                                                            align-self: flex-start; /* Align to the left side */
+                                                            display: block; /* Ensure the button is displayed as a block element */
+                                                        `;
+                                                        finishedButton.textContent = 'Finished Hard Reboots';
+                                                        const firstDiv = popupResultElement.querySelector('div');
+                                                        firstDiv.appendChild(finishedButton);
+
+                                                        // Now the popup is appended, we can attach event listeners
+                                                        const finishedHardRebootsButton = popupResultElement.querySelector('#finishedHardReboots');
+
+                                                        // Add button hover effect
+                                                        finishedHardRebootsButton.addEventListener('mouseenter', function() {
+                                                            this.style.backgroundColor = '#45a049';
+                                                        });
+
+                                                        finishedHardRebootsButton.addEventListener('mouseleave', function() {
+                                                            this.style.backgroundColor = '#4CAF50';
+                                                        });
+
+                                                        // Close button functionality
+                                                        finishedHardRebootsButton.onclick = function() {
+                                                            popupResultElement.remove();
+                                                            popupResultElement = null;
+
+                                                            // Remove the scanning element
+                                                            scanningElement.remove();
+                                                            progressLog.remove();
+                                                            clearInterval(scanningInterval);
+
+                                                            // Start the next stage
+                                                            startScan(timeFrame, true, stage+1);
+                                                        };
+
+                                                        // Add the miner data to the table body
+                                                        const popupTableBody = popupResultElement.querySelector('tbody');
+                                                        Object.keys(rebootData).forEach(minerID => {
+                                                            const minerRebootData = rebootData[minerID];
+                                                            if (minerRebootData.shouldHardReboot) {
+                                                                const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                                                                const row = document.createElement('tr');
+                                                                const model = allMinersLookup[minerID].model;
+                                                                const slotID = allMinersLookup[minerID].locationName;
+
+                                                                var splitSlotID = slotID.split('-');
+                                                                var rowNum = Number(splitSlotID[2]);
+                                                                var colNum = Number(splitSlotID[3]);
+                                                                var rowWidth = 4;
+                                                                var breakerNum = (rowNum-1)*rowWidth + colNum;
+                        
+                                                                const minerSerialNumber = allMinersLookup[minerID].serialNumber;
+                                                                row.innerHTML = `
+                                                                    <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a></td>
+                                                                    <td style="text-align: left;">${slotID}</td>
+                                                                    <td style="text-align: left;">${breakerNum}</td>
+                                                                    <td style="text-align: left;">${minerSerialNumber}</td>
+                                                                `;
+                                                                popupTableBody.appendChild(row);
+                                                            }
+                                                        });
+
+                                                        document.title = orginalTitle;
+
+                                                        // Ensure jQuery, DataTables, and ColResize are loaded before initializing the table
+                                                        $(document).ready(function() {
+                                                            // Custom sorting function for slot IDs
+                                                            $.fn.dataTable.ext.type.order['miner-id'] = function(d) {
+                                                                // Split something "C05-10-3-4" into an array of just the numbers that aren't seperated by anything at all
+                                                                console.log(d);
+                                                                let numbers = d.match(/\d+/g).map(Number);
+                                                                //numbers.shift(); // Remove the first number since it is the miner ID
+                                                                console.log(numbers);
+                                                                // Convert the array of numbers into a single comparable value
+                                                                // For example, [10, 3, 4] becomes 100304
+                                                                let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
+                                                                return comparableValue;
+                                                            };
+                                                            
+                                                            $('#minerTable').DataTable({
+                                                                paging: false,       // Disable pagination
+                                                                searching: false,    // Disable searching
+                                                                info: false,         // Disable table info
+                                                                columnReorder: true, // Enable column reordering
+                                                                responsive: true,    // Enable responsive behavior
+                                                                colResize: true,      // Enable column resizing
+
+                                                                // Use custom sorting for the "Slot ID" column
+                                                                columnDefs: [
+                                                                    {
+                                                                        targets: $('#minerTable th').filter(function() {
+                                                                            return $(this).text().trim() === 'Slot ID';
+                                                                        }).index(),
+                                                                        type: 'miner-id'  // Apply the custom sorting function
+                                                                    }
+                                                                ]
+                                                            });
+                                                        });
+                                                    });
+                                                    
+                                                } else if(stage === 3) {
+                                                    // Add a log entry for the rebooting stage
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `All Rebooting Stages Completed`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.borderTop = '1px solid white';
+                                                    progressLog.appendChild(logEntry);
+
+                                                    // Create table for the miners that should be pull
+                                                    const cols = ['Miner', 'Slot ID', 'Breaker Number', 'Serial Number'];
+                                                    createPopUpTable(`Recommended Miners to Pull`, cols, false, (popupResultElement) => {
+                                                            
+                                                        // Add the "Finished Hard Reboots" button
+                                                        const finishedButton = document.createElement('button');
+                                                        finishedButton.id = 'finishedHardReboots';
+                                                        finishedButton.style.cssText = `
+                                                            padding: 10px 20px;
+                                                            background-color: #4CAF50;
+                                                            color: white;
+                                                            border: none;
+                                                            cursor: pointer;
+                                                            margin-top: 10px;
+                                                            border-radius: 5px;
+                                                            transition: background-color 0.3s;
+                                                            align-self: flex-start; /* Align to the left side */
+                                                            display: block; /* Ensure the button is displayed as a block element */
+                                                        `;
+                                                        finishedButton.textContent = 'Close Auto Reboot Scan';
+                                                        const firstDiv = popupResultElement.querySelector('div');
+                                                        firstDiv.appendChild(finishedButton);
+
+                                                        // Now the popup is appended, we can attach event listeners
+                                                        const finishedHardRebootsButton = popupResultElement.querySelector('#finishedHardReboots');
+
+                                                        // Add button hover effect
+                                                        finishedHardRebootsButton.addEventListener('mouseenter', function() {
+                                                            this.style.backgroundColor = '#45a049';
+                                                        });
+
+                                                        finishedHardRebootsButton.addEventListener('mouseleave', function() {
+                                                            this.style.backgroundColor = '#4CAF50';
+                                                        });
+
+                                                        // Close button functionality
+                                                        finishedHardRebootsButton.onclick = function() {
+                                                            popupResultElement.remove();
+                                                            popupResultElement = null;
+
+                                                            // Remove the scanning element
+                                                            scanningElement.remove();
+                                                            progressLog.remove();
+                                                            clearInterval(scanningInterval);
+                                                        };
+
+                                                        // Add the miner data to the table body
+                                                        const popupTableBody = popupResultElement.querySelector('tbody');
+                                                        Object.keys(rebootData).forEach(minerID => {
+                                                            const minerRebootData = rebootData[minerID];
+                                                            if (minerRebootData.hardRebootFailed) {
+                                                                const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                                                                const row = document.createElement('tr');
+                                                                const model = allMinersLookup[minerID].model;
+                                                                const slotID = allMinersLookup[minerID].locationName;
+
+                                                                var splitSlotID = slotID.split('-');
+                                                                var rowNum = Number(splitSlotID[2]);
+                                                                var colNum = Number(splitSlotID[3]);
+                                                                var rowWidth = 4;
+                                                                var breakerNum = (rowNum-1)*rowWidth + colNum;
+                        
+                                                                const minerSerialNumber = allMinersLookup[minerID].serialNumber;
+                                                                row.innerHTML = `
+                                                                    <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a></td>
+                                                                    <td style="text-align: left;">${slotID}</td>
+                                                                    <td style="text-align: left;">${breakerNum}</td>
+                                                                    <td style="text-align: left;">${minerSerialNumber}</td>
+                                                                `;
+                                                                popupTableBody.appendChild(row);
+                                                            }
+                                                        });
+
+                                                        document.title = orginalTitle;
+
+                                                        // Ensure jQuery, DataTables, and ColResize are loaded before initializing the table
+                                                        $(document).ready(function() {
+                                                            // Custom sorting function for slot IDs
+                                                            $.fn.dataTable.ext.type.order['miner-id'] = function(d) {
+                                                                // Split something "C05-10-3-4" into an array of just the numbers that aren't seperated by anything at all
+                                                                console.log(d);
+                                                                let numbers = d.match(/\d+/g).map(Number);
+                                                                //numbers.shift(); // Remove the first number since it is the miner ID
+                                                                console.log(numbers);
+                                                                // Convert the array of numbers into a single comparable value
+                                                                // For example, [10, 3, 4] becomes 100304
+                                                                let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
+                                                                return comparableValue;
+                                                            };
+                                                            
+                                                            $('#minerTable').DataTable({
+                                                                paging: false,       // Disable pagination
+                                                                searching: false,    // Disable searching
+                                                                info: false,         // Disable table info
+                                                                columnReorder: true, // Enable column reordering
+                                                                responsive: true,    // Enable responsive behavior
+                                                                colResize: true,      // Enable column resizing
+
+                                                                // Use custom sorting for the "Slot ID" column
+                                                                columnDefs: [
+                                                                    {
+                                                                        targets: $('#minerTable th').filter(function() {
+                                                                            return $(this).text().trim() === 'Slot ID';
+                                                                        }).index(),
+                                                                        type: 'miner-id'  // Apply the custom sorting function
+                                                                    }
+                                                                ]
+                                                            });
+                                                        });
+                                                    });
+                                                }
+
+                                            } else {
+                                                // Add a log entry
+                                                const logEntry = document.createElement('div');
+                                                logEntry.textContent = `Scan Complete`;
+                                                logEntry.style.padding = '10px';
+                                                logEntry.style.borderTop = '1px solid white';
+                                                progressLog.appendChild(logEntry);
+                                            }
+                                        }
+
+                                        // Scroll to the bottom of the progress log
+                                        progressLog.scrollTop = progressLog.scrollHeight;
+                                    }
+
+                                    if(!autoreboot) {
+                                        var expectedHashRate = allMinersLookup[minerID].expectedHashRate;
+                                        retrieveMinerData("MinerHashrate", minerID, timeFrame, function(minerID, minerHashData) {
+
+                                            // Loop through the hash data and check for any times it is below 80% of the expected hash rate
+                                            var belowCount = 0;
+                                            var totalExpectedHash = 0;
+                                            var totalActualHash = 0;
+                                            var hashRateDataTimeLookup = {};
+                                            for (const [index, data] of Object.entries(minerHashData)) {
+                                                var timestamp = data[0];
+                                                var curHash = Number(data[1]);
+                                                totalExpectedHash += expectedHashRate;
+                                                totalActualHash += curHash;
+                                                hashRateDataTimeLookup[timestamp] = curHash;
+                                                if (data[1] < expectedHashRate * 0.8) {
+                                                    belowCount++;
+                                                }
+                                            }
+
+                                            var overallHashRate = Math.round((totalActualHash / totalExpectedHash) * 100);
+                                            console.log("Actual Hash Rate: " + totalActualHash);
+                                            console.log("Expected Hash Rate: " + totalExpectedHash);
+                                            console.log("Overall Hash Rate: " + overallHashRate);
+
+                                            var totalOnlineActualHashRate = 0;
+                                            var totalOnlineExpectedHashRate = 0;
+                                            var onlineHashRate;
+
+                                            // Now that we have the minerHashData, we can retrieve the uptime data
+                                            retrieveMinerData("MinerOnline", minerID, timeFrame, function(minerID, minerUptime) {
+                                                
+                                                // Loop through the uptime and check for any downtime
+                                                var minerDownTimes = 0;
+                                                var previousState = '1';
+                                                for (const [index, data] of Object.entries(minerUptime)) {
+                                                    var timestamp = data[0];
+                                                    var state = data[1];
+                                                    if (state === '0' && previousState === '1') {
+                                                        minerDownTimes++;
+                                                    }
+                                                    previousState = state;
+
+                                                    // Get the hashrate for when we are online
+                                                    if (state === '1') {
+                                                        totalOnlineActualHashRate += hashRateDataTimeLookup[timestamp];
+                                                        totalOnlineExpectedHashRate += expectedHashRate;
+                                                    }
+                                                }
+
+                                                // Calculate the online hashrate
+                                                onlineHashRate = Math.round((totalOnlineActualHashRate / totalOnlineExpectedHashRate) * 100);
+
+                                                // Add the miner to the minersScanData object
+                                                minersScanData[minerID] = minersScanData[minerID] || {};
+                                                minersScanData[minerID].downTimes = minerDownTimes;
+                                                minersScanData[minerID].overallHashRate = overallHashRate;
+                                                minersScanData[minerID].onlineHashRate = onlineHashRate;
+                    
+                                                // Run next miner
+                                                runNextMiner();
+                                            });
+                                        });
+                                    } else {
+                                        var curHash = allMinersLookup[minerID].currentHashRate;
+                                        var expectedHashRate = allMinersLookup[minerID].expectedHashRate;
+                                        var minUpTime = 60*60; // 1 hour
+                                        var upTime = currentMiner.uptimeValue;
+                                        var location = allMinersLookup[minerID].locationName;
+                                        if(!location || location === null) {
+                                            runNextMiner(); // Skip if location is null
+                                        } else {
+                                            var container = location.split("_")[1].split("-")[0].replace(/\D/g, '').replace(/^0+/, '');
+                                            var maxTemp = 78;
+                                            var containerTemp = containerTempData[container].temp;
+                                            var issueType = currentMiner.issueType;
+                                            console.log("____________________________________________________")
+                                            console.log("Location: " + location);
+                                            console.log("Container: " + container);
+                                            
+                                            console.log("Container Temp: " + containerTemp);
+                                            console.log("Current Hash Rate: " + curHash);
+                                            console.log("Issue Type: " + issueType);
+                                            console.log("Up Time: " + upTime);
+
+                                            var nonHash = issueType === "Non Hashing" || curHash < 1;
+                                            var moreThanOneHour = upTime > minUpTime;
+                                            var belowMaxTemp = containerTemp <= maxTemp;
+
+                                            var minerRebootTimesData = lastRebootTimes[minerID] || {};
+                                            var upTimeAtReboot = minerRebootTimesData.upTimeAtReboot || false;
+                                            var lastRebootTime = minerRebootTimesData.autoRebootTime || false;
+                                            if(lastRebootTime && (new Date() - new Date(lastRebootTime)) < 60*60*1000) { // Mainly if the page was reloaded or something and another scan was started before the miner uptime data could change so it still thinks it hasn't been rebooted IE the uptime hasn't changed
+                                                moreThanOneHour = false;
+                                            }
+
+                                            rebootData[minerID] = rebootData[minerID] || {};
+                                            rebootData[minerID].belowMaxTemp = belowMaxTemp;
+                                            rebootData[minerID].nonHash = nonHash;
+                                            rebootData[minerID].moreThanOneHour = moreThanOneHour;
+
+                                            if(stage === 1) {    
+                                                if(nonHash && moreThanOneHour && belowMaxTemp) { // If the miner passed the conditions, then we can reboot it
+                                                    // Reboot the miner
+                                                    console.log("Rebooting Miner: " + minerID);
+
+                                                    var minerIdList = [minerID];
+                                                    rebootData[minerID].isRebooting = true;
+                                                    rebootData[minerID].sentReboot = true;
+
+                                                    // Update the lastRebootTimes
+                                                    lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
+                                                    lastRebootTimes[minerID].autoRebootTime = new Date().toISOString();
+                                                    lastRebootTimes[minerID].upTimeAtReboot = upTime;
+                                                    totalRebooted++;
+
+                                                    // 10 minute timere to set the isRebooting to false
+                                                    setTimeout(() => {
+                                                        rebootData[minerID].isRebooting = false;
+                                                    }, 10*60*1000);
+
+                                                    // Inteval to check if there are less than 100 miners rebooting
+                                                    var checkRebootInterval = setInterval(() => {
+                                                        var minersRebooting = 0;
+                                                        for (const [minerID, data] of Object.entries(rebootData)) {
+                                                            if (data.isRebooting) {
+                                                                minersRebooting++;
+                                                            }
+                                                        }
+
+                                                        if(minersRebooting < maxRebootAllowed) {
+                                                            clearInterval(checkRebootInterval);
+                                                            runNextMiner();
+                                                        }
+                                                    }, 100);
+
+                                                    // Actually send the reboot request
+                                                    pageInstance.post(`/RebootMiners`, { miners: minerIdList, bypassed: false })
+                                                        .then(() => {
+                                                            console.log("Rebooted Miner: " + minerID);
+                                                    });
+                                                    
+
+                                                } else {
+                                                    runNextMiner();          
+                                                }
+                                            } else {
+                                                // If the miner has a lastRebootTime and it is at or more than 15 minutes and still has a 0 hash rate, then we can flag it to be hard rebooted, or if the miner last uptime is the same as the current uptime
+                                                var minTime = 15*60*1000; // 15 minutes
+                                                var forgetTime = 60*60*1000; // 1 hour
+                                                var sinceLastReboot = lastRebootTime ? (new Date() - new Date(lastRebootTime)) : 0;
+                                                var isOnline = currentMiner.connectivity === 'Online';
+                                                lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
+                                                lastRebootTimes[minerID].lastUpTimeAtHardRebootScan = upTime;
+                                                lastRebootTimes[minerID].hardRebootScanTime = new Date().toISOString();
+                                                
+                                                if( nonHash && (sinceLastReboot >= minTime && sinceLastReboot < forgetTime) ) {
+                                                    if(stage === 2) {
+                                                        // Mark the miner to be hard rebooted
+                                                        rebootData[minerID].shouldHardReboot = true;
+                                                        runNextMiner();
+                                                    } else if(stage === 3 && (!isOnline || upTime >= minTime || upTimeAtReboot === upTime)) { // Not online, uptime is more than 15 minutes, or the last uptime is the same as the current uptime which might indicate that the miner is stuck
+                                                        console.log("Checking Hard Reboot: " + minerID);
+                                                        console.log("Time Since Last Reboot: " + sinceLastReboot);
+                                                        retrieveMinerData("MinerOnline", minerID, sinceLastReboot, function(minerID, minerUptime) {
+                                                
+                                                            // Loop through the uptime and check for any downtime
+                                                            var minerDownTimes = 0;
+                                                            var previousState = '1';
+                                                            for (const [index, data] of Object.entries(minerUptime)) {
+                                                                var timestamp = data[0];
+                                                                var state = data[1];
+                                                                if (state === '0' && previousState === '1') {
+                                                                    minerDownTimes++;
+                                                                }
+                                                                previousState = state;
+                                                            }
+
+                                                            var hardRebootUpTime = lastRebootTimes[minerID].lastUpTimeAtHardRebootScan;
+                                                            var hardRebootTime = new Date(hardRebootUpTime).getTime();
+                                                            var timeSinceLastUpTime = hardRebootUpTime + hardRebootTime;
+                                                            if(minerDownTimes > 0 || timeSinceLastUpTime >= upTime) {
+                                                                rebootData[minerID].hardRebootFailed = true;
+                                                                console.log("Hard Reboot Failed: " + minerID);
+                                                            }
+                                                            runNextMiner();
+                                                        });
+                                                    } else {
+                                                        runNextMiner();
+                                                    }
+                                                } else {
+                                                    runNextMiner();
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    
+                                }
+                                parseMinerUpTimeData(currentMiner.id, timeFrame);
+
+                                const waitTillDone = setInterval(() => {
+                                    if (Object.keys(minersScanData).length === Object.keys(issueMiners).length) {
+                                        clearInterval(waitTillDone);
+
+                                        // Remove the scanning element
+                                        scanningElement.remove();
+                                        progressLog.remove();
+                                        clearInterval(scanningInterval);
+
+                                        // Create a popup element for showing the results
+                                        const cols = ['Miner', 'Offline Count', 'Overall Hash Efficiency', 'Online Hash Efficiency', 'Slot ID', 'Serial Number'];
+                                        createPopUpTable(`Offline Count List (${scanTimeFrameText})`, cols, false, (popupResultElement) => {
+
+                                            // Add the close button
+                                            const closeButton = document.createElement('button');
+                                            closeButton.id = 'closePopup';
+                                            closeButton.style.cssText = `
                                                 padding: 10px 20px;
                                                 background-color: #ff5e57;
                                                 color: white;
@@ -1264,139 +2067,100 @@ function OptiFleetSpecificLogic() {
                                                 border-radius: 5px;
                                                 transition: background-color 0.3s;
                                                 align-self: flex-start; /* Align to the left side */
-                                            ">Close</button>
-                                        </div>
-                                    `;
+                                                display: block; /* Ensure the button is displayed as a block element */
+                                            `;
+                                            closeButton.textContent = 'Close';
+                                            const firstDiv = popupResultElement.querySelector('div');
+                                            firstDiv.appendChild(closeButton);
 
-                                    // Append popup to the body first, then assign the event listeners
-                                    document.body.appendChild(popupResultElement);
+                                            // Now the popup is appended, we can attach event listeners
+                                            const closePopupButton = popupResultElement.querySelector('#closePopup');
 
-                                    // Now the popup is appended, we can attach event listeners
-                                    const closePopupButton = popupResultElement.querySelector('#closePopup');
+                                            // Add button hover effect
+                                            closePopupButton.addEventListener('mouseenter', function() {
+                                                this.style.backgroundColor = '#ff3832';
+                                            });
 
-                                    // Add button hover effect
-                                    closePopupButton.addEventListener('mouseenter', function() {
-                                        this.style.backgroundColor = '#ff3832';
-                                    });
+                                            closePopupButton.addEventListener('mouseleave', function() {
+                                                this.style.backgroundColor = '#ff5e57';
+                                            });
 
-                                    closePopupButton.addEventListener('mouseleave', function() {
-                                        this.style.backgroundColor = '#ff5e57';
-                                    });
+                                            // Close button functionality
+                                            closePopupButton.onclick = function() {
+                                                popupResultElement.remove();
+                                                popupResultElement = null;
+                                            };
 
-                                    // Close button functionality
-                                    closePopupButton.onclick = function() {
-                                        popupResultElement.remove();
-                                        popupResultElement = null;
-                                    };
+                                            // Add the miner data to the table body
+                                            const popupTableBody = popupResultElement.querySelector('tbody');
+                                            Object.keys(minersScanData).forEach(minerID => {
+                                                const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                                                const row = document.createElement('tr');
+                                                const model = allMinersLookup[minerID].model;
+                                                const rebootCount = minersScanData[minerID].downTimes;
+                                                const overallHashRate = minersScanData[minerID].overallHashRate;
+                                                const onlineHashRate = minersScanData[minerID].onlineHashRate;
+                                                const minerSlotID = allMinersLookup[minerID].locationName;
+                                                const minerSerialNumber = allMinersLookup[minerID].serialNumber;
+                                                row.innerHTML = `
+                                                    <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a></td>
+                                                    <td style="text-align: left;">${rebootCount}</td>
+                                                    <td style="text-align: left;">${overallHashRate}%</td>
+                                                    <td style="text-align: left;">${onlineHashRate}%</td>
+                                                    <td style="text-align: left;">${minerSlotID}</a></td>
+                                                    <td style="text-align: left;">${minerSerialNumber}</td>
+                                                `;
+                                                popupTableBody.appendChild(row);
+                                            });
 
-                                    // Add additional styling for the table using CSS
-                                    const tableStyle = document.createElement('style');
-                                    tableStyle.textContent = `
-                                        #minerTable {
-                                            border-collapse: collapse;
-                                            margin-top: 20px;
-                                        }
+                                            document.title = orginalTitle;
 
-                                        #minerTable th,
-                                        #minerTable td {
-                                            border: 1px solid gray;
-                                            padding: 10px;
-                                        }
+                                            // Ensure jQuery, DataTables, and ColResize are loaded before initializing the table
+                                            $(document).ready(function() {
+                                                // Custom sorting function for slot IDs
+                                                $.fn.dataTable.ext.type.order['miner-id'] = function(d) {
+                                                    // Split something "C05-10-3-4" into an array of just the numbers that aren't seperated by anything at all
+                                                    console.log(d);
+                                                    let numbers = d.match(/\d+/g).map(Number);
+                                                    //numbers.shift(); // Remove the first number since it is the miner ID
+                                                    console.log(numbers);
+                                                    // Convert the array of numbers into a single comparable value
+                                                    // For example, [10, 3, 4] becomes 100304
+                                                    let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
+                                                    return comparableValue;
+                                                };
+                                                
 
-                                        #minerTable th {
-                                            background-color: #444;
-                                            color: white;
-                                        }
+                                                $('#minerTable').DataTable({
+                                                    paging: false,       // Disable pagination
+                                                    searching: false,    // Disable searching
+                                                    info: false,         // Disable table info
+                                                    columnReorder: true, // Enable column reordering
+                                                    responsive: true,    // Enable responsive behavior
+                                                    colResize: true,      // Enable column resizing
 
-                                        #minerTable td {
-                                            text-align: center;
-                                            transition: background-color 0.2s ease;
-                                        }
+                                                    // Use custom sorting for the "Slot ID" column
+                                                    columnDefs: [
+                                                        {
+                                                            targets: $('#minerTable th').filter(function() {
+                                                                return $(this).text().trim() === 'Slot ID';
+                                                            }).index(),
+                                                            type: 'miner-id'  // Apply the custom sorting function
+                                                        }
+                                                    ]
+                                                });
 
-                                        #minerTable tr:hover td {
-                                            background-color: #555;
-                                        }
+                                                // Sort offline count to start with the highest
+                                                const offlineCountIndex = $('#minerTable th').filter(function() {
+                                                    return $(this).text().trim() === 'Offline Count';
+                                                }).index();
 
-                                        #minerTable th:hover {
-                                            cursor: pointer; /* indicates that the column can be reordered */
-                                        }
-
-                                        // When hovering between columns, show the resize cursor
-                                        #minerTable th.ui-resizable-column:hover {
-                                            cursor: col-resize;
-                                        }
-                                    `;
-                                    document.head.appendChild(tableStyle);
-
-                                    // Add the miner data to the table body
-                                    const popupTableBody = popupResultElement.querySelector('tbody');
-                                    Object.keys(minersScanData).forEach(minerID => {
-                                        const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                                        const row = document.createElement('tr');
-                                        const model = allMinersLookup[minerID].model;
-                                        const rebootCount = minersScanData[minerID].downTimes;
-                                        const overallHashRate = minersScanData[minerID].overallHashRate;
-                                        const onlineHashRate = minersScanData[minerID].onlineHashRate;
-                                        const minerSlotID = allMinersLookup[minerID].locationName;
-                                        const minerSerialNumber = allMinersLookup[minerID].serialNumber;
-                                        row.innerHTML = `
-                                            <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a></td>
-                                            <td style="text-align: left;">${rebootCount}</td>
-                                            <td style="text-align: left;">${overallHashRate}%</td>
-                                            <td style="text-align: left;">${onlineHashRate}%</td>
-                                            <td style="text-align: left;">${minerSlotID}</a></td>
-                                            <td style="text-align: left;">${minerSerialNumber}</td>
-                                        `;
-                                        popupTableBody.appendChild(row);
-                                    });
-
-                                    document.title = orginalTitle;
-
-                                    // Ensure jQuery, DataTables, and ColResize are loaded before initializing the table
-                                    $(document).ready(function() {
-                                        
-                                        // Custom sorting function for slot IDs
-                                        $.fn.dataTable.ext.type.order['miner-id'] = function(d) {
-                                            // Split something "C05-10-3-4" into an array of just the numbers that aren't seperated by anything at all
-                                            console.log(d);
-                                            let numbers = d.match(/\d+/g).map(Number);
-                                            //numbers.shift(); // Remove the first number since it is the miner ID
-                                            console.log(numbers);
-                                            // Convert the array of numbers into a single comparable value
-                                            // For example, [10, 3, 4] becomes 100304
-                                            let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
-                                            return comparableValue;
-                                        };
-                                        
-
-                                        $('#minerTable').DataTable({
-                                            paging: false,       // Disable pagination
-                                            searching: false,    // Disable searching
-                                            info: false,         // Disable table info
-                                            columnReorder: true, // Enable column reordering
-                                            responsive: true,    // Enable responsive behavior
-                                            colResize: true,      // Enable column resizing
-
-                                            // Use custom sorting for the "Slot ID" column
-                                            columnDefs: [
-                                                {
-                                                    targets: $('#minerTable th').filter(function() {
-                                                        return $(this).text().trim() === 'Slot ID';
-                                                    }).index(),
-                                                    type: 'miner-id'  // Apply the custom sorting function
-                                                }
-                                            ]
+                                                $('#minerTable').DataTable().order([offlineCountIndex, 'desc']).draw();
+                                            });
                                         });
-
-                                        // Sort offline count to start with the highest
-                                        const offlineCountIndex = $('#minerTable th').filter(function() {
-                                            return $(this).text().trim() === 'Offline Count';
-                                        }).index();
-
-                                        $('#minerTable').DataTable().order([offlineCountIndex, 'desc']).draw();
-                                    });
-                                }
-                            }, 500);
+                                    }
+                                }, 500);
+                            });
                         });
                     });
                 }
@@ -1429,20 +2193,21 @@ function OptiFleetSpecificLogic() {
                     scanTimeFrameText = 'Last 30 Days';
                 }
 
-                /*
-                // Create a auto reboot button to the right of the dropdown
-                const autoRebootButton = document.createElement('button');
-                autoRebootButton.classList.add('m-button');
-                autoRebootButton.style.marginLeft = '10px';
-                autoRebootButton.textContent = 'Auto Reboot';
-                autoRebootButton.onclick = function(event) {
-                    event.preventDefault(); // Prevent the default behavior of the button
-                };
+                if(siteName.includes("Minden")) {
+                    // Create a auto reboot button to the right of the dropdown
+                    const autoRebootButton = document.createElement('button');
+                    autoRebootButton.classList.add('m-button');
+                    autoRebootButton.style.marginLeft = '10px';
+                    autoRebootButton.textContent = 'Auto Reboot';
+                    autoRebootButton.onclick = function(event) {
+                        event.preventDefault(); // Prevent the default behavior of the button
 
-                // Add the auto reboot button to the right of the dropdown
-                actionsDropdown.before(autoRebootButton);
-                */
+                        startScan(60*60*24*7, true, 1);
+                    };
 
+                    // Add the auto reboot button to the right of the dropdown
+                    actionsDropdown.before(autoRebootButton);
+                }
             }
 
         }, 1000);
