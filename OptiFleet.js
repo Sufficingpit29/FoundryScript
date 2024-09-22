@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.6.6
+// @version      1.7.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -916,17 +916,65 @@ function OptiFleetSpecificLogic() {
                 var columnIndexes = {};
                 const columns = minerGrid.querySelectorAll('.k-header');
                 columns.forEach((column, index) => {
+                    // Get the title of the column, and store the index
                     const title = column.getAttribute('data-title');
                     columnIndexes[title] = index;
                 });
 
                 const rows = minerGrid.querySelectorAll('tr.k-master-row');
                 rows.forEach(row => {
+
                     const uid = row.getAttribute('data-uid');
+                    let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
+                    
+                    // for first index add a link icon element that opens the miner page
+                    if(minerLinkElement && !minerLinkElement.addedLinkIcon) {
+                        minerLinkElement.addedLinkIcon = true;
+                        const linkIcon = document.createElement('a');
+                        linkIcon.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerLinkElement.getAttribute('data-miner-id')}`;
+                        linkIcon.target = '_blank';
+                        linkIcon.style.cursor = 'pointer';
+                        linkIcon.style.marginRight = '5px';
+                        linkIcon.style.width = '24px';
+                        linkIcon.style.height = '24px';
+                        linkIcon.style.verticalAlign = 'middle';
+                        linkIcon.oncontextmenu = function(event) {
+                            event.stopPropagation(); // Prevent the custom context menu from opening
+                        };
+                        linkIcon.onclick = function(event) {
+                            event.stopPropagation(); // Prevent the custom context menu from opening
+                        };
+
+                        const img = document.createElement('img');
+                        img.src = 'https://img.icons8.com/?size=100&id=82787&format=png&color=FFFFFF';
+                        img.style.width = '100%';
+                        img.style.height = '100%';
+                        linkIcon.appendChild(img);
+
+                        minerLinkElement.prepend(linkIcon);
+
+                        // Delete the default 3 dots icon
+                        const defaultIcon = minerLinkElement.querySelector('m-icon[name="more-vertical"]');
+                        if (defaultIcon) {
+                            defaultIcon.style.display = 'none';
+                        }
+
+                        row.addEventListener('contextmenu', (event) => {
+                            event.preventDefault();
+                            defaultIcon.click();
+
+                            // Find the context menu (id issueMenu) and move it to the mouse position
+                            const contextMenu = document.getElementById('issueMenu');
+                            if (contextMenu) {
+                                contextMenu.style.position = 'fixed';
+                                contextMenu.style.top = event.clientY + 'px';
+                                contextMenu.style.left = event.clientX + 'px';
+                            }
+                        });
+                    }
 
                     // Loop through columnIndexes and get the data for each column
                     for (const [key, colIndex] of Object.entries(columnIndexes)) {
-                        let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
                         let colRowElement = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(colIndex+1)) + ')');
                         if (minerLinkElement && colRowElement) {
                             // Store the data in the minersListTableLookup
@@ -972,8 +1020,6 @@ function OptiFleetSpecificLogic() {
                                 minerData['Slot ID'].appendChild(newElement);
                                 console.log('Breaker Number: ' + breakerNum);
                             }
-
-                            
                         }
 
                         // Container Temp
@@ -1151,7 +1197,7 @@ function OptiFleetSpecificLogic() {
                     }
                 }
 
-                
+                var orginalTitle = document.title;
                 function startScan(timeFrame, autoreboot, stage) {
                     var rebootData = {};
 
@@ -1204,7 +1250,6 @@ function OptiFleetSpecificLogic() {
                     scanningElement.appendChild(scanningText);
 
                     // Set the webpage title
-                    var orginalTitle = document.title;
                     document.title = orginalTitle + ' | Retrieving Miner Data...';
 
                     updateAllMinersData(false, allMinersData => {
@@ -1237,7 +1282,7 @@ function OptiFleetSpecificLogic() {
 
                                 var currentMiner = issueMiners[0];
                                 var currentMinerIndex = 0;
-                                setInterval(() => {
+                                var updatePercentageTextInteval = setInterval(() => {
                                     // Calculate the progress percentage
                                     var totalMiners = issueMiners.length;
                                     var minersScanned = currentMinerIndex;
@@ -1249,6 +1294,10 @@ function OptiFleetSpecificLogic() {
 
                                     // Update the title
                                     document.title = orginalTitle + ' | ' + percentageText.textContent;
+
+                                    if (reachedScanEnd) {
+                                        clearInterval(updatePercentageTextInteval);
+                                    }
                                 }, 50);
 
                                 // Add rebooting text below the progress bar
@@ -1260,7 +1309,7 @@ function OptiFleetSpecificLogic() {
                                     rebootingText.style.marginTop = '10px';
                                     rebootingText.style.textAlign = 'left';
                                     scanningElement.appendChild(rebootingText);
-                                    setInterval(() => {
+                                    var maxMinerRebootTextInterval = setInterval(() => {
                                         // Calculate the progress percentage
                                         var minersRebooting = 0;
                                         for (const [minerID, data] of Object.entries(rebootData)) {
@@ -1271,6 +1320,10 @@ function OptiFleetSpecificLogic() {
 
                                         // Update the rebooting text
                                         rebootingText.textContent = 'Rebooting: ' + minersRebooting + '/' + maxRebootAllowed;
+
+                                        if(reachedScanEnd) {
+                                            clearInterval(maxMinerRebootTextInterval);
+                                        }
                                     }, 50);
 
                                     // Add text below the percentage text
@@ -1280,9 +1333,13 @@ function OptiFleetSpecificLogic() {
                                     totalRebootedText.style.textAlign = 'left';
                                     scanningElement.appendChild(totalRebootedText);
 
-                                    setInterval(() => {
+                                    var sentRebootsTextInterval = setInterval(() => {
                                         // Update the rebooting text
                                         totalRebootedText.textContent = 'Total Sent Reboots: ' + totalRebooted;
+
+                                        if(reachedScanEnd) {
+                                            clearInterval(sentRebootsTextInterval);
+                                        }
                                     }, 50);
                                 }
 
@@ -1318,7 +1375,8 @@ function OptiFleetSpecificLogic() {
                                     const logEntry = document.createElement('div');
                                     const logLink = document.createElement('a');
                                     const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                                    logLink.textContent = `Miner ${minerID}`;
+                                    const minerModel = allMinersLookup[minerID].model;
+                                    logLink.textContent = `Miner ${minerModel}`;
                                     logLink.href = minerLink; // Make it clickable
                                     logLink.target = '_blank'; // Open in a new tab
                                     logLink.style.color = 'inherit'; // To keep the link color same as text color
@@ -1346,71 +1404,192 @@ function OptiFleetSpecificLogic() {
                                     }, 1);
                                     loadingIcon.style.display = 'inline-block';  // Show the icon
 
+                                    // Add location to the log entry
+                                    const minerSlotID = allMinersLookup[minerID].locationName;
+                                    const locationLog = document.createElement('div');
+                                    locationLog.textContent = `${minerSlotID}`;
+                                    locationLog.style.padding = '10px';
+                                    locationLog.style.paddingTop = '0';
+                                    locationLog.style.paddingLeft = '0px';
+                                    logEntry.appendChild(locationLog);
+
                                     // Scroll to the bottom of the progress log
                                     progressLog.scrollTop = progressLog.scrollHeight;
 
                                     function runNextMiner() {
                                         // Stop if we have reached the end of the scan
                                         console.log("Runnin Next Miner");
-                                        
-                                        // Remove the spinning 'loading' icon from the log entry
-                                        let logEntry = logEntries[currentMiner.id];
-                                        if (logEntry) {
-                                            const loadingIcon = logEntry.querySelector('span');
-                                            if (loadingIcon) {
-                                                clearInterval(loadingIcon.loadingIconInterval);
-                                                loadingIcon.remove();
-                                            }
-                                        }
-            
+
                                         // Make it a checkmark
                                         const checkmark = document.createElement('span');
                                         checkmark.textContent = '✓';
                                         checkmark.style.display = 'inline-block';
                                         checkmark.style.position = 'absolute';
                                         checkmark.style.right = '10px';
-                                        logEntry.appendChild(checkmark);
+
+                                        // Remove the spinning 'loading' icon from the log entry
+                                        let logEntry = logEntries[currentMiner.id];
+                                        if (logEntry) {
+                                            const loadingIcon = logEntry.querySelector('span');
+                                            if (loadingIcon) {
+                                                // Add the checkmark right before the loading icon
+                                                logEntry.insertBefore(checkmark, loadingIcon);
+
+                                                // Stop the spinning
+                                                clearInterval(loadingIcon.loadingIconInterval);
+                                                loadingIcon.remove();
+                                            }
+                                        }
 
                                         // Add if it sent reboot or skipped
                                         if(autoreboot) {
+                                            var curRebootData = rebootData[currentMiner.id];
                                             if(stage === 1) {
-                                                var sentReboot = rebootData[currentMiner.id].sentReboot || false;
-                                                var moreThanOneHour = rebootData[currentMiner.id].moreThanOneHour || false;
-                                                var belowMaxTemp = rebootData[currentMiner.id].belowMaxTemp || false;
+                                                var sentReboot = curRebootData.sentReboot || false;
+                                                var moreThanOneHour = curRebootData.moreThanOneHour || false;
+                                                var isOnline = curRebootData.isOnline || false;
+                                                var belowMaxTemp = curRebootData.belowMaxTemp || false;
 
                                                 if(sentReboot) {
                                                     const logEntry = document.createElement('div');
-                                                    logEntry.textContent = `Sent Reboot`;
+                                                    logEntry.textContent = `[Sent Soft Reboot]`;
                                                     logEntry.style.padding = '10px';
                                                     logEntry.style.paddingTop = '0';
                                                     logEntry.style.paddingLeft = '20px';
                                                     progressLog.appendChild(logEntry);
                                                 } else {
-                                                    if(!moreThanOneHour) {
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `[Skipped Soft Reboot]`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.paddingTop = '0';
+                                                    logEntry.style.paddingLeft = '20px';
+                                                    progressLog.appendChild(logEntry);
+                                                    if(isOnline && !moreThanOneHour) {
                                                         const logEntry = document.createElement('div');
                                                         logEntry.textContent = `Less Than 1 Hour Uptime`;
                                                         logEntry.style.padding = '10px';
                                                         logEntry.style.paddingTop = '0';
-                                                        logEntry.style.paddingLeft = '20px';
+                                                        logEntry.style.paddingLeft = '40px';
+                                                        progressLog.appendChild(logEntry);
+                                                    } else if(!isOnline) {
+                                                        const logEntry = document.createElement('div');
+                                                        logEntry.textContent = `Miner is Offline`;
+                                                        logEntry.style.padding = '10px';
+                                                        logEntry.style.paddingTop = '0';
+                                                        logEntry.style.paddingLeft = '40px';
                                                         progressLog.appendChild(logEntry);
                                                     }
                                                     if(!belowMaxTemp) {
                                                         const logEntry = document.createElement('div');
-                                                        logEntry.textContent = `Above Max Temp`;
+                                                        logEntry.textContent = `Miner is above 78°F`;
                                                         logEntry.style.padding = '10px';
                                                         logEntry.style.paddingTop = '0';
-                                                        logEntry.style.paddingLeft = '20px';
+                                                        logEntry.style.paddingLeft = '40px';
                                                         progressLog.appendChild(logEntry);
                                                     }
                                                 }
                                             } else if(stage === 2) {
                                                 var shouldHardReboot = rebootData[currentMiner.id].shouldHardReboot || false;
                                                 if(shouldHardReboot) {
+                                                    const logEntry1 = document.createElement('div');
+                                                    logEntry1.textContent = `[Hard Reboot Recommended]`;
+                                                    logEntry1.style.padding = '10px';
+                                                    logEntry1.style.paddingTop = '0';
+                                                    logEntry1.style.paddingLeft = '20px';
+                                                    progressLog.appendChild(logEntry1);
+
+                                                    // Reason for hard reboot
+                                                    const logEntry2 = document.createElement('div');
+                                                    logEntry2.textContent = `Still not hashing after soft reboot.`;
+                                                    logEntry2.style.padding = '10px';
+                                                    logEntry2.style.paddingTop = '0';
+                                                    logEntry2.style.paddingLeft = '40px';
+                                                    progressLog.appendChild(logEntry2);
+                                                    
+                                                    var softRebootCount = (lastRebootTimes[currentMiner.id].softRebootsTimes || []).length;
+                                                    if(softRebootCount >= 3) {
+                                                        const logEntry = document.createElement('div');
+                                                        logEntry.textContent = `${softRebootCount} Soft Reboots in the last 6 hours`;
+                                                        logEntry.style.padding = '10px';
+                                                        logEntry.style.paddingTop = '0';
+                                                        logEntry.style.paddingLeft = '40px';
+                                                        progressLog.appendChild(logEntry);
+                                                    }
+                                                } else {
                                                     const logEntry = document.createElement('div');
-                                                    logEntry.textContent = `Should Hard Reboot`;
+                                                    logEntry.textContent = `[Hard Reboot Skip]`;
                                                     logEntry.style.padding = '10px';
                                                     logEntry.style.paddingTop = '0';
                                                     logEntry.style.paddingLeft = '20px';
+                                                    progressLog.appendChild(logEntry);
+
+                                                    var pastMinTime = curRebootData.isPastMinTime || false;
+                                                    var withinMaxTime = curRebootData.notPastForgetTime || false;
+                                                    var lastHardRebootScanTimeMoreThanHour = curRebootData.lastHardRebootScanTimeMoreThanHour || false;
+
+                                                    if(!pastMinTime && withinMaxTime) {
+                                                        const logEntry = document.createElement('div');
+                                                        logEntry.textContent = `15 Minutes has not passed since last reboot.`;
+                                                        logEntry.style.padding = '10px';
+                                                        logEntry.style.paddingTop = '0';
+                                                        logEntry.style.paddingLeft = '40px';
+                                                        progressLog.appendChild(logEntry);
+                                                    } else if(!withinMaxTime) {
+                                                        const logEntry = document.createElement('div');
+                                                        logEntry.textContent = `Soft Reboot has not been sent from this computer in the last 2 hours.`;
+                                                        logEntry.style.padding = '10px';
+                                                        logEntry.style.paddingTop = '0';
+                                                        logEntry.style.paddingLeft = '40px';
+                                                        progressLog.appendChild(logEntry);
+                                                    } else if(!lastHardRebootScanTimeMoreThanHour) {
+                                                        const logEntry = document.createElement('div');
+                                                        logEntry.textContent = `Last Hard Reboot Scan was less than an hour ago.`;
+                                                        logEntry.style.padding = '10px';
+                                                        logEntry.style.paddingTop = '0';
+                                                        logEntry.style.paddingLeft = '40px';
+                                                        progressLog.appendChild(logEntry);
+                                                    }
+                                                }
+                                            } else if(stage === 3) {
+                                                var didHardReboot = rebootData[currentMiner.id].didHardReboot || false;
+                                                var hardRebootFailed = rebootData[currentMiner.id].hardRebootFailed || false;
+
+                                                if(hardRebootFailed || didHardReboot) {
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `[Miner Pull Recommended]`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.paddingTop = '0';
+                                                    logEntry.style.paddingLeft = '20px';
+                                                    progressLog.appendChild(logEntry);
+                                                } else {
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `[Miner Pull Not Recommended]`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.paddingTop = '0';
+                                                    logEntry.style.paddingLeft = '20px';
+                                                    progressLog.appendChild(logEntry);
+                                                }
+
+                                                if(hardRebootFailed) {
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `Still not hashing after hard reboot`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.paddingTop = '0';
+                                                    logEntry.style.paddingLeft = '40px';
+                                                    progressLog.appendChild(logEntry);
+                                                } else if(didHardReboot) {
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `15 Minutes has not passed since hard reboot.`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.paddingTop = '0';
+                                                    logEntry.style.paddingLeft = '40px';
+                                                    progressLog.appendChild(logEntry);
+                                                } else {
+                                                    const logEntry = document.createElement('div');
+                                                    logEntry.textContent = `Hard Reboot Not Detected`;
+                                                    logEntry.style.padding = '10px';
+                                                    logEntry.style.paddingTop = '0';
+                                                    logEntry.style.paddingLeft = '40px';
                                                     progressLog.appendChild(logEntry);
                                                 }
                                             }
@@ -1498,32 +1677,8 @@ function OptiFleetSpecificLogic() {
                                                     tooHotText.style.bottom = '90px';
                                                     scanningElement.appendChild(tooHotText);
 
-                                                    if(totalRebooted > 0){
-                                                        // Add a timer countdown for the next stage 15 minutes
-                                                        var countdown = 15*60;
-                                                        var countdownText = document.createElement('div');
-                                                        countdownText.textContent = `Next Stage in ${Math.floor(countdown / 60)} minutes and ${countdown % 60} seconds`;
-                                                        countdownText.style.padding = '10px';
-                                                        progressLog.appendChild(countdownText);
-
-                                                        // Update the countdown every second
-                                                        var countdownInterval = setInterval(() => {
-                                                            countdown--;
-                                                            countdownText.textContent = `Next Stage in ${Math.floor(countdown / 60)} minutes and ${countdown % 60} seconds`;
-
-                                                            if(countdown === 0) {
-                                                                clearInterval(countdownInterval);
-
-                                                                // Remove the scanning element
-                                                                scanningElement.remove();
-                                                                progressLog.remove();
-                                                                clearInterval(scanningInterval);
-                                                                
-                                                                // Start the next stage
-                                                                startScan(timeFrame, true, stage+1);
-                                                            }
-                                                        }, 1000);
-                                                    } else {
+                                                    var countdown = 15*60;
+                                                    if(totalRebooted <= 0) {
                                                         // Add log saying that no miners were rebooted
                                                         const logEntry = document.createElement('div');
                                                         logEntry.textContent = `No Miners Rebooted`;
@@ -1531,71 +1686,86 @@ function OptiFleetSpecificLogic() {
                                                         logEntry.style.borderTop = '1px solid white';
                                                         progressLog.appendChild(logEntry);
 
-                                                        // Add a timer countdown for the next stage 15 minutes
-                                                        var countdown = 5;
-                                                        var countdownText = document.createElement('div');
-                                                        countdownText.textContent = `Next Stage in ${countdown % 60} seconds`;
-                                                        countdownText.style.padding = '10px';
-                                                        progressLog.appendChild(countdownText);
+                                                        // Set timer to 5 seconds
+                                                        countdown = 5;
+                                                    }
 
-                                                        // Update the countdown every second
-                                                        var countdownInterval = setInterval(() => {
-                                                            countdown--;
-                                                            countdownText.textContent = `Next Stage in ${countdown % 60} seconds`;
+                                                    // Add a timer countdown for the next stage
+                                                    var startCountdown = new Date();
+                                                    var countdownText = document.createElement('div');
+                                                    function formatTime(seconds) {
+                                                        const minutes = Math.floor(seconds / 60);
+                                                        const remainingSeconds = seconds % 60;
+                                                        return `${minutes} minute${minutes !== 1 ? 's' : ''} and ${remainingSeconds} second${remainingSeconds !== 1 ? 's' : ''}`;
+                                                    }
 
-                                                            if(countdown === 0) {
-                                                                clearInterval(countdownInterval);
+                                                    countdownText.textContent = `Next Stage in ${formatTime(countdown)}`;
+                                                    countdownText.style.padding = '10px';
+                                                    progressLog.appendChild(countdownText);
 
-                                                                // Remove the scanning element
-                                                                scanningElement.remove();
-                                                                progressLog.remove();
-                                                                clearInterval(scanningInterval);
-                                                                
-                                                                // Start the next stage
-                                                                startScan(timeFrame, true, stage+1);
-                                                            }
-                                                        }, 1000);
+                                                    // Update the countdown every second
+                                                    var countdownInterval = setInterval(() => {
+                                                        var currentTime = new Date();
+                                                        var remaining = countdown - Math.floor((currentTime - startCountdown) / 1000);
+                                                        countdownText.textContent = `Next Stage in ${Math.floor(remaining / 60)} minutes and ${remaining % 60} seconds`;
 
-                                                        /*
-                                                        // Add a button to close the scanning element
-                                                        const finishedButton = document.createElement('button');
-                                                        finishedButton.id = 'finishedReboots';
-                                                        finishedButton.style.cssText = `
-                                                            padding: 10px 20px;
-                                                            background-color: #ff5e57;
-                                                            color: white;
-                                                            border: none;
-                                                            cursor: pointer;
-                                                            margin-top: 10px;
-                                                            border-radius: 5px;
-                                                            transition: background-color 0.3s;
-                                                        `;
-                                                        finishedButton.textContent = 'Close Auto Reboot Scan';
-                                                        scanningElement.appendChild(finishedButton);
+                                                        if(remaining <= 0) {
+                                                            clearInterval(countdownInterval);
 
-                                                        // Add button hover effect
-                                                        finishedButton.addEventListener('mouseenter', function() {
-                                                            this.style.backgroundColor = '#ff3b30';
-                                                        });
-
-                                                        finishedButton.addEventListener('mouseleave', function() {
-                                                            this.style.backgroundColor = '#ff5e57';
-                                                        });
-
-                                                        // Close button functionality
-                                                        finishedButton.onclick = function() {
+                                                            // Remove the scanning element
                                                             scanningElement.remove();
                                                             progressLog.remove();
                                                             clearInterval(scanningInterval);
-                                                        };
-                                                        */
+                                                            
+                                                            // Start the next stage
+                                                            startScan(timeFrame, true, stage+1);
+                                                        }
+                                                    }, 500);
+
+                                                    // Add a button to skip the countdown
+                                                    const skipButton = document.createElement('button');
+                                                    skipButton.id = 'skipCountdown';
+                                                    skipButton.style.cssText = `
+                                                        padding: 10px 20px;
+                                                        background-color: #ff5e57;
+                                                        color: white;
+                                                        border: none;
+                                                        cursor: pointer;
+                                                        margin-top: 10px;
+                                                        margin-bottom: 10px;
+                                                        border-radius: 5px;
+                                                        transition: background-color 0.3s;
+                                                    `;
+                                                    skipButton.textContent = 'Skip Countdown';
+                                                    progressLog.appendChild(skipButton);
+
+                                                    // Add button hover effect
+                                                    skipButton.addEventListener('mouseenter', function() {
+                                                        this.style.backgroundColor = '#ff3b30';
+                                                    });
+
+                                                    skipButton.addEventListener('mouseleave', function() {
+                                                        this.style.backgroundColor = '#ff5e57';
+                                                    });
+
+                                                    // Skip button functionality
+                                                    skipButton.onclick = function() {
+                                                        clearInterval(countdownInterval);
+
+                                                        // Remove the scanning element
+                                                        scanningElement.remove();
+                                                        progressLog.remove();
+                                                        clearInterval(scanningInterval);
+                                                        
+                                                        // Start the next stage
+                                                        startScan(timeFrame, true, stage+1); // start the next stage
                                                     }
                                                 } else if(stage === 2) {
                                                     console.log("Creating Hard Reboot Table");
                                                     // Create table for the miners that should be hard rebooted
                                                     const cols = ['Miner', 'Slot ID', 'Breaker Number', 'Serial Number'];
                                                     createPopUpTable(`Recommended Hard Reboot Miners`, cols, false, (popupResultElement) => {
-                                                            
+
                                                         // Add the "Finished Hard Reboots" button
                                                         const finishedButton = document.createElement('button');
                                                         finishedButton.id = 'finishedHardReboots';
@@ -1614,6 +1784,9 @@ function OptiFleetSpecificLogic() {
                                                         finishedButton.textContent = 'Finished Hard Reboots';
                                                         const firstDiv = popupResultElement.querySelector('div');
                                                         firstDiv.appendChild(finishedButton);
+
+                                                        // Set the popupResultElement to be aligned to the left side
+                                                        firstDiv.style.left = '41%'
 
                                                         // Now the popup is appended, we can attach event listeners
                                                         const finishedHardRebootsButton = popupResultElement.querySelector('#finishedHardReboots');
@@ -1736,6 +1909,9 @@ function OptiFleetSpecificLogic() {
                                                         finishedButton.textContent = 'Close Auto Reboot Scan';
                                                         const firstDiv = popupResultElement.querySelector('div');
                                                         firstDiv.appendChild(finishedButton);
+
+                                                        // Set the popupResultElement to be aligned to the left side
+                                                        firstDiv.style.left = '41%'
 
                                                         // Now the popup is appended, we can attach event listeners
                                                         const finishedHardRebootsButton = popupResultElement.querySelector('#finishedHardReboots');
@@ -1906,7 +2082,7 @@ function OptiFleetSpecificLogic() {
                                     } else {
                                         var curHash = allMinersLookup[minerID].currentHashRate;
                                         var expectedHashRate = allMinersLookup[minerID].expectedHashRate;
-                                        var minUpTime = 60*60; // 1 hour
+                                        var minSoftRebootUpTime = 60*60; // 1 hour
                                         var upTime = currentMiner.uptimeValue;
                                         var location = allMinersLookup[minerID].locationName;
                                         if(!location || location === null) {
@@ -1925,8 +2101,8 @@ function OptiFleetSpecificLogic() {
                                             console.log("Issue Type: " + issueType);
                                             console.log("Up Time: " + upTime);
 
-                                            var nonHash = issueType === "Non Hashing" || curHash < 1;
-                                            var moreThanOneHour = upTime > minUpTime;
+                                            var isOnline = currentMiner.connectivity === 'Online';
+                                            var moreThanOneHour = upTime > minSoftRebootUpTime;
                                             var belowMaxTemp = containerTemp <= maxTemp;
 
                                             var minerRebootTimesData = lastRebootTimes[minerID] || {};
@@ -1938,11 +2114,11 @@ function OptiFleetSpecificLogic() {
 
                                             rebootData[minerID] = rebootData[minerID] || {};
                                             rebootData[minerID].belowMaxTemp = belowMaxTemp;
-                                            rebootData[minerID].nonHash = nonHash;
                                             rebootData[minerID].moreThanOneHour = moreThanOneHour;
+                                            rebootData[minerID].isOnline = isOnline;
 
                                             if(stage === 1) {    
-                                                if(nonHash && moreThanOneHour && belowMaxTemp) { // If the miner passed the conditions, then we can reboot it
+                                                if(moreThanOneHour && belowMaxTemp) { // If the miner passed the conditions, then we can reboot it
                                                     // Reboot the miner
                                                     console.log("Rebooting Miner: " + minerID);
 
@@ -1954,6 +2130,8 @@ function OptiFleetSpecificLogic() {
                                                     lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
                                                     lastRebootTimes[minerID].autoRebootTime = new Date().toISOString();
                                                     lastRebootTimes[minerID].upTimeAtReboot = upTime;
+                                                    lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
+                                                    lastRebootTimes[minerID].softRebootsTimes.push(new Date().toISOString());
                                                     totalRebooted++;
 
                                                     // 10 minute timere to set the isRebooting to false
@@ -1989,50 +2167,81 @@ function OptiFleetSpecificLogic() {
                                             } else {
                                                 // If the miner has a lastRebootTime and it is at or more than 15 minutes and still has a 0 hash rate, then we can flag it to be hard rebooted, or if the miner last uptime is the same as the current uptime
                                                 var minTime = 15*60*1000; // 15 minutes
-                                                var forgetTime = 60*60*1000; // 1 hour
+                                                var forgetTime = 2*60*60*1000; // 2 hours
                                                 var sinceLastReboot = lastRebootTime ? (new Date() - new Date(lastRebootTime)) : 0;
-                                                var isOnline = currentMiner.connectivity === 'Online';
-                                                lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
-                                                lastRebootTimes[minerID].lastUpTimeAtHardRebootScan = upTime;
-                                                lastRebootTimes[minerID].hardRebootScanTime = new Date().toISOString();
-                                                
-                                                if( nonHash && (sinceLastReboot >= minTime && sinceLastReboot < forgetTime) ) {
-                                                    if(stage === 2) {
-                                                        // Mark the miner to be hard rebooted
-                                                        rebootData[minerID].shouldHardReboot = true;
-                                                        runNextMiner();
-                                                    } else if(stage === 3 && (!isOnline || upTime >= minTime || upTimeAtReboot === upTime)) { // Not online, uptime is more than 15 minutes, or the last uptime is the same as the current uptime which might indicate that the miner is stuck
-                                                        console.log("Checking Hard Reboot: " + minerID);
-                                                        console.log("Time Since Last Reboot: " + sinceLastReboot);
-                                                        retrieveMinerData("MinerOnline", minerID, sinceLastReboot, function(minerID, minerUptime) {
-                                                
-                                                            // Loop through the uptime and check for any downtime
-                                                            var minerDownTimes = 0;
-                                                            var previousState = '1';
-                                                            for (const [index, data] of Object.entries(minerUptime)) {
-                                                                var timestamp = data[0];
-                                                                var state = data[1];
-                                                                if (state === '0' && previousState === '1') {
-                                                                    minerDownTimes++;
-                                                                }
-                                                                previousState = state;
-                                                            }
 
-                                                            var hardRebootUpTime = lastRebootTimes[minerID].lastUpTimeAtHardRebootScan;
-                                                            var hardRebootTime = new Date(hardRebootUpTime).getTime();
-                                                            var timeSinceLastUpTime = hardRebootUpTime + hardRebootTime;
-                                                            if(minerDownTimes > 0 || timeSinceLastUpTime >= upTime) {
-                                                                rebootData[minerID].hardRebootFailed = true;
-                                                                console.log("Hard Reboot Failed: " + minerID);
-                                                            }
-                                                            runNextMiner();
-                                                        });
-                                                    } else {
-                                                        runNextMiner();
+                                                var isPastMinTime = sinceLastReboot >= minTime;
+                                                var notPastForgetTime = sinceLastReboot < forgetTime;
+                                                rebootData[minerID].isPastMinTime = isPastMinTime;
+                                                rebootData[minerID].notPastForgetTime = notPastForgetTime;
+
+                                                // Loops through the softRebootsTimes and remove any that are more than 6 hours old
+                                                lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
+                                                lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
+                                                lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes.filter((time) => {
+                                                    return (new Date() - new Date(time)) < 6*60*60*1000;
+                                                });
+
+                                                var moreThan3SoftReboots = lastRebootTimes[minerID].softRebootsTimes.length >= 3;
+                                                
+                                                if((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots) {
+                                                    if(stage === 2) {
+                                                        console.log("Checking Hard Reboot: " + minerID);
+                                                        
+                                                        console.log("Is Past Min Time: " + isPastMinTime);
+                                                        console.log("Not Past Forget Time: " + notPastForgetTime);
+
+
+                                                        var lastHardRebootScanTime = lastRebootTimes[minerID].lastHardRebootScanTime || false;
+                                                        var lastHardRebootScanTimeMoreThanHour = lastHardRebootScanTime ? (new Date() - new Date(lastHardRebootScanTime)) >= 60*60*1000 : false;
+
+                                                        console.log("Last Hard Reboot Scan Time More Than Hour: " + lastHardRebootScanTimeMoreThanHour);
+                                                        console.log("More Than 3 Soft Reboots: " + moreThan3SoftReboots);
+                                                        console.log("Is Online: " + isOnline);
+                                                        rebootData[minerID].lastHardRebootScanTimeMoreThanHour = lastHardRebootScanTimeMoreThanHour;
+
+                                                        // Mark the miner to be hard rebooted if we either haven't scanned it yet or it has been more than an hour since the last scan
+                                                        // or if this miner has had 3 soft reboots in the last 6 hours
+                                                        // or simply if it is offline, we can just mark it to be hard rebooted since soft rebooting it won't do anything
+                                                        if(lastHardRebootScanTimeMoreThanHour || moreThan3SoftReboots || !isOnline) {
+                                                            rebootData[minerID].shouldHardReboot = true;
+                                                            lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
+                                                            lastRebootTimes[minerID].lastUpTimeAtHardRebootScan = upTime;
+                                                            lastRebootTimes[minerID].lastHardRebootScanTime = new Date().toISOString();
+                                                        }
+                                                    } else if(stage === 3) {
+                                                        console.log("Checking Pull Recommend: " + minerID);
+                                                        
+                                                        var lastHardRebootScanTime = new Date(lastRebootTimes[minerID].lastHardRebootScanTime);
+                                                        var timeSinceHardRebootScan = new Date() - lastHardRebootScanTime;
+                                                        var hardRebootUpTime = lastRebootTimes[minerID].lastUpTimeAtHardRebootScan;
+                                                        var previousStartTime = lastHardRebootScanTime - hardRebootUpTime*1000;
+                                                        var currentStartTime = new Date() - upTime*1000;
+
+                                                        console.log("Previous Start Time: " + previousStartTime);
+                                                        console.log("Current Start Time: " + currentStartTime);
+                                                        console.log("Up Time: " + upTime);
+
+
+                                                        // In thoery, if the miner had a hard reboot, then the previous start time should be less than the current start time
+                                                        // or if it is the exact same, then it probably is stuck
+                                                        // or if the uptime is at 0, then it probably refused to start up even
+                                                        var didHardReboot = previousStartTime <= currentStartTime;
+                                                        console.log("Did Hard Reboot: " + didHardReboot);
+                                                        var min15 = 15*60;
+                                                        // Either the miner did come back online and is past 15 minutes, or it is still at 0 uptime which probably means it is stuck, we check for 15 min from scan as a imperfect way to filter out if the user just clicked to the next stage too early
+                                                        var pastMinUpTime = upTime >= min15 || upTime === 0 && timeSinceHardRebootScan >= min15*1000;
+                                                        rebootData[minerID].didHardReboot = didHardReboot;
+                                                        rebootData[minerID].hardRebootFailed = didHardReboot && pastMinUpTime;
+                                                        console.log("Hard Reboot Failed: " + rebootData[minerID].hardRebootFailed);
+
+                                                        if(didHardReboot && pastMinUpTime) {
+                                                            // Reset the lastHardRebootScanTime so we can scan it again (with the assumption the miner did/is going to get pulled)
+                                                            lastRebootTimes[minerID].lastHardRebootScanTime = false;
+                                                        }
                                                     }
-                                                } else {
-                                                    runNextMiner();
                                                 }
+                                                runNextMiner();
                                             }
                                         }
                                     }
