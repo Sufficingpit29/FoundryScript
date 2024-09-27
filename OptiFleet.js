@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.7.2
+// @version      1.7.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1444,12 +1444,36 @@ function OptiFleetSpecificLogic() {
                                         // Add if it sent reboot or skipped
                                         if(autoreboot) {
                                             var curRebootData = rebootData[currentMiner.id];
+                                            function addExtraDetailToLog() {
+                                                let details = curRebootData.details || {};
+                                                const logEntry = document.createElement('div');
+                                                logEntry.textContent = details.main;
+                                                logEntry.style.padding = '10px';
+                                                logEntry.style.paddingTop = '0';
+                                                logEntry.style.paddingLeft = '20px';
+                                                progressLog.appendChild(logEntry);
+
+                                                // Add sub details
+                                                var subDetails = details.sub || [];
+                                                subDetails.forEach(subDetail => {
+                                                    const subLogEntry = document.createElement('div');
+                                                    subLogEntry.textContent = "• " + subDetail;
+                                                    subLogEntry.style.padding = '10px';
+                                                    subLogEntry.style.paddingTop = '0';
+                                                    subLogEntry.style.paddingLeft = '40px';
+                                                    progressLog.appendChild(subLogEntry);
+                                                });
+                                            }
+
+                                            addExtraDetailToLog();
+                                            
                                             if(stage === 1) {
                                                 var sentReboot = curRebootData.sentReboot || false;
                                                 var moreThanOneHour = curRebootData.moreThanOneHour || false;
                                                 var isOnline = curRebootData.isOnline || false;
                                                 var belowMaxTemp = curRebootData.belowMaxTemp || false;
 
+                                                /*
                                                 if(sentReboot) {
                                                     const logEntry = document.createElement('div');
                                                     logEntry.textContent = `[Sent Soft Reboot]`;
@@ -1488,8 +1512,11 @@ function OptiFleetSpecificLogic() {
                                                         progressLog.appendChild(logEntry);
                                                     }
                                                 }
+                                                */
                                             } else if(stage === 2) {
+                                                /*
                                                 var shouldHardReboot = rebootData[currentMiner.id].shouldHardReboot || false;
+                                                
                                                 if(shouldHardReboot) {
                                                     const logEntry1 = document.createElement('div');
                                                     logEntry1.textContent = `[Hard Reboot Recommended]`;
@@ -1529,7 +1556,7 @@ function OptiFleetSpecificLogic() {
 
                                                     if(!pastMinTime && withinMaxTime) {
                                                         const logEntry = document.createElement('div');
-                                                        logEntry.textContent = `15 Minutes has not passed since last reboot.`;
+                                                        logEntry.textContent = `15 Minutes has not passed since last reboot.`; // Add a timer counting down how much time is left to wait, then maybe it will auto add it once the time is up
                                                         logEntry.style.padding = '10px';
                                                         logEntry.style.paddingTop = '0';
                                                         logEntry.style.paddingLeft = '40px';
@@ -1550,7 +1577,9 @@ function OptiFleetSpecificLogic() {
                                                         progressLog.appendChild(logEntry);
                                                     }
                                                 }
+                                                    */
                                             } else if(stage === 3) {
+                                                /*
                                                 var didHardReboot = rebootData[currentMiner.id].didHardReboot || false;
                                                 var hardRebootFailed = rebootData[currentMiner.id].hardRebootFailed || false;
 
@@ -1592,6 +1621,7 @@ function OptiFleetSpecificLogic() {
                                                     logEntry.style.paddingLeft = '40px';
                                                     progressLog.appendChild(logEntry);
                                                 }
+                                                    */
                                             }
                                         }
 
@@ -2116,6 +2146,7 @@ function OptiFleetSpecificLogic() {
                                             rebootData[minerID].belowMaxTemp = belowMaxTemp;
                                             rebootData[minerID].moreThanOneHour = moreThanOneHour;
                                             rebootData[minerID].isOnline = isOnline;
+                                            rebootData[minerID].details = [];
 
                                             if(stage === 1) {    
                                                 if(moreThanOneHour && belowMaxTemp) { // If the miner passed the conditions, then we can reboot it
@@ -2125,6 +2156,12 @@ function OptiFleetSpecificLogic() {
                                                     var minerIdList = [minerID];
                                                     rebootData[minerID].isRebooting = true;
                                                     rebootData[minerID].sentReboot = true;
+                                                    
+                                                    rebootData[minerID].details.main = "[Sent Soft Reboot]";
+                                                    rebootData[minerID].details.sub = [
+                                                        "Miner has been online for more than 1 hour.",
+                                                        "Miner is below 78°F."
+                                                    ];
 
                                                     // Update the lastRebootTimes
                                                     lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
@@ -2159,9 +2196,17 @@ function OptiFleetSpecificLogic() {
                                                         .then(() => {
                                                             console.log("Rebooted Miner: " + minerID);
                                                     });
-                                                    
-
                                                 } else {
+                                                    rebootData[minerID].details.main = "[Soft Reboot Skipped]";
+                                                    rebootData[minerID].details.sub = [];
+                                                    if(!moreThanOneHour) {
+                                                        rebootData[minerID].details.sub.push("Miner has not been online for more than 1 hour.");
+                                                    }
+
+                                                    if(!belowMaxTemp) {
+                                                        rebootData[minerID].details.sub.push("Miner is above 78°F.");
+                                                    }
+
                                                     runNextMiner();          
                                                 }
                                             } else {
@@ -2182,7 +2227,8 @@ function OptiFleetSpecificLogic() {
                                                     return (new Date() - new Date(time)) < 6*60*60*1000;
                                                 });
 
-                                                var moreThan3SoftReboots = lastRebootTimes[minerID].softRebootsTimes.length >= 3;
+                                                var numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
+                                                var moreThan3SoftReboots = numOfSoftReboots >= 3;
                                                 
                                                 if((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots) {
                                                     if(stage === 2) {
@@ -2208,7 +2254,30 @@ function OptiFleetSpecificLogic() {
                                                             lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
                                                             lastRebootTimes[minerID].lastUpTimeAtHardRebootScan = upTime;
                                                             lastRebootTimes[minerID].lastHardRebootScanTime = new Date().toISOString();
+
+                                                            rebootData[minerID].details.main = "[Hard Reboot Recommended]";
+                                                            rebootData[minerID].details.sub = [
+                                                                "Still not hashing after soft reboot."
+                                                            ];
+                                                            if(moreThan3SoftReboots) {
+                                                                rebootData[minerID].details.sub.push(`${numOfSoftReboots} Soft Reboots sent from this computer in the last 6 hours`);
+                                                            }
+                                                        } else {
+                                                            rebootData[minerID].details.main = "[Hard Reboot Skipped]";
+                                                            rebootData[minerID].details.sub = [];
+                                                            if(!isPastMinTime && notPastForgetTime) {
+                                                                rebootData[minerID].details.sub.push("15 Minutes has not passed since last reboot.");
+                                                            }
+
+                                                            if(!notPastForgetTime) {
+                                                                rebootData[minerID].details.sub.push("Soft Reboot has not been sent from this computer in the last 2 hours.");
+                                                            }
+
+                                                            if(!lastHardRebootScanTimeMoreThanHour) {
+                                                                rebootData[minerID].details.sub.push("Last Hard Reboot Scan was less than an hour ago.");
+                                                            }
                                                         }
+
                                                     } else if(stage === 3) {
                                                         console.log("Checking Pull Recommend: " + minerID);
                                                         
@@ -2222,22 +2291,59 @@ function OptiFleetSpecificLogic() {
                                                         console.log("Current Start Time: " + currentStartTime);
                                                         console.log("Up Time: " + upTime);
 
-
                                                         // In thoery, if the miner had a hard reboot, then the previous start time should be less than the current start time
                                                         // or if it is the exact same, then it probably is stuck
                                                         // or if the uptime is at 0, then it probably refused to start up even
                                                         var didHardReboot = previousStartTime <= currentStartTime;
                                                         console.log("Did Hard Reboot: " + didHardReboot);
                                                         var min15 = 15*60;
+
                                                         // Either the miner did come back online and is past 15 minutes, or it is still at 0 uptime which probably means it is stuck, we check for 15 min from scan as a imperfect way to filter out if the user just clicked to the next stage too early
                                                         var pastMinUpTime = upTime >= min15 || upTime === 0 && timeSinceHardRebootScan >= min15*1000;
                                                         rebootData[minerID].didHardReboot = didHardReboot;
                                                         rebootData[minerID].hardRebootFailed = didHardReboot && pastMinUpTime;
                                                         console.log("Hard Reboot Failed: " + rebootData[minerID].hardRebootFailed);
 
+                                                        if(hardRebootFailed) {
+                                                            rebootData[minerID].details.main = "[Pull Recommended]";
+                                                            rebootData[minerID].details.sub = [
+                                                                "Still not hashing after hard reboot."
+                                                            ];
+                                                        } else if(didHardReboot && !pastMinUpTime) {
+                                                            rebootData[minerID].details.main = "[Pull Not Recommended]";
+                                                            rebootData[minerID].details.sub = [
+                                                                "15 Minutes has not passed since hard reboot."
+                                                            ];
+                                                        } else {
+                                                            rebootData[minerID].details.main = "[Hard Reboot Not Detected]";
+                                                            rebootData[minerID].details.sub = [];
+                                                        }
+
                                                         if(didHardReboot && pastMinUpTime) {
                                                             // Reset the lastHardRebootScanTime so we can scan it again (with the assumption the miner did/is going to get pulled)
                                                             lastRebootTimes[minerID].lastHardRebootScanTime = false;
+                                                        }
+                                                    }
+                                                } else {
+                                                    if(stage === 2) {
+                                                        rebootData[minerID].details.main = "[Hard Reboot Skipped]";
+                                                        rebootData[minerID].details.sub = [];
+                                                        if(!isPastMinTime) {
+                                                            rebootData[minerID].details.sub.push("15 Minutes has not passed since last reboot.");
+                                                        }
+
+                                                        if(!notPastForgetTime) {
+                                                            rebootData[minerID].details.sub.push("Soft Reboot has not been sent from this computer in the last 2 hours.");
+                                                        }
+                                                    } else if(stage === 3) {
+                                                        rebootData[minerID].details.main = "[Pull Skipped]";
+                                                        rebootData[minerID].details.sub = [];
+                                                        if(!pastMinUpTime) {
+                                                            rebootData[minerID].details.sub.push("15 Minutes has not passed since last reboot.");
+                                                        }
+
+                                                        if(!notPastForgetTime) {
+                                                            rebootData[minerID].details.sub.push("Soft Reboot has not been sent from this computer in the last 2 hours.");
                                                         }
                                                     }
                                                 }
@@ -2245,8 +2351,6 @@ function OptiFleetSpecificLogic() {
                                             }
                                         }
                                     }
-                                    
-                                    
                                 }
                                 parseMinerUpTimeData(currentMiner.id, timeFrame);
 
