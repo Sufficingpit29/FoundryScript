@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.8.2
+// @version      1.8.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1542,8 +1542,7 @@ function OptiFleetSpecificLogic() {
                                     var numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
                                     var moreThan3SoftReboots = numOfSoftReboots >= 3;
 
-                                    var previousUpTime = lastRebootTimes[minerID].previousUpTime || false;
-                                    var stuckAtZero = upTime === 0 && previousUpTime === 0;
+                                    var stuckAtZero = upTime === 0 && isOnline;
 
                                     var hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
                                     var timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
@@ -1584,6 +1583,11 @@ function OptiFleetSpecificLogic() {
                                             rebootData[minerID].details.sub.push("Time Left: " + formatUptime(timeLeft));
                                         }
 
+                                        if(!isOnline) {
+                                            rebootData[minerID].details.sub.push("Miner is offline.");
+                                        } else if(stuckAtZero) {
+                                            rebootData[minerID].details.sub.push("Miner is stuck at 0 uptime.");
+                                        }
                                     }
 
                                     if(!belowMaxTemp) {
