@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.8.3
+// @version      1.8.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1198,9 +1198,20 @@ function OptiFleetSpecificLogic() {
 
                     // Get saved last reboot times
                     var lastRebootTimes = GM_SuperValue.get('lastRebootTimes', {});
-
-                    var totalRebooted = 0;
                     var reachedScanEnd = false;
+
+                    function getTotalRebootCount() {
+                        var rebootCount = 0;
+                        for (const [minerID, rebootData] of Object.entries(lastRebootTimes)) {
+                            var softRebootTimes = rebootData.softRebootsTimes || [];
+                            var lastSoftRebootTime = softRebootTimes[softRebootTimes.length-1] || false;
+                            var timeSinceLastSoftReboot = lastSoftRebootTime ? (new Date() - new Date(lastSoftRebootTime)) : false;
+                            if(timeSinceLastSoftReboot && timeSinceLastSoftReboot < 15*60*1000) {
+                                rebootCount++;
+                            }
+                        }
+                        return rebootCount;
+                    }
 
                     // Close the dropdown
                     issues.toggleDropdownMenu('newActionsDropdown');
@@ -1297,49 +1308,6 @@ function OptiFleetSpecificLogic() {
                                     clearInterval(updatePercentageTextInteval);
                                 }
                             }, 50);
-
-                            // Add rebooting text below the progress bar
-                            var rebootingText;
-                            var totalRebootedText;
-                            if (stage === 1) {
-                                rebootingText = document.createElement('div');
-                                rebootingText.textContent = 'Rebooting: 0/100';
-                                rebootingText.style.marginTop = '10px';
-                                rebootingText.style.textAlign = 'left';
-                                scanningElement.appendChild(rebootingText);
-                                var maxMinerRebootTextInterval = setInterval(() => {
-                                    // Calculate the progress percentage
-                                    var minersRebooting = 0;
-                                    for (const [minerID, data] of Object.entries(rebootData)) {
-                                        if (data.isRebooting) {
-                                            minersRebooting++;
-                                        }
-                                    }
-
-                                    // Update the rebooting text
-                                    rebootingText.textContent = 'Rebooting: ' + minersRebooting + '/' + maxRebootAllowed;
-
-                                    if(reachedScanEnd) {
-                                        clearInterval(maxMinerRebootTextInterval);
-                                    }
-                                }, 50);
-
-                                // Add text below the percentage text
-                                totalRebootedText = document.createElement('div');
-                                totalRebootedText.textContent = 'Total Rebooted: 0';
-                                totalRebootedText.style.marginTop = '10px';
-                                totalRebootedText.style.textAlign = 'left';
-                                scanningElement.appendChild(totalRebootedText);
-
-                                var sentRebootsTextInterval = setInterval(() => {
-                                    // Update the rebooting text
-                                    totalRebootedText.textContent = 'Total Sent Reboots: ' + totalRebooted;
-
-                                    if(reachedScanEnd) {
-                                        clearInterval(sentRebootsTextInterval);
-                                    }
-                                }, 50);
-                            }
 
                             // Add the progress log on the right side of the screen
                             var progressLog = document.createElement('div');
@@ -1441,7 +1409,6 @@ function OptiFleetSpecificLogic() {
                                     var lastSoftRebootTime = softRebootTimes[softRebootTimes.length-1] || false;
                                     var timeSinceLastSoftReboot = lastSoftRebootTime ? (new Date() - new Date(lastSoftRebootTime)) : false;
                                     
-                                    var lastRebootTime = minerRebootTimesData.autoRebootTime || false;
                                     if(timeSinceLastSoftReboot && timeSinceLastSoftReboot < 60*60*1000) { // Mainly if the page was reloaded or something and another scan was started before the miner uptime data could change so it still thinks it hasn't been rebooted IE the uptime hasn't changed
                                         moreThanOneHour = false;
                                     }
@@ -1461,50 +1428,40 @@ function OptiFleetSpecificLogic() {
 
                                     if(isOnline) {
                                         if(moreThanOneHour && belowMaxTemp) { // If the miner passed the conditions, then we can reboot it
-                                            // Reboot the miner
-                                            var minerIdList = [minerID];
-                                            rebootData[minerID].isRebooting = true;
-                                            rebootData[minerID].sentReboot = true;
-                                            
-                                            rebootData[minerID].details.main = "Sent Soft Reboot";
-                                            rebootData[minerID].details.sub = [
-                                                "Miner has been online for more than 1 hour.",
-                                                "Miner is below 78°F."
-                                            ];
 
-                                            // Update the lastRebootTimes
-                                            lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
-                                            lastRebootTimes[minerID].autoRebootTime = new Date().toISOString();
-                                            lastRebootTimes[minerID].upTimeAtReboot = upTime;
-                                            lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
-                                            lastRebootTimes[minerID].softRebootsTimes.push(new Date().toISOString());
-                                            totalRebooted++;
+                                            // Loop through lastRebootTimes, and get the last reboot time for each miner, if it has been less than 15 minutes, we will count that as activly rebooting
+                                            var rebootCount = getTotalRebootCount();
 
-                                            // 10 minute timere to set the isRebooting to false
-                                            setTimeout(() => {
-                                                rebootData[minerID].isRebooting = false;
-                                            }, 10*60*1000);
+                                            if(rebootCount < maxRebootAllowed) {
+                                                // Reboot the miner
+                                                var minerIdList = [minerID];
+                                                
+                                                rebootData[minerID].details.main = "Sent Soft Reboot";
+                                                rebootData[minerID].details.sub = [
+                                                    "Miner has been online for more than 1 hour.",
+                                                    "Miner is below 78°F."
+                                                ];
 
-                                            // Inteval to check if there are less than 100 miners rebooting
-                                            var checkRebootInterval = setInterval(() => {
-                                                var minersRebooting = 0;
-                                                for (const [minerID, data] of Object.entries(rebootData)) {
-                                                    if (data.isRebooting) {
-                                                        minersRebooting++;
-                                                    }
-                                                }
+                                                // Update the lastRebootTimes
+                                                lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
+                                                lastRebootTimes[minerID].upTimeAtReboot = upTime;
+                                                lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
+                                                lastRebootTimes[minerID].softRebootsTimes.push(new Date().toISOString());
 
-                                                if(minersRebooting < maxRebootAllowed) {
-                                                    clearInterval(checkRebootInterval);
-                                                    runNextMiner();
-                                                }
-                                            }, 100);
-
-                                            // Actually send the reboot request
-                                            pageInstance.post(`/RebootMiners`, { miners: minerIdList, bypassed: false })
-                                                .then(() => {
-                                                    console.log("Rebooted Miner: " + minerID);
-                                            });
+                                                // Actually send the reboot request
+                                                pageInstance.post(`/RebootMiners`, { miners: minerIdList, bypassed: false })
+                                                    .then(() => {
+                                                        console.log("Rebooted Miner: " + minerID);
+                                                });
+                                            } else {
+                                                rebootData[minerID].details.main = "Max Reboot Limit Reached";
+                                                rebootData[minerID].details.sub = [
+                                                    "Miner has been online for more than 1 hour.",
+                                                    "Miner is below 78°F.",
+                                                    "Max Reboot Limit of " + maxRebootAllowed + " reached.",
+                                                    "15 minutes needs to pass before another reboot can be sent."
+                                                ];
+                                            }
                                         } else {
                                             if(timeSinceLastSoftReboot && timeSinceLastSoftReboot <= min15*1000) {
                                                 rebootData[minerID].details.main = "Waiting on Soft Reboot Attempt";
@@ -1871,7 +1828,6 @@ function OptiFleetSpecificLogic() {
                                                     actualTable.appendChild(invisibleDiv);
 
                                                     // Reset the scan
-                                                    totalRebooted = 0;
                                                     reachedScanEnd = false;
                                                     currentMinerIndex = 0;
                                                     
@@ -1934,6 +1890,26 @@ function OptiFleetSpecificLogic() {
                                                         }, 20);
                                                     });
                                                 };
+
+                                                // Add text saying the current soft rebooting miners from getTotalRebootCount() that updates
+                                                const softRebootingMinersText = document.createElement('div');
+                                                softRebootingMinersText.style.cssText = `
+                                                    padding: 10px;
+                                                    background-color: #444947;
+                                                    border-radius: 10px;
+                                                    margin-top: 10px;
+                                                `;
+                                                // Position the text in the top left corner
+                                                softRebootingMinersText.style.top = '20px';
+                                                softRebootingMinersText.style.left = '30px';
+                                                softRebootingMinersText.style.position = 'absolute';
+                                                firstDiv.appendChild(softRebootingMinersText);
+                                                softRebootingMinersText.textContent = `Sent Soft Reboots: ${getTotalRebootCount()}/${maxRebootAllowed}`;
+
+                                                const softRebootingMinersTextInterval = setInterval(() => {
+                                                    const rebootCount = getTotalRebootCount();
+                                                    softRebootingMinersText.textContent = `Sent Soft Reboots: ${rebootCount}/${maxRebootAllowed}`;
+                                                }, 1000);
 
                                                 // Set the progress bar to show up above the table
                                                 progressBar.style.marginTop = '10px';
