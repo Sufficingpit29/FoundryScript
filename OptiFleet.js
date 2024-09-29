@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.8.6
+// @version      1.8.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1013,7 +1013,6 @@ function OptiFleetSpecificLogic() {
                                 var newElement = document.createElement('div');
                                 newElement.textContent = 'Breaker Number: ' + breakerNum;
                                 minerData['Slot ID'].appendChild(newElement);
-                                console.log('Breaker Number: ' + breakerNum);
                             }
                         }
 
@@ -1385,7 +1384,6 @@ function OptiFleetSpecificLogic() {
 
                                 function checkMiner(minerID) {
                                     var location = currentMiner.locationName;
-                                    console.log(`Checking Miner: ${minerID} - ${location}`);
                                     if(!location) {
                                         console.error("No location for miner: " + minerID);
                                         return;
@@ -1466,9 +1464,9 @@ function OptiFleetSpecificLogic() {
                                             if(timeSinceLastSoftReboot && timeSinceLastSoftReboot <= min15*1000) {
                                                 rebootData[minerID].details.main = "Waiting on Soft Reboot Result";
                                                 rebootData[minerID].details.sub = [];
+                                                rebootData[minerID].details.color = 'yellow';
                                                 const formattedTime = new Date(lastSoftRebootTime).toLocaleTimeString();
                                                 rebootData[minerID].details.sub.push("Soft Reboot sent at: " + formattedTime);
-                                                console.log("timeSinceLastSoftReboot: " + timeSinceLastSoftReboot);
                                                 var timeLeft = (min15*1000 - timeSinceLastSoftReboot)/1000;
                                                 rebootData[minerID].details.sub.push("Time Left: " + formatUptime(timeLeft));
                                             } else {
@@ -1504,12 +1502,17 @@ function OptiFleetSpecificLogic() {
                                     var hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
                                     var timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
                                     var hardRebootAttempted = timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000; // 6 hours
+
+                                    var hardRebootRecommendedTime = lastRebootTimes[minerID].hardRebootRecommended || false;
+                                    var timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
+                                    var hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 6*60*60*1000; // 6 hours
                                     
-                                    if( !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || stuckAtZero)) {
+                                    if( !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || stuckAtZero || hardRebootRecommended)) {
                                         lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
 
                                         rebootData[minerID].details.main = "Hard Reboot Recommended";
                                         rebootData[minerID].details.sub = [];
+                                        rebootData[minerID].details.color = 'orange';
                                         if(isPastMinTime && notPastForgetTime) {
                                             rebootData[minerID].details.sub.push("15 Minutes has passed since last soft reboot and miner is still not hashing.");
                                         }
@@ -1523,15 +1526,20 @@ function OptiFleetSpecificLogic() {
                                         } else if(stuckAtZero) {
                                             rebootData[minerID].details.sub.push("Miner is stuck at 0 uptime.");
                                         }
+
+                                        // Save that a hard reboot was recommended
+                                        lastRebootTimes[minerID].hardRebootRecommended = new Date().toISOString();
                                     } else if(hardRebootAttempted) {
 
                                         if(timeSinceHardRebootAttempted >= min15*1000) {
                                             rebootData[minerID].details.main = "Pull Recommened";
                                             rebootData[minerID].details.sub = [];
                                             rebootData[minerID].details.sub.push("15 Minutes has passed since hard reboot attempt.");
+                                            rebootData[minerID].details.color = 'red';
                                         } else {
                                             rebootData[minerID].details.main = "Waiting on Hard Reboot Result";
                                             rebootData[minerID].details.sub = [];
+                                            rebootData[minerID].details.color = 'yellow';
                                             const formattedTime = new Date(hardRebootAttemptedTime).toLocaleTimeString();
                                             rebootData[minerID].details.sub.push("15 Minutes has not passed since hard reboot mark time.");
                                             rebootData[minerID].details.sub.push("Hard Reboot Marked at: " + formattedTime);
@@ -1556,7 +1564,6 @@ function OptiFleetSpecificLogic() {
 
                                 function runNextMiner() {
                                     // Stop if we have reached the end of the scan
-                                    console.log("Running Next Miner");
 
                                     // Make it a checkmark
                                     const checkmark = document.createElement('span');
@@ -1782,7 +1789,7 @@ function OptiFleetSpecificLogic() {
                                                         <td style="text-align: left; position: relative;">
                                                             ${minerRebootData.details.main}
                                                             <div style="display: inline-block; margin-left: 5px; cursor: pointer; position: relative; float: right;">
-                                                                <div style="width: 16px; height: 16px; border-radius: 50%; background-color: #0078d4; color: white; text-align: center; line-height: 16px; font-size: 12px;">?</div>
+                                                                <div style="width: 20px; height: 20px; border-radius: 50%; background-color: #0078d4; color: white; text-align: center; line-height: 20px; font-size: 12px; border: 1px solid black; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;">?</div>
                                                                 <div style="display: none; position: absolute; top: 20px; right: 0; background-color: #444947; color: white; padding: 5px; border-radius: 5px; z-index: 9999; white-space: nowrap; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);">
                                                                     [${minerRebootData.details.main}]
                                                                     ${minerRebootData.details.sub.map(subDetail => `<div style="padding-left: 10px; padding-top: 6px;">• ${subDetail}</div>`).join('')}
@@ -1790,6 +1797,11 @@ function OptiFleetSpecificLogic() {
                                                             </div>
                                                         </td>
                                                     `;
+
+                                                    var questionColor = minerRebootData.details.color || false;
+                                                    if(questionColor) {
+                                                        row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;   
+                                                    }
 
                                                     row.minerID = minerID;
 
@@ -1804,6 +1816,7 @@ function OptiFleetSpecificLogic() {
                                                             cursor: pointer;
                                                             border-radius: 5px;
                                                             transition: background-color 0.3s;
+                                                            margin-left: 5px;
                                                         `;
                                                         row.querySelector('td:last-child').appendChild(hardRebootButton);
 
@@ -1819,6 +1832,10 @@ function OptiFleetSpecificLogic() {
                                                         // Add click event to the button
                                                         hardRebootButton.onclick = function() {
                                                             lastRebootTimes[minerID].hardRebootAttempted = new Date().toISOString();
+                                                            lastRebootTimes[minerID].hardRebootRecommended = false;
+
+                                                            // make a copy of the details data
+                                                            lastRebootTimes[minerID].previousDetails = structuredClone(rebootData[minerID].details);
 
                                                             // Save lastRebootTimes
                                                             GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
@@ -1829,26 +1846,70 @@ function OptiFleetSpecificLogic() {
 
                                                             setUpRowData(row, minerID);
                                                         }
-                                                    } else if(minerRebootData.details.main === "Pull Recommened") {
-                                                        const pullButton = document.createElement('button');
-                                                        pullButton.textContent = 'Mark Fixed';
-                                                        pullButton.style.cssText = `
-                                                            background-color: #0078d4;
+                                                    }
+                                                    
+                                                    // Add a button to cancel the hard reboot mark if details.main === "Waiting on Hard Reboot Result"
+                                                    if(minerRebootData.details.main === "Waiting on Hard Reboot Result") {
+                                                        const cancelButton = document.createElement('button');
+                                                        cancelButton.textContent = 'Unmark Hard Reboot';
+                                                        cancelButton.style.cssText = `
+                                                            background-color: #dc3545; /* Red background */
                                                             color: white;
                                                             border: none;
                                                             cursor: pointer;
                                                             border-radius: 5px;
                                                             transition: background-color 0.3s;
+                                                            margin-left: 5px;
+                                                        `;
+                                                        row.querySelector('td:last-child').appendChild(cancelButton);
+                                                        
+                                                        // Add button hover effect
+                                                        cancelButton.addEventListener('mouseenter', function() {
+                                                            this.style.backgroundColor = '#c82333'; /* Darker red on hover */
+                                                        });
+
+                                                        cancelButton.addEventListener('mouseleave', function() {
+                                                            this.style.backgroundColor = '#dc3545'; /* Original red */
+                                                        });
+
+                                                        // Add click event to the button
+                                                        cancelButton.onclick = function() {
+                                                            lastRebootTimes[minerID].hardRebootAttempted = false;
+                                                            lastRebootTimes[minerID].hardRebootRecommended = new Date().toISOString();
+
+                                                            // Save lastRebootTimes
+                                                            GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
+
+                                                            // Set the details to show what it was before the hard reboot mark
+                                                            rebootData[minerID].details = structuredClone(lastRebootTimes[minerID].previousDetails);
+
+                                                            setUpRowData(row, minerID);
+                                                        }
+                                                    }
+
+
+                                                    // Add a button before the question mark that says Mark Fixed
+                                                    if(minerRebootData.details.main === "Hard Reboot Recommended" || minerRebootData.details.main === "Pull Recommened") {
+                                                        const pullButton = document.createElement('button');
+                                                        pullButton.textContent = 'Mark Fixed';
+                                                        pullButton.style.cssText = `
+                                                            background-color: #28a745; /* Green background */
+                                                            color: white;
+                                                            border: none;
+                                                            cursor: pointer;
+                                                            border-radius: 5px;
+                                                            transition: background-color 0.3s;
+                                                            margin-left: 5px;
                                                         `;
                                                         row.querySelector('td:last-child').appendChild(pullButton);
 
                                                         // Add button hover effect
                                                         pullButton.addEventListener('mouseenter', function() {
-                                                            this.style.backgroundColor = '#005a9e';
+                                                            this.style.backgroundColor = '#218838'; /* Darker green on hover */
                                                         });
 
                                                         pullButton.addEventListener('mouseleave', function() {
-                                                            this.style.backgroundColor = '#0078d4';
+                                                            this.style.backgroundColor = '#28a745'; /* Original green */
                                                         });
 
                                                         // Add click event to the button
@@ -1863,8 +1924,8 @@ function OptiFleetSpecificLogic() {
                                                             rebootData[minerID].details.sub = ["Miner has been marked as fixed.", "Erased hard reboot mark time."];
 
                                                             setUpRowData(row, minerID);
+                                                            rebootData[minerID] = {};
                                                         }
-
                                                     }
                                                             
                                                     
@@ -1882,6 +1943,7 @@ function OptiFleetSpecificLogic() {
                                                 }
 
                                                 var showSkipped = true;
+                                                var showSuccess = true;
                                                 function toggleSkippedMiners() {
                                                     // Get the current sort order before refreshing
                                                     var reversed = $('#minerTable').DataTable().order()[0][1] === 'desc';
@@ -1891,6 +1953,9 @@ function OptiFleetSpecificLogic() {
                                                         var curResultText = row.querySelector('td:last-child').textContent;
                                                         if(curResultText.includes("Soft Reboot Skipped") || curResultText.includes("Waiting on Soft Reboot Result") || curResultText.includes("Sent Soft Reboot")) {
                                                             row.style.display = showSkipped ? '' : 'none';
+                                                        }
+                                                        if(curResultText.includes("Successfully Hashing")) {
+                                                            row.style.display = showSuccess ? '' : 'none';
                                                         }
                                                     });
 
@@ -1930,6 +1995,7 @@ function OptiFleetSpecificLogic() {
                                                     retrieveIssueMiners((issueMiners) => {
                                                         var issueMinersLookup = {};
                                                         for (const miner of issueMiners) {
+                                                            //if(miner.serialNumber === "YNAHANCBCABJA023E") { continue; } //Used for testing
                                                             issueMinersLookup[miner.id] = miner;
                                                         }
 
@@ -1941,9 +2007,14 @@ function OptiFleetSpecificLogic() {
                                                             currentMiner = issueMinersLookup[minerID];
                                                             
                                                             // Check the miner
-                                                            if(!currentMiner) {
-                                                                row.remove();
-                                                            } else {
+                                                            if(minerID && !currentMiner) {
+                                                                rebootData[minerID] = rebootData[minerID] || {};
+                                                                rebootData[minerID].details = {};
+                                                                rebootData[minerID].details.main = "Successfully Hashing";
+                                                                rebootData[minerID].details.sub = ["Miner is now hashing again."];
+                                                                rebootData[minerID].details.color = '#218838';
+                                                                setUpRowData(row, minerID);
+                                                            } else if(currentMiner) {
                                                                 parseMinerUpTimeData(minerID, timeFrame);
                                                                 setUpRowData(row, minerID);
                                                             }
@@ -2021,6 +2092,42 @@ function OptiFleetSpecificLogic() {
                                                     showSkipped = !showSkipped;
                                                     toggleSkippedMiners();
                                                 };
+
+                                                // Add a toggle button to hide/show successful miners
+                                                const showSuccessfulButton = document.createElement('button');
+                                                showSuccessfulButton.id = 'showSuccessfulButton';
+                                                showSuccessfulButton.style.cssText = `
+                                                    padding: 10px 20px;
+                                                    background-color: #0078d4;
+                                                    color: white;
+                                                    border: none;
+                                                    cursor: pointer;
+                                                    margin-top: 10px;
+                                                    border-radius: 5px;
+                                                    transition: background-color 0.3s;
+                                                    align-self: flex-end; /* Align to the right side */
+                                                    display: block; /* Ensure the button is displayed as a block element */
+                                                `;
+
+                                                showSuccessfulButton.textContent = 'Toggle Successful Miners';
+                                                firstDiv.appendChild(showSuccessfulButton);
+
+                                                // Add button hover effect
+                                                showSuccessfulButton.addEventListener('mouseenter', function() {
+                                                    this.style.backgroundColor = '#005a9e';
+                                                });
+
+                                                showSuccessfulButton.addEventListener('mouseleave', function() {
+                                                    this.style.backgroundColor = '#0078d4';
+                                                });
+
+                                                // Show/Hide Successful Miners functionality
+                                                showSuccessfulButton.onclick = function() {
+                                                    showSuccess = !showSuccess;
+                                                    toggleSkippedMiners();
+                                                };
+
+
 
                                                 // Add the "Finished Hard Reboots" button
                                                 const finishedButton = document.createElement('button');
@@ -2309,10 +2416,8 @@ function OptiFleetSpecificLogic() {
                                             // Custom sorting function for slot IDs
                                             $.fn.dataTable.ext.type.order['miner-id'] = function(d) {
                                                 // Split something "C05-10-3-4" into an array of just the numbers that aren't seperated by anything at all
-                                                console.log(d);
                                                 let numbers = d.match(/\d+/g).map(Number);
                                                 //numbers.shift(); // Remove the first number since it is the miner ID
-                                                console.log(numbers);
                                                 // Convert the array of numbers into a single comparable value
                                                 // For example, [10, 3, 4] becomes 100304
                                                 let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
@@ -2610,7 +2715,6 @@ function OptiFleetSpecificLogic() {
 
                 var locationID = minerDetails['locationID']; // Rack-Row-Col
                 var splitLocationID = locationID.split('-');
-                console.log(splitLocationID);
                 var row = Number(splitLocationID[1]);
                 var col = Number(splitLocationID[2]);
                 var rowWidth = 4;
@@ -2863,7 +2967,7 @@ if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
                 console.error('Container not found.');
             }
         } else {
-            console.log('Header with title "TestName" not found.');
+            console.log('Header with title "Diagnosed" not found.');
         }
 
         return false; // Keep observing for further mutations
