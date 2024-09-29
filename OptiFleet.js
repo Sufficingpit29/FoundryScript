@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.8.4
+// @version      1.8.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1464,7 +1464,7 @@ function OptiFleetSpecificLogic() {
                                             }
                                         } else {
                                             if(timeSinceLastSoftReboot && timeSinceLastSoftReboot <= min15*1000) {
-                                                rebootData[minerID].details.main = "Waiting on Soft Reboot Attempt";
+                                                rebootData[minerID].details.main = "Waiting on Soft Reboot Result";
                                                 rebootData[minerID].details.sub = [];
                                                 const formattedTime = new Date(lastSoftRebootTime).toLocaleTimeString();
                                                 rebootData[minerID].details.sub.push("Soft Reboot sent at: " + formattedTime);
@@ -1530,7 +1530,7 @@ function OptiFleetSpecificLogic() {
                                             rebootData[minerID].details.sub = [];
                                             rebootData[minerID].details.sub.push("15 Minutes has passed since hard reboot attempt.");
                                         } else {
-                                            rebootData[minerID].details.main = "Waiting on Hard Reboot Attempt";
+                                            rebootData[minerID].details.main = "Waiting on Hard Reboot Result";
                                             rebootData[minerID].details.sub = [];
                                             const formattedTime = new Date(hardRebootAttemptedTime).toLocaleTimeString();
                                             rebootData[minerID].details.sub.push("15 Minutes has not passed since hard reboot mark time.");
@@ -1658,6 +1658,48 @@ function OptiFleetSpecificLogic() {
                                                 refreshText.style.padding = '5px 10px';
                                                 refreshContainer.appendChild(refreshText);
 
+                                                // Add a "pause" button
+                                                const pauseButton = document.createElement('button');
+                                                pauseButton.className = 'm-button is-ghost is-icon-only';
+                                                pauseButton.type = 'button';
+                                                pauseButton.id = 'pauseAutoReboot';
+                                                pauseButton.style.cssText = `
+                                                    margin-left: 10px; /* Add some space between the text and the button */
+                                                    background-color: #0078d4;
+                                                    color: white;
+                                                    display: inline-block; /* Ensure the button is displayed inline with the text */
+                                                    display: flex; /* Use flexbox to center the icon */
+                                                    align-items: center; /* Vertically center the icon */
+                                                    justify-content: center; /* Horizontally center the icon */
+                                                `;
+
+                                                const pauseIcon = document.createElement('img');
+                                                const pauseIconURL = 'https://img.icons8.com/?size=100&id=61012&format=png&color=FFFFFF';
+                                                const playIconURL = 'https://img.icons8.com/?size=100&id=59862&format=png&color=FFFFFF';
+                                                pauseIcon.src = pauseIconURL;
+                                                pauseIcon.alt = 'Pause Icon';
+                                                pauseIcon.style.cssText = `
+                                                    width: var(--size-icon-xl);
+                                                    height: var(--size-icon-xl);
+                                                `;
+
+                                                refreshContainer.appendChild(pauseButton);
+                                                pauseButton.appendChild(pauseIcon);
+
+                                                // Toggle pause icon on click
+                                                var pauseTime = false;
+                                                var targetTime = Date.now() + countdown * 1000;
+                                                pauseButton.addEventListener('click', () => {
+                                                    if (pauseIcon.src === pauseIconURL) {
+                                                        pauseIcon.src = playIconURL;
+                                                        pauseTime = targetTime - Date.now()
+                                                    } else {
+                                                        pauseIcon.src = pauseIconURL;
+                                                        targetTime = Date.now() + pauseTime;
+                                                        pauseTime = false;
+                                                    }
+                                                });
+
                                                 // Add a "Refresh" button
                                                 const refreshButton = document.createElement('button');
                                                 refreshButton.className = 'm-button is-ghost is-icon-only';
@@ -1685,9 +1727,12 @@ function OptiFleetSpecificLogic() {
                                                 // Now the button is created, we can grab the actual button element
                                                 const refreshAutoRebootButton = popupResultElement.querySelector('#refreshAutoReboot');
 
-                                                var targetTime = Date.now() + countdown * 1000;
+                                                
                                                 // Update the countdown
                                                 const countdownInterval = setInterval(() => {
+                                                    if (pauseTime) {
+                                                        return;
+                                                    }
                                                     if (!targetTime) return;
                                                     const remainingTime = Math.max(0, Math.floor((targetTime - Date.now()) / 1000));
                                                     refreshText.textContent = `Refreshing in (${remainingTime}s)`;
@@ -1753,7 +1798,6 @@ function OptiFleetSpecificLogic() {
                                                         const hardRebootButton = document.createElement('button');
                                                         hardRebootButton.textContent = 'Mark Hard Rebooted';
                                                         hardRebootButton.style.cssText = `
-                                                            
                                                             background-color: #0078d4;
                                                             color: white;
                                                             border: none;
@@ -1776,12 +1820,51 @@ function OptiFleetSpecificLogic() {
                                                         hardRebootButton.onclick = function() {
                                                             lastRebootTimes[minerID].hardRebootAttempted = new Date().toISOString();
 
+                                                            // Save lastRebootTimes
+                                                            GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
+
                                                             // Set the details to show that it is hard rebooting
-                                                            rebootData[minerID].details.main = "Waiting on Hard Reboot Attempt";
+                                                            rebootData[minerID].details.main = "Waiting on Hard Reboot Result";
                                                             rebootData[minerID].details.sub = ["15 Minutes has not passed since hard reboot mark time."];
 
                                                             setUpRowData(row, minerID);
                                                         }
+                                                    } else if(minerRebootData.details.main === "Pull Recommened") {
+                                                        const pullButton = document.createElement('button');
+                                                        pullButton.textContent = 'Mark Fixed';
+                                                        pullButton.style.cssText = `
+                                                            background-color: #0078d4;
+                                                            color: white;
+                                                            border: none;
+                                                            cursor: pointer;
+                                                            border-radius: 5px;
+                                                            transition: background-color 0.3s;
+                                                        `;
+                                                        row.querySelector('td:last-child').appendChild(pullButton);
+
+                                                        // Add button hover effect
+                                                        pullButton.addEventListener('mouseenter', function() {
+                                                            this.style.backgroundColor = '#005a9e';
+                                                        });
+
+                                                        pullButton.addEventListener('mouseleave', function() {
+                                                            this.style.backgroundColor = '#0078d4';
+                                                        });
+
+                                                        // Add click event to the button
+                                                        pullButton.onclick = function() {
+                                                            lastRebootTimes[minerID] = {};
+
+                                                            // Save lastRebootTimes
+                                                            GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
+
+                                                            // Set the details to show that it is hard rebooting
+                                                            rebootData[minerID].details.main = "Marked Fixed";
+                                                            rebootData[minerID].details.sub = ["Miner has been marked as fixed.", "Erased hard reboot mark time."];
+
+                                                            setUpRowData(row, minerID);
+                                                        }
+
                                                     }
                                                             
                                                     
@@ -1800,13 +1883,24 @@ function OptiFleetSpecificLogic() {
 
                                                 var showSkipped = true;
                                                 function toggleSkippedMiners() {
+                                                    // Get the current sort order before refreshing
+                                                    var reversed = $('#minerTable').DataTable().order()[0][1] === 'desc';
+
                                                     const tableRows = popupResultElement.querySelectorAll('tbody tr');
                                                     tableRows.forEach(row => {
                                                         var curResultText = row.querySelector('td:last-child').textContent;
-                                                        if(curResultText.includes("Soft Reboot Skipped")) {
+                                                        if(curResultText.includes("Soft Reboot Skipped") || curResultText.includes("Waiting on Soft Reboot Result") || curResultText.includes("Sent Soft Reboot")) {
                                                             row.style.display = showSkipped ? '' : 'none';
                                                         }
                                                     });
+
+                                                    // If the table is grouped, resort by Slot ID & Breaker
+                                                    var grouped = $('#minerTable').attr('data-grouped');
+                                                    if (grouped) {
+                                                        const table = $('#minerTable').DataTable();
+                                                        orderType = reversed ? 'desc' : 'asc';
+                                                        table.order([1, orderType]).draw();
+                                                    }
                                                 }
 
                                                 // Refresh button functionality
@@ -1842,52 +1936,26 @@ function OptiFleetSpecificLogic() {
                                                         // Loop through the table and heighlight the miner we're currently on for 0.5 seconds
                                                         var currentRow = 0;
                                                         const tableRows = popupResultElement.querySelectorAll('tbody tr');
-                                                        const highlightInterval = setInterval(() => {
+                                                        tableRows.forEach((row, index) => {
+                                                            let minerID = row.minerID;
+                                                            currentMiner = issueMinersLookup[minerID];
                                                             
-                                                            tableRows.forEach((row, index) => {
-                                                                row.style.backgroundColor = index === currentRow ? 'rgba(255, 255, 255, 0.1)' : '';
-
-                                                                if (index === currentRow) {
-                                                                    // Scroll to the highlighted row
-                                                                    row.scrollIntoView({ behavior: 'auto', block: 'center' });
-
-                                                                    // Set the current miner
-                                                                    let minerID = row.minerID;
-                                                                    currentMiner = issueMinersLookup[minerID];
-                                                                    
-                                                                    // Check the miner
-                                                                    if(!currentMiner) {
-                                                                        row.remove();
-                                                                    } else {
-                                                                        parseMinerUpTimeData(minerID, timeFrame);
-                                                                        setUpRowData(row, minerID);
-                                                                    }
-                                                                }
-                                                            });
-                                                            toggleSkippedMiners();
-                                                            currentRow = (currentRow + 1) % tableRows.length;
-
-                                                            // If we've gone through all the rows, stop the interval
-                                                            if (currentRow === 0) {
-                                                                // Stop the interval
-                                                                clearInterval(highlightInterval);
-
-                                                                // remove the highlight
-                                                                tableRows.forEach(row => {
-                                                                    row.style.backgroundColor = '';
-                                                                });
-
-                                                                // Scroll back to where we were
-                                                                popupResultElement.querySelector('#minerTableDiv').scrollTop = currentTableScroll;
-                                                                
-
-                                                                // Reset the target time
-                                                                targetTime = Date.now() + countdown * 1000;
-
-                                                                // Delete the invisible div to allow the user to click the table again
-                                                                invisibleDiv.remove();
+                                                            // Check the miner
+                                                            if(!currentMiner) {
+                                                                row.remove();
+                                                            } else {
+                                                                parseMinerUpTimeData(minerID, timeFrame);
+                                                                setUpRowData(row, minerID);
                                                             }
-                                                        }, 20);
+                                                        });
+
+                                                        toggleSkippedMiners();
+
+                                                        // Reset the target time
+                                                        targetTime = Date.now() + countdown * 1000;
+
+                                                        // Delete the invisible div to allow the user to click the table again
+                                                        invisibleDiv.remove();
                                                     });
                                                 };
 
@@ -1936,7 +2004,7 @@ function OptiFleetSpecificLogic() {
                                                     align-self: flex-end; /* Align to the right side */
                                                     display: block; /* Ensure the button is displayed as a block element */
                                                 `;
-                                                showSkippedButton.textContent = 'Toggle Skipped Miners';
+                                                showSkippedButton.textContent = 'Toggle Soft Reboot Miners';
                                                 firstDiv.appendChild(showSkippedButton);
 
                                                 // Add button hover effect
@@ -2047,6 +2115,36 @@ function OptiFleetSpecificLogic() {
 
                                                     // Sort Scan Result column
                                                     $('#minerTable').DataTable().order([3, 'asc']).draw();
+
+                                                    // Attach event listener for column sorting
+                                                    $('#minerTable').DataTable().on('order.dt', function() {
+                                                        // If the table is sorted by the "Slot ID & Breaker" column, group the rows by container
+                                                        if ($('#minerTable').DataTable().order()[0][0] === 1) {
+                                                            // Group rows by container
+                                                            let currentContainer = null;
+                                                            let containerGroup = null;
+                                                            $('#minerTable tbody tr').each(function() {
+                                                                // If the row isn't hidden via display: none, group it
+                                                                if ($(this).css('display') !== 'none') {
+                                                                    let container = $(this).find('td:eq(1)').text().split('-')[0].substring(1);
+                                                                    if (container !== currentContainer) {
+                                                                        currentContainer = container;
+                                                                        containerGroup = $('<tr class="container-group"><td colspan="4" style="text-align: left; padding-left: 10px; background-color: #444947; color: white; height: 20px !important; padding: 5px; margin: 0px;">Container ' + container + '</td></tr>');
+                                                                        $(this).before(containerGroup);
+                                                                    }
+                                                                }
+                                                            });
+
+                                                            // Set that the table is grouped
+                                                            $('#minerTable').attr('data-grouped', 'true');
+                                                        } else {
+                                                            // Remove the container groups
+                                                            $('.container-group').remove();
+
+                                                            // Set that the table is not grouped
+                                                            $('#minerTable').attr('data-grouped', 'false');
+                                                        }
+                                                    });
 
                                                 });
                                             });
