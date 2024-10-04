@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.8.8
+// @version      1.9.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1497,7 +1497,8 @@ function OptiFleetSpecificLogic() {
                                     var numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
                                     var moreThan3SoftReboots = numOfSoftReboots >= 3;
 
-                                    var stuckAtZero = upTime === 0 && isOnline;
+                                    // Check if the miner is at 0 uptime and is online, if so that might indicate it is stuck, but we only do it if the normal soft reboot conditions have gone through and is now skipping
+                                    var stuckAtZero = upTime === 0 && isOnline && rebootData[minerID].details.main === "Soft Reboot Skipped";
 
                                     var hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
                                     var timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
@@ -1524,7 +1525,7 @@ function OptiFleetSpecificLogic() {
                                         if(!isOnline) {
                                             rebootData[minerID].details.sub.push("Miner is offline.");
                                         } else if(stuckAtZero) {
-                                            rebootData[minerID].details.sub.push("Miner is stuck at 0 uptime.");
+                                            rebootData[minerID].details.sub.push("Miner might be stuck at 0 uptime? This is not a perfect rigorous check.");
                                         }
 
                                         // Save that a hard reboot was recommended
@@ -2726,6 +2727,79 @@ function OptiFleetSpecificLogic() {
             }, 500);
         }
         createBreakerNumBox();
+    } else if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/Map")) {
+        function addDataBox(title, data, updateFunc, updateInterval) {
+            // Add new m-box to m-grid-list
+            const mGridList = document.querySelector('.m-grid-list');
+            const mBox = document.createElement('div');
+            mBox.classList.add('m-box');
+            mGridList.appendChild(mBox);
+
+            // Add new m-stack to m-box
+            const mStack = document.createElement('div');
+            mStack.classList.add('m-stack');
+            mStack.classList.add('has-space-s');
+            mBox.appendChild(mStack);
+
+            // Add new h3 to m-stack
+            const h3 = document.createElement('h3');
+            h3.classList.add('m-heading');
+            h3.classList.add('is-muted');
+            h3.textContent = title;
+            mStack.appendChild(h3);
+
+            // Add new p to m-stack
+            const p = document.createElement('p');
+            p.classList.add('m-code');
+            p.classList.add('is-size-xl');
+            p.textContent = data;
+            mStack.appendChild(p);
+
+            // Run the update function if it exists
+            if (updateFunc) {
+                updateFunc(mBox, h3, p);
+                if (updateInterval) {
+                    setInterval(() => {
+                        updateFunc(mBox, h3, p);
+                    }, updateInterval);
+                }
+            }
+
+            // Return the m-box element
+            return mBox;
+        }
+
+        addDataBox("Temperature", "Loading...", (mBox, h3, p) => {
+            console.log('Updating temperature');
+            console.log(mBox);
+            if (mBox) {
+                retrieveContainerTempData((containerTempData) => {
+                    const containerElement = document.querySelector('div.dropdown.clickable[onclick="$(`#zoneList`).data(\'kendoDropDownList\').toggle()"]');
+                    console.log(containerElement);
+                    if (containerElement) {
+                        const containerText = containerElement.textContent.trim();
+                        // Make sure we in the minden site
+                        if(containerText !== "zones" && !containerText.includes('Minden')) {
+                            mBox.remove();
+                            return;
+                        }
+                        try {
+                            const containerNum = parseInt(containerText.split('_')[1].substring(1), 10); // Extract the number after 'C' and remove leading zeros
+                            if (isNaN(containerNum) || !containerTempData[containerNum]) {
+                                throw new Error('Invalid container number or missing temperature data');
+                            }
+                            const tempValue = containerTempData[containerNum].temp.toFixed(2);
+                            p.textContent = tempValue;
+                        } catch (error) {
+                            console.error('Error retrieving temperature data:', error);
+                            p.textContent = '';
+                        }
+                    } else {
+                        p.textContent = '';
+                    }
+                } );
+            }
+        }, 1000);
     }
 }
 
