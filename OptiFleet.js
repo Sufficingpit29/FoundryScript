@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.5
+// @version      2.0.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -3391,8 +3391,8 @@ if (ipURLMatch) {
                     },
                     'Network Lost': {
                         icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
-                        start: "WARN_NET_LOST",
-                        end: "ERROR_UNKOWN_STATUS: power off by NET_LOST",
+                        start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
+                        end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
                     },
                     
                     'Bad Hashboard Chain': {
@@ -3409,6 +3409,16 @@ if (ipURLMatch) {
                         end: "ERROR_SOC_INIT",
                         onlySeparate: true
                     },
+                    'Firmware Error': {
+                        icon: "https://img.icons8.com/?size=100&id=hbCljOlfk4WP&format=png&color=FFFFFF",
+                        start: "Firmware registration failed",
+                        end: "Firmware registration failed",
+                    },
+                    'ASIC Error': {
+                        icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
+                        start: "test_loop_securely_find_asic_num",
+                        end: "test_loop_securely_find_asic_num"
+                    }
                 }
 
                 // Search through the log and locate errors
@@ -3426,30 +3436,34 @@ if (ipURLMatch) {
                             break;
                         }
                         var startIndex = -1;
-                        if (Array.isArray(errorData.start)) {
-                            for (const start of errorData.start) {
-                                const curIndex = logText.indexOf(start, lastEndIndex);
-                                if (curIndex !== -1 && (startIndex === -1 || curIndex < startIndex)) {
-                                    startIndex = curIndex;
-                                }
+                        if (!Array.isArray(errorData.start)) {
+                            errorData.start = [errorData.start];
+                        }
+
+                        for (const start of errorData.start) {
+                            const curIndex = logText.indexOf(start, lastEndIndex);
+                            if (curIndex !== -1 && (startIndex === -1 || curIndex < startIndex)) {
+                                startIndex = curIndex;
                             }
-                        } else {
-                            startIndex = logText.indexOf(errorData.start, lastEndIndex);
                         }
 
                         if (startIndex !== -1) {
                             var endIndex = -1;
-                            if (Array.isArray(errorData.end)) {
-                                for (const end of errorData.end) {
-                                    const curIndex = logText.indexOf(end, startIndex);
-                                    if (curIndex !== -1 && (endIndex === -1 || curIndex > endIndex)) {
+                            if (!Array.isArray(errorData.end)) {
+                                errorData.end = [errorData.end];
+                            }
+
+                            const separatorTexts = ["start the http log", "****power off hashboard****"];
+                            for (const end of errorData.end) {
+                                const curIndex = logText.indexOf(end, startIndex);
+                                if (curIndex !== -1 && (endIndex === -1 || curIndex > endIndex)) {
+                                    // Make sure another start doesn't appear before the end & make sure a separator doesn't appear between the start and end
+                                    const lineAfterStart = logText.indexOf('\n', startIndex);
+                                    if (!errorData.start.some(start => logText.indexOf(start, lineAfterStart) < curIndex && logText.indexOf(start, lineAfterStart) !== -1) && !separatorTexts.some(separator => logText.indexOf(separator, startIndex) < curIndex && logText.indexOf(separator, startIndex) !== -1)) {
                                         endIndex = curIndex;
                                     }
                                 }
-                            } else {
-                                endIndex = logText.indexOf(errorData.end, startIndex);
                             }
-
                             // Set the start index to be back at the start of the line
                             const lastLineBreak = logText.lastIndexOf('\n', startIndex);
                             if (lastLineBreak !== -1) {
@@ -3467,11 +3481,8 @@ if (ipURLMatch) {
                                 endIndex = logText.indexOf('\n', startIndex) + 1;
                             }
 
-                            // Check to see if any of the seperator texts exists between the start and end index
-                            const separatorTexts = ["start the http log"];
-                            const separatorIndex = separatorTexts.findIndex(separator => logText.substring(startIndex, endIndex).includes(separator));
                             var setEndIndexAfter;
-                            if (endIndex !== -1 && separatorIndex === -1) {
+                            if (endIndex !== -1) {
                                 const errorText = logText.substring(startIndex, endIndex);
 
                                 // if onlySeparate is true, only add the error if it doesn't appear in another start/end as another error
@@ -3492,10 +3503,11 @@ if (ipURLMatch) {
                                         start: startIndex,
                                         end: endIndex
                                     });
+                                    setEndIndexAfter = endIndex;
                                 } else {
                                     console.log('Error text did not meet conditions');
+                                    setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
                                 }
-                                setEndIndexAfter = endIndex;
                             } else {
                                 setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
                             }
