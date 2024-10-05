@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      1.9.0
+// @version      2.0.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
 // @match        *://tasks.office.com/foundrydigital.com/*
 // @match        *://foundrydigitalllc.sharepoint.com/*
 // @match        *https://planner.cloud.microsoft/foundrydigital.com/Home/Planner/*
+// @match        *://*/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
 // @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
@@ -1384,10 +1385,15 @@ function OptiFleetSpecificLogic() {
 
                                 function checkMiner(minerID) {
                                     var location = currentMiner.locationName;
-                                    if(!location) {
+                                    if(!location || location === "Unassigned") {
                                         console.error("No location for miner: " + minerID);
+                                        rebootData[currentMiner.id] = rebootData[currentMiner.id] || {};
+                                        rebootData[currentMiner.id].details = {};
+                                        rebootData[currentMiner.id].details.main = "Missing Location";
+                                        rebootData[currentMiner.id].details.sub = [];
+                                        rebootData[currentMiner.id].details.sub.push("Miner is unassigned.");
+                                        rebootData[currentMiner.id].details.color = 'red';
                                         return;
-
                                     }
 
                                     var min15 = 15*60;
@@ -1396,7 +1402,6 @@ function OptiFleetSpecificLogic() {
                                     var container = location.split("_")[1].split("-")[0].replace(/\D/g, '').replace(/^0+/, '');
                                     var maxTemp = 78;
                                     var containerTemp = containerTempData[container].temp;
-                                    var issueType = currentMiner.issueType;
 
                                     var isOnline = currentMiner.connectivity === 'Online';
                                     var moreThanOneHour = upTime > minSoftRebootUpTime;
@@ -1502,9 +1507,9 @@ function OptiFleetSpecificLogic() {
 
                                     var hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
                                     var timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
-                                    var hardRebootAttempted = timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000; // 6 hours
+                                    var hardRebootAttempted = (timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000) || hardRebootAttemptedTime === true;
 
-                                    var hardRebootRecommendedTime = lastRebootTimes[minerID].hardRebootRecommended || false;
+                                    var hardRebootRecommended = lastRebootTimes[minerID].hardRebootRecommended || false;
                                     var timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
                                     var hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 6*60*60*1000; // 6 hours
                                     
@@ -1532,10 +1537,14 @@ function OptiFleetSpecificLogic() {
                                         lastRebootTimes[minerID].hardRebootRecommended = new Date().toISOString();
                                     } else if(hardRebootAttempted) {
 
-                                        if(timeSinceHardRebootAttempted >= min15*1000) {
-                                            rebootData[minerID].details.main = "Pull Recommened";
+                                        if(timeSinceHardRebootAttempted >= min15*1000 || hardRebootAttemptedTime === true) {
+                                            rebootData[minerID].details.main = "Pull Recommended";
                                             rebootData[minerID].details.sub = [];
-                                            rebootData[minerID].details.sub.push("15 Minutes has passed since hard reboot attempt.");
+                                            if(hardRebootAttemptedTime === true) {
+                                                rebootData[minerID].details.sub.push("Manually set should pull.");
+                                            } else {
+                                                rebootData[minerID].details.sub.push("15 Minutes has passed since hard reboot attempt.");
+                                            }
                                             rebootData[minerID].details.color = 'red';
                                         } else {
                                             rebootData[minerID].details.main = "Waiting on Hard Reboot Result";
@@ -1589,7 +1598,7 @@ function OptiFleetSpecificLogic() {
 
                                     // Add if it sent reboot or skipped
                                     if(autoreboot) {
-                                        var curRebootData = rebootData[currentMiner.id];
+                                        var curRebootData = rebootData[currentMiner.id] || {};
                                         function addExtraDetailToLog() {
                                             let details = curRebootData.details || {};
                                             const logEntry = document.createElement('div');
@@ -1890,7 +1899,7 @@ function OptiFleetSpecificLogic() {
 
 
                                                     // Add a button before the question mark that says Mark Fixed
-                                                    if(minerRebootData.details.main === "Hard Reboot Recommended" || minerRebootData.details.main === "Pull Recommened") {
+                                                    if(minerRebootData.details.main === "Hard Reboot Recommended" || minerRebootData.details.main === "Pull Recommended") {
                                                         const pullButton = document.createElement('button');
                                                         pullButton.textContent = 'Mark Fixed';
                                                         pullButton.style.cssText = `
@@ -1928,19 +1937,127 @@ function OptiFleetSpecificLogic() {
                                                             rebootData[minerID] = {};
                                                         }
                                                     }
+                                                    
+                                                    // Custom right click context menu when right clicking on the row
+                                                    row.addEventListener('contextmenu', (e) => {
+                                                        e.preventDefault();
+                                                        const contextMenu = document.createElement('div');
+                                                        contextMenu.style.cssText = `
+                                                            position: absolute;
+                                                            top: ${e.clientY}px;
+                                                            left: ${e.clientX}px;
+                                                            background-color: #333;
+                                                            color: white;
+                                                            padding: 10px;
+                                                            border-radius: 5px;
+                                                            z-index: 9999;
+                                                            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+                                                        `;
+                                                        document.body.appendChild(contextMenu);
+
+                                                        // If a context menu was already open, this should close it
+                                                        document.body.click();
+
+                                                        // Remove the context menu when clicking outside of it
+                                                        document.addEventListener('click', () => contextMenu.remove());
+
+                                                        const buttons = [
+                                                            { text: 'Set Should Hard Reboot', onClick: setShouldHardReboot },
+                                                            { text: 'Set Should Pull', onClick: setShouldPull },
+                                                            { text: 'Mark Fixed', onClick: markFixed }
+                                                        ];
+
+                                                        buttons.forEach(({ text, onClick }) => {
+                                                            const button = document.createElement('button');
+                                                            button.textContent = text;
+                                                            button.style.cssText = `
+                                                                display: block;
+                                                                width: 100%;
+                                                                background: none;
+                                                                color: white;
+                                                                border: none;
+                                                                cursor: pointer;
+                                                                padding: 10px;
+                                                                text-align: left;
+                                                                transition: background-color 0.3s;
+                                                            `;
+                                                            button.addEventListener('mouseenter', () => button.style.backgroundColor = '#555');
+                                                            button.addEventListener('mouseleave', () => button.style.backgroundColor = 'transparent');
+                                                            button.onclick = () => {
+                                                                onClick();
+                                                                contextMenu.remove();
+                                                            };
+                                                            contextMenu.appendChild(button);
+                                                        });
+                                                        
+                                                        function setShouldHardReboot() {
+                                                            lastRebootTimes[minerID].hardRebootAttempted = false;
+                                                            lastRebootTimes[minerID].hardRebootRecommended = new Date().toISOString();
+                                                            GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
+                                                            rebootData[minerID].details.main = "Hard Reboot Recommended";
+                                                            rebootData[minerID].details.sub = ["Manually set should hard reboot."];
+                                                            setUpRowData(row, minerID);
+                                                        }
+
+                                                        function setShouldPull() {
+                                                            lastRebootTimes[minerID].hardRebootAttempted = true;
+                                                            lastRebootTimes[minerID].hardRebootRecommended = false;
+
+                                                            rebootData[minerID].details.main = "Pull Recommended";
+                                                            rebootData[minerID].details.sub = ["Manually set should pull."];
+
+                                                            // make a copy of the details data
+                                                            lastRebootTimes[minerID].previousDetails = structuredClone(rebootData[minerID].details);
                                                             
+                                                            GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
+                                                            
+                                                            setUpRowData(row, minerID);
+                                                        }
+
+                                                        function markFixed() {
+                                                            lastRebootTimes[minerID] = {};
+                                                            GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
+                                                            rebootData[minerID].details.main = "Marked Fixed";
+                                                            rebootData[minerID].details.sub = ["Manually marked fixed.", "Erased stored reboot data."];
+                                                            setUpRowData(row, minerID);
+                                                            rebootData[minerID] = {};
+                                                        }
+                                                    });
                                                     
                                                     // Add hover event listeners to show/hide the full details
                                                     const questionMark = row.querySelector('td:last-child div[style*="position: relative;"]');
                                                     const tooltip = questionMark.querySelector('div[style*="display: none;"]');
-
+                                                    document.body.appendChild(tooltip);
                                                     questionMark.addEventListener('mouseenter', () => {
+                                                        const rect = questionMark.getBoundingClientRect();
+                                                        tooltip.style.left = `${rect.left + window.scrollX}px`;
+                                                        tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
                                                         tooltip.style.display = 'block';
                                                     });
 
-                                                    questionMark.addEventListener('mouseleave', () => {
-                                                        tooltip.style.display = 'none';
+                                                    
+                                                    // Start a timer to hide the tooltip after a delay if not hovered over
+                                                    let hideTooltipTimer;
+                                                    const hideTooltipWithDelay = () => {
+                                                        hideTooltipTimer = setTimeout(() => {
+                                                            tooltip.style.display = 'none';
+                                                        }, 100);
+                                                    };
+
+                                                    tooltip.style.display = 'none';
+
+                                                    // Clear the timer if the tooltip or question mark is hovered over again
+                                                    questionMark.addEventListener('mouseenter', () => {
+                                                        clearTimeout(hideTooltipTimer);
                                                     });
+
+                                                    tooltip.addEventListener('mouseenter', () => {
+                                                        clearTimeout(hideTooltipTimer);
+                                                    });
+
+                                                    // Start the timer when the mouse leaves the tooltip or question mark
+                                                    questionMark.addEventListener('mouseleave', hideTooltipWithDelay);
+                                                    tooltip.addEventListener('mouseleave', hideTooltipWithDelay);
                                                 }
 
                                                 var showSkipped = true;
@@ -2234,10 +2351,13 @@ function OptiFleetSpecificLogic() {
                                                             $('#minerTable tbody tr').each(function() {
                                                                 // If the row isn't hidden via display: none, group it
                                                                 if ($(this).css('display') !== 'none') {
-                                                                    let container = $(this).find('td:eq(1)').text().split('-')[0].substring(1);
+                                                                    let container = `Container ` + $(this).find('td:eq(1)').text().split('-')[0].substring(1);
+                                                                    if (!/\d/.test(container)) {
+                                                                        container = "Unknown";
+                                                                    }
                                                                     if (container !== currentContainer) {
                                                                         currentContainer = container;
-                                                                        containerGroup = $('<tr class="container-group"><td colspan="4" style="text-align: left; padding-left: 10px; background-color: #444947; color: white; height: 20px !important; padding: 5px; margin: 0px;">Container ' + container + '</td></tr>');
+                                                                        containerGroup = $('<tr class="container-group"><td colspan="4" style="text-align: left; padding-left: 10px; background-color: #444947; color: white; height: 20px !important; padding: 5px; margin: 0px;">' + container + '</td></tr>');
                                                                         $(this).before(containerGroup);
                                                                     }
                                                                 }
@@ -3108,4 +3228,587 @@ if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
 
         removeToastContainer();
     });
+}
+
+// See if the URL likly contains a IP address
+const ipRegex = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
+const ipURLMatch = currentUrl.match(ipRegex);
+
+// Return if the URL doesn't match the IP regex
+if (ipURLMatch) {
+    function adjustLayout() {
+        const homePage = document.getElementById('homePage');
+        if (homePage) {
+            // At certain zoom levels the homePage seemingly disappears, going down beneath the whole page
+            // This is a workaround to fix that
+            homePage.style.display = 'block';
+            homePage.style.position = 'absolute';
+            homePage.style.top = '0';
+            homePage.style.right = '0';
+
+            // Get the width left for the homePage based on how much layout-l fl takes up
+            const layoutL = document.querySelector('.layout-l');
+            if (layoutL) {
+                const layoutLWidth = layoutL.offsetWidth;
+                const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+                homePage.style.width = `calc(100% - ${layoutLWidth+scrollBarWidth}px)`;
+                
+                // find head clearfix and set the width to the same as homePage
+                const headClearfix = document.querySelector('.head.clearfix');
+                if (headClearfix) {
+                    headClearfix.style.width = homePage.style.width;
+                } else {
+                    console.error('Head clearfix not found');
+                }
+            }
+        }
+    }  
+
+    // Function to check the current URL
+    var lastRunTime = 0;
+    function handleFooter() {
+        // Check if the last run was less than 1 second ago
+        if (Date.now() - lastRunTime < 1000) {
+            return;
+        }
+        lastRunTime = Date.now();
+
+        // Locate the footer element
+        const footer = document.querySelector('.footer.clearfix');
+
+        // Locate the log content element
+        const logContent = document.querySelector('.log-content');
+
+        // Locate main-content
+        const mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.style.paddingBottom = '0';
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.attributeName === 'style') {
+                        const currentPadding = mainContent.style.paddingBottom;
+                        if (currentPadding !== '0px') {
+                            mainContent.style.paddingBottom = '0';
+                        }
+                    }
+                    // Run the footer handling logic on any change
+                    handleFooter();
+                });
+            });
+
+            observer.observe(mainContent, { attributes: true });
+        } else {
+            console.error('Main content element not found');
+        }
+
+        function removeOldErrorTab() {
+            // If it found the error tab, remove it
+            const oldErrorTab = document.querySelector('[data-id="errors"]');
+            if (oldErrorTab) {
+                // Remove any inner elements
+                const errorSubMenu = document.querySelector('#errorSubMenu');
+                if (errorSubMenu) {
+                    errorSubMenu.remove();
+                }
+
+                oldErrorTab.remove();
+            }
+
+            // If found old error tab separator, remove it
+            const oldSeparator = document.querySelector('.separator');
+            if (oldSeparator) {
+                oldSeparator.remove();
+            }
+        }
+
+        // Check if both elements are found
+        if (footer && logContent) {
+
+            // On tab change
+            const tabs = document.querySelectorAll('.tab span');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    removeOldErrorTab();
+                    setTimeout(handleFooter, 500);
+                });
+            });
+
+            // Make sure the log content is not overlayed over anything
+            logContent.style.position = 'relative';
+
+            // Remove the old footer clone if it exists
+            const oldFooterClone = document.querySelector('.footer-clone');
+            if (oldFooterClone) {
+                oldFooterClone.remove();
+            }
+
+            // Clone the footer element
+            const footerClone = footer.cloneNode(true);
+            footerClone.classList.add('footer-clone');
+
+            // Hide the original footer element
+            footer.style.display = 'none';
+
+            // Locate the target element to append the footer clone after
+            const targetElement = document.querySelector('#blogPage .tab');
+            if (targetElement) {
+                // Append the cloned footer element at the end of the target element's parent
+                targetElement.parentNode.appendChild(footerClone);
+            } else {
+                console.error('Target element not found');
+            }
+
+            // Make sure the footer clone is not overlayed over anything
+            footerClone.style.position = 'relative';
+
+            // Make the footer size to the log content size
+            footerClone.style.width = '100%';
+
+            // If we didn't already add the error tab, add it
+            const oldErrorTab = document.querySelector('[data-id="errors"]');
+            if (!oldErrorTab) {
+
+                const errorsToSearch = {
+                    'Voltage Abnormity': {
+                        icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
+                        start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
+                        end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed"],
+                    },
+                    'Temperature Overheat': {
+                        icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
+                        start: "asic temp too high",
+                        end: "stop_mining: asic temp too high",
+                    },
+                    'Bad Chain ID': {
+                        icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
+                        start: "bad chain id",
+                        end: "stop_mining: basic init failed!",
+                    },
+                    'Fan Speed Error': {
+                        icon: "https://media.discordapp.net/attachments/940214867778998283/1291656835048149014/download.png?ex=6700e4ab&is=66ff932b&hm=48bb47248a9a6843719256ffa07ff5c63f12a7ffe5612c769f11d85fd93baa71&=&format=webp&quality=lossless&width=150&height=150",
+                        start: "Error, fan lost,",
+                        end: "stop_mining: fan lost",
+                    },
+                    'Network Lost': {
+                        icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
+                        start: "WARN_NET_LOST",
+                        end: "ERROR_UNKOWN_STATUS: power off by NET_LOST",
+                    },
+                    
+                    'Bad Hashboard Chain': {
+                        icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
+                        start: ["get pll config err", "Chain[0]:"],
+                        end: ["stop_mining: soc init failed"],
+                        conditions: (text) => {
+                            return text.includes('only find');
+                        }
+                    },
+                    'SOC INIT Fail': {
+                        icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
+                        start: "ERROR_SOC_INIT",
+                        end: "ERROR_SOC_INIT",
+                        onlySeparate: true
+                    },
+                }
+
+                // Search through the log and locate errors
+                const logText = logContent.innerText;
+                var errorFound = [];
+
+                for (const error in errorsToSearch) {
+                    const errorData = errorsToSearch[error];
+                    var lastEndIndex = 0;
+                    var maxIterations = 100;
+                    while(maxIterations > -1) {
+                        maxIterations--;
+                        if (maxIterations <= 0) {
+                            console.error('Max iterations reached');
+                            break;
+                        }
+                        var startIndex = -1;
+                        if (Array.isArray(errorData.start)) {
+                            for (const start of errorData.start) {
+                                const curIndex = logText.indexOf(start, lastEndIndex);
+                                if (curIndex !== -1 && (startIndex === -1 || curIndex < startIndex)) {
+                                    startIndex = curIndex;
+                                }
+                            }
+                        } else {
+                            startIndex = logText.indexOf(errorData.start, lastEndIndex);
+                        }
+
+                        if (startIndex !== -1) {
+                            var endIndex = -1;
+                            if (Array.isArray(errorData.end)) {
+                                for (const end of errorData.end) {
+                                    const curIndex = logText.indexOf(end, startIndex);
+                                    if (curIndex !== -1 && (endIndex === -1 || curIndex > endIndex)) {
+                                        endIndex = curIndex;
+                                    }
+                                }
+                            } else {
+                                endIndex = logText.indexOf(errorData.end, startIndex);
+                            }
+
+                            // Set the start index to be back at the start of the line
+                            const lastLineBreak = logText.lastIndexOf('\n', startIndex);
+                            if (lastLineBreak !== -1) {
+                                startIndex = lastLineBreak + 1;
+                            }
+
+                            // Set the end index to be at the end of the line
+                            const nextLineBreak = logText.indexOf('\n', endIndex);
+                            if (nextLineBreak !== -1) {
+                                endIndex = nextLineBreak + 1;
+                            }
+
+                            // If the start index is after the end index, just do the one start line
+                            if(startIndex > endIndex) {
+                                endIndex = logText.indexOf('\n', startIndex) + 1;
+                            }
+
+                            // Check to see if any of the seperator texts exists between the start and end index
+                            const separatorTexts = ["start the http log"];
+                            const separatorIndex = separatorTexts.findIndex(separator => logText.substring(startIndex, endIndex).includes(separator));
+                            var setEndIndexAfter;
+                            if (endIndex !== -1 && separatorIndex === -1) {
+                                const errorText = logText.substring(startIndex, endIndex);
+
+                                // if onlySeparate is true, only add the error if it doesn't appear in another start/end as another error
+                                var errorTextAlreadyFound = false;
+                                if(errorData.onlySeparate) {
+                                    if(errorFound.some(err => err.text.includes(errorText))) {
+                                        console.log('Error text already found');
+                                        errorTextAlreadyFound = true;
+                                    }
+                                }
+
+                                // Check if the error text meets the conditions
+                                if (typeof errorData.conditions === 'function' ? errorData.conditions(errorText) : true && !errorTextAlreadyFound) {
+                                    errorFound.push({
+                                        name: error,
+                                        icon: errorData.icon,
+                                        text: errorText.trimEnd(),
+                                        start: startIndex,
+                                        end: endIndex
+                                    });
+                                } else {
+                                    console.log('Error text did not meet conditions');
+                                }
+                                setEndIndexAfter = endIndex;
+                            } else {
+                                setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
+                            }
+                        }
+
+                        if (startIndex === -1 || endIndex === -1 || lastEndIndex === endIndex) {
+                            console.log('No more errors found');
+                            break;
+                        }
+
+                        lastEndIndex = setEndIndexAfter;
+                    }
+                }
+
+                // Find all the times 'error' is mentioned in the log, if it isn't already found, mark is as an Unknown Error
+                const errorRegex = /error/gi;
+                const failRegex = /fail/gi;
+                const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
+                for (const match of errorMatches) {
+                    const matchIndex = match.index;
+                    if (!errorFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
+                        const start = logText.lastIndexOf('\n', matchIndex) + 1;
+                        const end = logText.indexOf('\n', matchIndex) + 1;
+                        const errorText = logText.substring(start, end);
+                        errorFound.push({
+                            name: 'Unknown Error',
+                            text: errorText.trimEnd(),
+                            start: start,
+                            end: end
+                        });
+                    }
+                }
+
+                // Create a new element to display the errors
+                if (errorFound.length > 0) {
+                    // Locate the menu element
+                    const menu = document.querySelector('.menu-t.menu');
+                    if (menu) {
+                        // Add line separator
+                        const separator = document.createElement('li');
+                        separator.style.borderBottom = '1px solid #ccc';
+                        separator.style.margin = '10px 0';
+                        separator.classList.add('separator');
+                        menu.appendChild(separator);
+
+                        // Create a new list item for errors
+                        const errorTab = document.createElement('li');
+                        errorTab.classList.add('item');
+                        errorTab.setAttribute('data-id', 'errors');
+                        errorTab.innerHTML = '<i class="error-ico icon"></i> <span class="itm-name" data-locale="errors">Errors</span> <i class="drop-icon"></i>';
+
+                        // Check if errorTab is pressed
+                        errorTab.addEventListener('click', () => {
+                            setTimeout(adjustLayout, 0);
+                        });
+
+                        // Create a sub-menu for the errors
+                        const errorSubMenu = document.createElement('ul');
+                        errorSubMenu.classList.add('sub-menu', 'menu');
+                        errorSubMenu.id = 'errorSubMenu';
+                        
+                        // Find and replace the drop icon so it doesn't flip when the other sub-menu is opened
+                        const dropIcon = errorTab.querySelector('.drop-icon');
+                        if (dropIcon) {
+                            dropIcon.remove();
+
+                            const errorIcon = document.createElement('i');
+                            errorIcon.classList.add('icon');
+                            errorIcon.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=2760&format=png&color=FFFFFF)';
+                            errorIcon.style.width = '16px';
+                            errorIcon.style.height = '16px';
+                            errorIcon.style.display = 'inline-block';
+                            errorIcon.style.backgroundSize = 'contain';
+                            errorIcon.style.marginRight = '5px';
+                            errorTab.appendChild(errorIcon);
+                        }
+
+                        // Swap the left empty icon source with the error icon
+                        const errorIcon = errorTab.querySelector('.error-ico');
+                        if (errorIcon) {
+                            errorIcon.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=24552&format=png&color=FFFFFF)';
+                            
+                            errorIcon.style.display = 'inline-block';
+                            errorIcon.style.backgroundSize = 'contain';
+                            errorIcon.style.marginRight = '5px';
+                        }
+
+
+                        // Populate the sub-menu with error details
+                        errorFound.forEach((error, index) => {
+                            const errorItem = document.createElement('li');
+                            errorItem.classList.add('item');
+                            errorItem.setAttribute('data-id', `error-${index}`);
+                            errorItem.innerHTML = `<i class="error-detail-ico icon"></i> <span class="itm-name">${error.name}</span>`;
+                            errorItem.addEventListener('click', () => {
+                                // Check if the error element already exists
+                                const existingErrorElement = document.getElementById(`errorLogElement`);
+                                if (existingErrorElement) {
+                                    existingErrorElement.remove();
+                                    
+                                    // Remove any children of the log content
+                                    while (logContent.firstChild) {
+                                        logContent.removeChild(logContent.firstChild);
+                                    }
+
+                                    // Re-add the original log content
+                                    logContent.textContent = logText;
+                                }
+
+                                // Create a new element to highlight the error
+                                const errorElement = document.createElement('span');
+                                errorElement.style.backgroundColor = '#ffcccc';
+                                errorElement.style.color = 'black';
+                                errorElement.style.width = '100%';
+                                errorElement.style.display = 'block';
+
+                                errorElement.setAttribute('data-original-text', error.text);
+                                errorElement.textContent = error.text;
+                                errorElement.setAttribute('data-original-text', error.text);
+
+                                errorElement.id = `errorLogElement`;
+
+                                // In bottom right corner add a copy button
+                                const copyButton = document.createElement('button');
+                                copyButton.textContent = 'Copy';
+                                copyButton.style.position = 'absolute';
+                                copyButton.style.bottom = '0';
+                                copyButton.style.right = '0';
+                                copyButton.style.backgroundColor = 'transparent';
+                                copyButton.style.border = 'none';
+                                copyButton.style.color = 'black';
+                                copyButton.style.cursor = 'pointer';
+                                copyButton.style.padding = '5px';
+                                copyButton.style.fontSize = '12px';
+                                copyButton.style.fontWeight = 'bold';
+                                copyButton.style.zIndex = '1';
+                                copyButton.addEventListener('click', () => {
+                                    // Copy the error text to the clipboard
+                                    if (navigator.clipboard) {
+                                        navigator.clipboard.writeText(error.text).then(() => {
+                                            console.log('Text copied to clipboard');
+                                        }).catch(err => {
+                                            console.error('Failed to copy text: ', err);
+                                        });
+                                    } else {
+                                        // Fallback method for older browsers
+                                        const textArea = document.createElement('textarea');
+                                        textArea.value = error.text;
+                                        document.body.appendChild(textArea);
+                                        textArea.select();
+                                        try {
+                                            document.execCommand('copy');
+                                            console.log('Text copied to clipboard');
+                                        } catch (err) {
+                                            console.error('Failed to copy text: ', err);
+                                        }
+                                        document.body.removeChild(textArea);
+                                    }
+
+                                    // Change the button text to copied
+                                    copyButton.textContent = 'Copied!';
+                                    setTimeout(() => {
+                                        copyButton.textContent = 'Copy';
+                                    }, 1000);
+                                });
+                                
+                                // Add as child of error element
+                                errorElement.style.position = 'relative'; // Ensure the errorElement is positioned relative
+                                errorElement.appendChild(copyButton);
+
+                                // While hovering over the error element, show the copy button
+                                errorElement.addEventListener('mouseover', () => {
+                                    copyButton.style.display = 'block';
+                                });
+
+                                errorElement.addEventListener('mouseout', () => {
+                                    copyButton.style.display = 'none';
+                                });
+
+                                // When hover, change the copy button color
+                                copyButton.addEventListener('mouseover', () => {
+                                    copyButton.style.color = 'green';
+                                });
+
+                                copyButton.addEventListener('mouseout', () => {
+                                    copyButton.style.color = 'black';
+                                });
+
+                                // Replace the error text in the log with the highlighted version
+                                const logTextNode = logContent.childNodes[0];
+                                const beforeErrorText = logTextNode.textContent.substring(0, error.start);
+                                const afterErrorText = logTextNode.textContent.substring(error.end);
+
+                                logTextNode.textContent = beforeErrorText;
+                                logContent.insertBefore(errorElement, logTextNode.nextSibling);
+                                logContent.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
+
+                                // Scroll to the highlighted error
+                                errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            });
+                            errorSubMenu.appendChild(errorItem);
+
+                            // Set the icon for the error <i class="error-detail-ico icon"></i>
+                            const errorDetailIcon = errorItem.querySelector('.error-detail-ico');
+                            if (errorDetailIcon) {
+                                errorDetailIcon.style.backgroundImage = error.icon !== undefined ? `url(${error.icon})` : 'url(https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF)';
+                                errorDetailIcon.style.display = 'inline-block';
+                                errorDetailIcon.style.backgroundSize = 'contain';
+                                errorDetailIcon.style.marginRight = '5px';
+                            }
+                            // Create an info icon to the right that will show the error text
+                            const infoIcon = document.createElement('div');
+                            infoIcon.style.width = '14px';
+                            infoIcon.style.height = '14px';
+                            infoIcon.style.borderRadius = '50%';
+                            infoIcon.style.backgroundColor = '#0078d4';
+                            infoIcon.style.color = 'white';
+                            infoIcon.style.textAlign = 'center';
+                            infoIcon.style.lineHeight = '14px';
+                            infoIcon.style.fontSize = '8px';
+                            infoIcon.style.border = '1px solid black';
+                            infoIcon.style.fontWeight = 'bold';
+                            infoIcon.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
+                            infoIcon.style.cursor = 'pointer';
+                            infoIcon.style.position = 'relative';
+                            infoIcon.style.float = 'right';
+                            infoIcon.textContent = 'i';
+                                                        
+                            // Create the tooltip
+                            const tooltip = document.createElement('div');
+                            tooltip.style.display = 'none';
+                            tooltip.style.position = 'absolute';
+                            tooltip.style.backgroundColor = '#444947';
+                            tooltip.style.color = 'white';
+                            tooltip.style.padding = '5px';
+                            tooltip.style.borderRadius = '5px';
+                            tooltip.style.zIndex = '9999';
+                            tooltip.style.whiteSpace = 'pre-wrap'; // Use pre-wrap to preserve newlines
+                            tooltip.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.5)';
+                            tooltip.textContent = error.text;
+                            document.body.appendChild(tooltip);
+
+                            // Position the tooltip relative to the infoIcon
+                            infoIcon.addEventListener('mouseenter', () => {
+                                const rect = infoIcon.getBoundingClientRect();
+                                tooltip.style.left = `${rect.left + window.scrollX}px`;
+                                tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
+                                tooltip.style.display = 'block';
+                            });
+
+                            infoIcon.addEventListener('mouseleave', () => {
+                                tooltip.style.display = 'none';
+                            });
+
+                            // Position the tooltip relative to the infoIcon
+                            infoIcon.addEventListener('mouseenter', () => {
+                                const rect = infoIcon.getBoundingClientRect();
+                                tooltip.style.left = `${rect.left + window.scrollX}px`;
+                                tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
+                                tooltip.style.display = 'block';
+                            });
+                            
+                            infoIcon.addEventListener('mouseleave', () => {
+                                tooltip.style.display = 'none';
+                            });
+
+                            // Append the info icon to the error item
+                            errorItem.appendChild(infoIcon);
+
+                        });
+
+                        // Append the error tab and sub-menu to the menu
+                        menu.appendChild(errorTab);
+                        menu.appendChild(errorSubMenu);
+
+                        // Add event listener to toggle the sub-menu
+                        errorTab.addEventListener('click', () => {
+                            const isVisible = errorSubMenu.style.display === 'block';
+                            errorSubMenu.style.display = isVisible ? 'none' : 'block';
+                        });
+
+                        console.log('Error tab and sub-menu added successfully');
+                    } else {
+                        console.error('Menu element not found');
+                    }
+                }
+            }
+
+            setTimeout(adjustLayout, 100);
+        } else {
+            if (!footer) {
+                //console.error('Footer element not found');
+            } else {
+                footer.style.display = 'block';
+                //console.log('Footer element shown');
+            }
+            if (!logContent) {
+                //console.error('Log content element not found');
+            }
+
+            removeOldErrorTab();
+        }
+    }
+
+    // Run the check on mutation
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.addedNodes.length > 0) {
+                setTimeout(handleFooter, 500);
+            }
+            adjustLayout();
+        });
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
 }
