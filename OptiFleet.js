@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.8
+// @version      2.0.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -2847,7 +2847,7 @@ function OptiFleetSpecificLogic() {
             }, 500);
         }
         createBreakerNumBox();
-    } else if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/Map")) {
+    } else if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/Map") || currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/List")) {
         function addDataBox(title, data, updateFunc, updateInterval) {
             // Add new m-box to m-grid-list
             const mGridList = document.querySelector('.m-grid-list');
@@ -2890,18 +2890,21 @@ function OptiFleetSpecificLogic() {
         }
 
         addDataBox("Temperature", "Loading...", (mBox, h3, p) => {
-            console.log('Updating temperature');
-            console.log(mBox);
             if (mBox) {
                 retrieveContainerTempData((containerTempData) => {
-                    const containerElement = document.querySelector('div.dropdown.clickable[onclick="$(`#zoneList`).data(\'kendoDropDownList\').toggle()"]');
+                    var containerElement = document.querySelector('div.dropdown.clickable[onclick="$(`#zoneList`).data(\'kendoDropDownList\').toggle()"]');
+                    if(!containerElement) {
+                        containerElement = document.querySelector('div.dropdown.clickable[onclick*="ddlZones"]');
+                    }
                     console.log(containerElement);
                     if (containerElement) {
                         const containerText = containerElement.textContent.trim();
                         // Make sure we in the minden site
                         if(containerText !== "zones" && !containerText.includes('Minden')) {
-                            mBox.remove();
+                            mBox.style.display = 'none';
                             return;
+                        } else {
+                            mBox.style.display = 'block';
                         }
                         try {
                             const containerNum = parseInt(containerText.split('_')[1].substring(1), 10); // Extract the number after 'C' and remove leading zeros
@@ -3379,13 +3382,8 @@ if (ipURLMatch) {
                         start: "asic temp too high",
                         end: "stop_mining: asic temp too high",
                     },
-                    'Bad Chain ID': {
-                        icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
-                        start: "bad chain id",
-                        end: "stop_mining: basic init failed!",
-                    },
                     'Fan Speed Error': {
-                        icon: "https://media.discordapp.net/attachments/940214867778998283/1291656835048149014/download.png?ex=6700e4ab&is=66ff932b&hm=48bb47248a9a6843719256ffa07ff5c63f12a7ffe5612c769f11d85fd93baa71&=&format=webp&quality=lossless&width=150&height=150",
+                        icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
                         start: "Error, fan lost,",
                         end: "stop_mining: fan lost",
                     },
@@ -3394,7 +3392,6 @@ if (ipURLMatch) {
                         start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
                         end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
                     },
-                    
                     'Bad Hashboard Chain': {
                         icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
                         start: ["get pll config err", "Chain[0]:"],
@@ -3408,6 +3405,11 @@ if (ipURLMatch) {
                         start: "ERROR_SOC_INIT",
                         end: "ERROR_SOC_INIT",
                         onlySeparate: true
+                    },
+                    'Bad Chain ID': {
+                        icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
+                        start: "bad chain id",
+                        end: "stop_mining: basic init failed!",
                     },
                     'Firmware Error': {
                         icon: "https://img.icons8.com/?size=100&id=hbCljOlfk4WP&format=png&color=FFFFFF",
