@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.1.2
+// @version      2.2.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1266,10 +1266,6 @@ function OptiFleetSpecificLogic() {
                     document.title = orginalTitle + ' | Retrieving Miner Data...';
                     retrieveContainerTempData((containerTempData) => {
                         retrieveIssueMiners((issueMiners) => {
-                            var issueMinersLookup = {};
-                            for (const miner of issueMiners) {
-                                issueMinersLookup[miner.id] = miner;
-                            }
 
                             // If we are in auto reboot mode, remove any miner that isn't completely non-hashing
                             if (autoreboot) {
@@ -1296,7 +1292,7 @@ function OptiFleetSpecificLogic() {
                             percentageText.style.fontSize = '1em';
                             scanningElement.appendChild(percentageText);
 
-                            var currentMiner = issueMiners[0];
+                            //var currentMiner = issueMiners[0];
                             var currentMinerIndex = 0;
                             var updatePercentageTextInteval = setInterval(() => {
                                 // Calculate the progress percentage
@@ -1306,7 +1302,7 @@ function OptiFleetSpecificLogic() {
 
                                 // Update the progress bar fill and percentage text
                                 progressFill.style.width = progressPercentage + '%';
-                                percentageText.textContent = Math.floor(progressPercentage) + '%' + ' (' + minersScanned + '/' + totalMiners + ')';
+                                percentageText.textContent = Math.floor(progressPercentage) + '% (' + minersScanned + '/' + totalMiners + ')';
 
                                 // Update the title
                                 document.title = orginalTitle + ' | ' + percentageText.textContent;
@@ -1343,7 +1339,8 @@ function OptiFleetSpecificLogic() {
 
                             // Loop through allMinersData and get the uptime
                             var firstScan = true;
-                            function parseMinerUpTimeData(minerID, timeFrame) {
+                            function parseMinerUpTimeData(currentMiner, timeFrame) {
+                                let minerID = currentMiner.id;
 
                                 // Add to progress log
                                 const logEntry = document.createElement('div');
@@ -1428,6 +1425,7 @@ function OptiFleetSpecificLogic() {
                                     rebootData[minerID].moreThanOneHour = moreThanOneHour;
                                     rebootData[minerID].isOnline = isOnline;
                                     rebootData[minerID].details = [];
+                                    rebootData[minerID].miner = currentMiner;
 
                                     function formatUptime(uptime) {
                                         var minutes = Math.floor(uptime % (60*60) / 60);
@@ -1462,7 +1460,16 @@ function OptiFleetSpecificLogic() {
                                                 pageInstance.post(`/RebootMiners`, { miners: minerIdList, bypassed: false })
                                                     .then(() => {
                                                         console.log("Rebooted Miner: " + minerID);
-                                                });
+                                                    })
+                                                    .catch((error) => {
+                                                        console.error("Failed to reboot Miner: " + minerID, error);
+                                                        
+                                                        // Remove the last reboot time if the reboot failed
+                                                        //lastRebootTimes[minerID].softRebootsTimes.pop();
+
+                                                        // Save the last reboot times
+                                                        //GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
+                                                    });
                                             } else {
                                                 rebootData[minerID].details.main = "Max Reboot Limit Reached";
                                                 rebootData[minerID].details.sub = [
@@ -1519,13 +1526,20 @@ function OptiFleetSpecificLogic() {
                                     var hardRebootRecommended = lastRebootTimes[minerID].hardRebootRecommended || false;
                                     var timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
                                     var hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 6*60*60*1000; // 6 hours
+
+                                    var manualHardReboot = lastRebootTimes[minerID].manualHardReboot || false;
                                     
-                                    if( !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || stuckAtZero || hardRebootRecommended)) {
+                                    if( !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || stuckAtZero || manualHardReboot)) {
                                         lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
 
                                         rebootData[minerID].details.main = "Hard Reboot Recommended";
                                         rebootData[minerID].details.sub = [];
                                         rebootData[minerID].details.color = 'orange';
+
+                                        if(manualHardReboot) {
+                                            rebootData[minerID].details.sub.push("Manually set should hard reboot.");
+                                        }
+
                                         if(isPastMinTime && notPastForgetTime) {
                                             rebootData[minerID].details.sub.push("15 Minutes has passed since last soft reboot and miner is still not hashing.");
                                         }
@@ -1538,6 +1552,10 @@ function OptiFleetSpecificLogic() {
                                             rebootData[minerID].details.sub.push("Miner is offline.");
                                         } else if(stuckAtZero) {
                                             rebootData[minerID].details.sub.push("Miner might be stuck at 0 uptime? This is not a perfect rigorous check.");
+                                            rebootData[minerID].details.sub.push("Current Uptime: " + formatUptime(upTime));
+
+                                            //let uptimeText = currentMiner.uptime;
+                                            //rebootData[minerID].details.sub.push("Current Uptime Raw: " + uptimeText);
                                         }
 
                                         // Save that a hard reboot was recommended
@@ -1635,7 +1653,7 @@ function OptiFleetSpecificLogic() {
                                         currentMinerIndex++;
                                         if (currentMinerIndex < Object.keys(issueMiners).length) {
                                             currentMiner = issueMiners[currentMinerIndex];
-                                            parseMinerUpTimeData(currentMiner.id, timeFrame);
+                                            parseMinerUpTimeData(currentMiner, timeFrame);
                                         }
                                     }
 
@@ -1658,7 +1676,7 @@ function OptiFleetSpecificLogic() {
                                             firstScan = false;
 
                                             // Create table for the miners that should be hard rebooted
-                                            const cols = ['Miner', 'Slot ID & Breaker', 'Serial Number', "Scan Result"];
+                                            const cols = ['IP', 'Miner', 'Slot ID & Breaker', 'Serial Number', "Scan Result"];
                                             createPopUpTable(`Auto Reboot System`, cols, false, (popupResultElement) => {
 
                                                 const firstDiv = popupResultElement.querySelector('div');
@@ -1671,7 +1689,7 @@ function OptiFleetSpecificLogic() {
                                                 refreshContainer.style.alignItems = 'center';
                                                 firstDiv.appendChild(refreshContainer);
 
-                                                // Add a "Refreshing in (35s)" text
+                                                // Add a "Refreshing in (60s)" text
                                                 let countdown = 60;
                                                 const refreshText = document.createElement('div');
                                                 refreshText.textContent = `Refreshing in (${countdown}s)`;
@@ -1774,11 +1792,11 @@ function OptiFleetSpecificLogic() {
                                                     this.style.backgroundColor = '#0078d4';
                                                 });
 
-                                                function setUpRowData(row, minerID) {
-                                                    const minerRebootData = rebootData[minerID];
-                                                    const currentMiner = issueMinersLookup[minerID];
-                                                    const model = currentMiner.modelName;
-                                                    const slotID = currentMiner.locationName;
+                                                function setUpRowData(row, currentMiner) {
+                                                    let minerID = currentMiner.id;
+                                                    let minerRebootData = rebootData[minerID];
+                                                    let model = currentMiner.modelName;
+                                                    let slotID = currentMiner.locationName;
 
                                                     var splitSlotID = slotID.split('-');
                                                     var containerID = splitSlotID[0].split('_')[1];
@@ -1789,15 +1807,20 @@ function OptiFleetSpecificLogic() {
                                                     var breakerNum = (rowNum-1)*rowWidth + colNum;
             
                                                     // Remakes the slot ID, but with added 0 padding
-                                                    const reconstructedSlotID = `${containerID}-${rackNum.toString().padStart(2, '0')}-${rowNum.toString().padStart(2, '0')}-${colNum.toString().padStart(2, '0')}`;
+                                                    let reconstructedSlotID = `${containerID}-${rackNum.toString().padStart(2, '0')}-${rowNum.toString().padStart(2, '0')}-${colNum.toString().padStart(2, '0')}`;
 
                                                     // Adds together the slot ID and breaker number, where the breaker number is padded with spaces
-                                                    const paddedSlotIDBreaker = `${reconstructedSlotID}  [${breakerNum.toString().padStart(2, '0')}]`;
+                                                    let paddedSlotIDBreaker = `${reconstructedSlotID}  [${breakerNum.toString().padStart(2, '0')}]`;
 
-                                                    const minerSerialNumber = currentMiner.serialNumber;
+                                                    let minerSerialNumber = currentMiner.serialNumber;
                                                     minerRebootData.details.main = minerRebootData.details.main || "ERROR";
                                                     minerRebootData.details.sub = minerRebootData.details.sub || ["Failed to get details!"];
+                                                    
+                                                    let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
                                                     row.innerHTML = `
+                                                        <td style="text-align: left; position: relative;">
+                                                            <a href="http://root:root@${currentMiner.ipAddress}/" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
+                                                        </td>
                                                         <td style="text-align: left; position: relative;">
                                                             <a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a>
                                                         </td>
@@ -1821,6 +1844,7 @@ function OptiFleetSpecificLogic() {
                                                     }
 
                                                     row.minerID = minerID;
+                                                    row.minerDataCopy = structuredClone(currentMiner);
 
                                                     // Add a button before the question mark that says Did Hard Reboot if details.main === "Hard Reboot Recommended"
                                                     if(minerRebootData.details.main === "Hard Reboot Recommended") {
@@ -1850,6 +1874,7 @@ function OptiFleetSpecificLogic() {
                                                         hardRebootButton.onclick = function() {
                                                             lastRebootTimes[minerID].hardRebootAttempted = new Date().toISOString();
                                                             lastRebootTimes[minerID].hardRebootRecommended = false;
+                                                            lastRebootTimes[minerID].manualHardReboot = false;
 
                                                             // make a copy of the details data
                                                             lastRebootTimes[minerID].previousDetails = structuredClone(rebootData[minerID].details);
@@ -1861,7 +1886,7 @@ function OptiFleetSpecificLogic() {
                                                             rebootData[minerID].details.main = "Waiting on Hard Reboot Result";
                                                             rebootData[minerID].details.sub = ["15 Minutes has not passed since hard reboot mark time."];
 
-                                                            setUpRowData(row, minerID);
+                                                            setUpRowData(row, currentMiner);
                                                         }
                                                     }
                                                     
@@ -1900,7 +1925,7 @@ function OptiFleetSpecificLogic() {
                                                             // Set the details to show what it was before the hard reboot mark
                                                             rebootData[minerID].details = structuredClone(lastRebootTimes[minerID].previousDetails);
 
-                                                            setUpRowData(row, minerID);
+                                                            setUpRowData(row, currentMiner);
                                                         }
                                                     }
 
@@ -1940,7 +1965,7 @@ function OptiFleetSpecificLogic() {
                                                             rebootData[minerID].details.main = "Marked Fixed";
                                                             rebootData[minerID].details.sub = ["Miner has been marked as fixed.", "Erased hard reboot mark time."];
 
-                                                            setUpRowData(row, minerID);
+                                                            setUpRowData(row, currentMiner);
                                                             rebootData[minerID] = {};
                                                         }
                                                     }
@@ -2000,15 +2025,17 @@ function OptiFleetSpecificLogic() {
                                                         function setShouldHardReboot() {
                                                             lastRebootTimes[minerID].hardRebootAttempted = false;
                                                             lastRebootTimes[minerID].hardRebootRecommended = new Date().toISOString();
+                                                            lastRebootTimes[minerID].manualHardReboot = true;
                                                             GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
                                                             rebootData[minerID].details.main = "Hard Reboot Recommended";
                                                             rebootData[minerID].details.sub = ["Manually set should hard reboot."];
-                                                            setUpRowData(row, minerID);
+                                                            setUpRowData(row, currentMiner);
                                                         }
 
                                                         function setShouldPull() {
                                                             lastRebootTimes[minerID].hardRebootAttempted = true;
                                                             lastRebootTimes[minerID].hardRebootRecommended = false;
+                                                            lastRebootTimes[minerID].manualHardReboot = false;
 
                                                             rebootData[minerID].details.main = "Pull Recommended";
                                                             rebootData[minerID].details.sub = ["Manually set should pull."];
@@ -2018,7 +2045,7 @@ function OptiFleetSpecificLogic() {
                                                             
                                                             GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
                                                             
-                                                            setUpRowData(row, minerID);
+                                                            setUpRowData(row, currentMiner);
                                                         }
 
                                                         function markFixed() {
@@ -2026,7 +2053,7 @@ function OptiFleetSpecificLogic() {
                                                             GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
                                                             rebootData[minerID].details.main = "Marked Fixed";
                                                             rebootData[minerID].details.sub = ["Manually marked fixed.", "Erased stored reboot data."];
-                                                            setUpRowData(row, minerID);
+                                                            setUpRowData(row, currentMiner);
                                                             rebootData[minerID] = {};
                                                         }
                                                     });
@@ -2036,10 +2063,16 @@ function OptiFleetSpecificLogic() {
                                                     const tooltip = questionMark.querySelector('div[style*="display: none;"]');
                                                     document.body.appendChild(tooltip);
                                                     questionMark.addEventListener('mouseenter', () => {
-                                                        const rect = questionMark.getBoundingClientRect();
-                                                        tooltip.style.left = `${rect.left + window.scrollX}px`;
-                                                        tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
                                                         tooltip.style.display = 'block';
+
+                                                        // Position the tooltip to the left of the question mark with the added width
+                                                        const questionMarkRect = questionMark.getBoundingClientRect();
+                                                        const tooltipRect = tooltip.getBoundingClientRect();
+                                                        tooltip.style.left = `${questionMarkRect.left - tooltipRect.width}px`;
+                                                        tooltip.style.right = 'auto';
+
+                                                        // Set top position to be the same as the question mark
+                                                        tooltip.style.top = `${questionMarkRect.top}px`;
                                                     });
 
                                                     
@@ -2085,11 +2118,12 @@ function OptiFleetSpecificLogic() {
                                                     });
 
                                                     // If the table is grouped, resort by Slot ID & Breaker
-                                                    var grouped = $('#minerTable').attr('data-grouped');
-                                                    if (grouped) {
+                                                    const slotIDBreakerIndex = Array.from(popupResultElement.querySelector('thead').querySelectorAll('th')).findIndex(th => th.textContent === 'Slot ID & Breaker');
+                                                    var grouped = $('#minerTable').attr('isGrouped');
+                                                    if (grouped === 'true') {
                                                         const table = $('#minerTable').DataTable();
                                                         orderType = reversed ? 'desc' : 'asc';
-                                                        table.order([1, orderType]).draw();
+                                                        table.order([slotIDBreakerIndex, orderType]).draw();
                                                     }
                                                 }
 
@@ -2118,32 +2152,84 @@ function OptiFleetSpecificLogic() {
                                                     rebootData = {};
 
                                                     retrieveIssueMiners((issueMiners) => {
-                                                        var issueMinersLookup = {};
-                                                        for (const miner of issueMiners) {
-                                                            //if(miner.serialNumber === "YNAHANCBCABJA023E") { continue; } //Used for testing
+                                                        // Only get the actual non hashing miners
+                                                        issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                                                        console.log("Refreshed issue miners:", issueMiners);
+
+                                                        let issueMinersLookup = {};
+                                                        issueMiners.forEach(miner => {
                                                             issueMinersLookup[miner.id] = miner;
-                                                        }
+                                                        });
+
+                                                        // Get what we're currently sorting by
+                                                        var orderColumn = $('#minerTable').attr('colIndex') || 0;
+                                                        var orderType = $('#minerTable').attr('orderType') || 'asc';
+                                                        var grouped = $('#minerTable').attr('isGrouped');
 
                                                         // Loop through the table and heighlight the miner we're currently on for 0.5 seconds
                                                         var currentRow = 0;
-                                                        const tableRows = popupResultElement.querySelectorAll('tbody tr');
+                                                        var tableRows = popupResultElement.querySelectorAll('tbody tr');
                                                         tableRows.forEach((row, index) => {
                                                             let minerID = row.minerID;
-                                                            currentMiner = issueMinersLookup[minerID];
-                                                            
-                                                            // Check the miner
-                                                            if(minerID && !currentMiner) {
+                                                            let currentMiner = issueMinersLookup[minerID];
+
+                                                            if(minerID) {
                                                                 rebootData[minerID] = rebootData[minerID] || {};
-                                                                rebootData[minerID].details = {};
-                                                                rebootData[minerID].details.main = "Successfully Hashing";
-                                                                rebootData[minerID].details.sub = ["Miner is now hashing again."];
-                                                                rebootData[minerID].details.color = '#218838';
-                                                                setUpRowData(row, minerID);
-                                                            } else if(currentMiner) {
-                                                                parseMinerUpTimeData(minerID, timeFrame);
-                                                                setUpRowData(row, minerID);
+                                                                rebootData[minerID].details = rebootData[minerID].details || {};
+                                                            }
+                                                            
+                                                            // If the miner had been set to have a hard reboot recommend, then let's skip the check as we want to wait until the user marks that it has been hard rebooted
+                                                            if(minerID && rebootData[minerID].details.main !== "Hard Reboot Recommended") {
+                                                                // Check the miner (If the currentMiner is no longer valid, then we can assume it is hashing again since it is no longer in the issue miners)
+                                                                if(!currentMiner) {
+                                                                    let rowMinerDataCopy = row.minerDataCopy;
+                                                                    rebootData[minerID] = rebootData[minerID] || {};
+                                                                    rebootData[minerID].details = {};
+                                                                    rebootData[minerID].details.main = "Successfully Hashing";
+                                                                    rebootData[minerID].details.sub = ["Miner is now hashing again."];
+                                                                    rebootData[minerID].details.color = '#218838';
+                                                                    setUpRowData(row, rowMinerDataCopy);
+                                                                } else if(currentMiner) {
+                                                                    parseMinerUpTimeData(currentMiner, timeFrame);
+                                                                    setUpRowData(row, currentMiner);
+                                                                }
                                                             }
                                                         });
+
+                                                        
+                                                        // Find any new miners in the issueMiners that are not in the table
+                                                        console.log("Checking for new miners to add to the table...");
+                                                        for (const miner of issueMiners) {
+                                                            if (miner === undefined || miner === null || !miner.id) {
+                                                                continue;
+                                                            }
+
+                                                            var found = false;
+                                                            tableRows = popupResultElement.querySelectorAll('tbody tr');
+                                                            tableRows.forEach((row, index) => {
+                                                                let minerID = row.minerID;
+                                                                if(minerID === miner.id) {
+                                                                    found = true;
+                                                                }
+                                                            });
+                                                            console.log("Found:", found);
+
+                                                            if (!found) {
+                                                                console.log('Adding new miner to the table:', miner.id);
+                                                                parseMinerUpTimeData(miner, timeFrame);
+                                                                rebootData[miner.id] = rebootData[miner.id] || {};
+                                                                rebootData[miner.id].details = rebootData[miner.id].details || {};
+                                                                rebootData[miner.id].details.sub = rebootData[miner.id].details.sub || [];
+                                                                rebootData[miner.id].details.sub.push("Just added to the table.");
+                                                                var newRow = document.createElement('tr');
+                                                                popupResultElement.querySelector('tbody').appendChild(newRow);
+                                                                setUpRowData(newRow, miner);
+
+
+                                                                // draw the row
+                                                                $('#minerTable').DataTable().row.add(newRow).draw();
+                                                            }
+                                                        }
 
                                                         toggleSkippedMiners();
 
@@ -2152,6 +2238,30 @@ function OptiFleetSpecificLogic() {
 
                                                         // Delete the invisible div to allow the user to click the table again
                                                         invisibleDiv.remove();
+
+                                                        // Set the scan text to say "Refreshing in (60s)"
+                                                        refreshText.textContent = `Refreshing in (${countdown}s)`;
+
+                                                        // Set the scanned miners text
+                                                        let newTotal = 0;
+                                                        tableRows.forEach((row, index) => {
+                                                            if(row.minerID) {
+                                                                newTotal++;
+                                                            }
+                                                        });
+                                                        percentageText.textContent = '100% (' + newTotal + '/' + newTotal + ')';
+
+                                                        // Resort the table
+                                                        if (grouped === "false") {
+                                                            console.log("Resorting table...");
+                                                            $('#minerTable').DataTable().order([orderColumn, orderType]).draw();
+                                                        }
+
+                                                        // Save these back, since it weirdly gets messed up...?
+                                                        $('#minerTable').attr('colIndex', orderColumn);
+                                                        $('#minerTable').attr('orderType', orderType);
+                                                        $('#minerTable').attr('isGrouped', grouped);
+                                                        console.log("Refreshed table with order:", orderColumn, orderType);
                                                     });
                                                 };
 
@@ -2305,7 +2415,8 @@ function OptiFleetSpecificLogic() {
                                                         const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
                                                         const row = document.createElement('tr');
 
-                                                        setUpRowData(row, minerID);
+                                                        let curMiner = rebootData[minerID].miner;
+                                                        setUpRowData(row, curMiner);
                                                         popupTableBody.appendChild(row);
                                                     }
                                                 });
@@ -2346,38 +2457,46 @@ function OptiFleetSpecificLogic() {
                                                     });
 
                                                     // Sort Scan Result column
-                                                    $('#minerTable').DataTable().order([3, 'asc']).draw();
+                                                    $('#minerTable').DataTable().order([4, 'asc']).draw();
 
                                                     // Attach event listener for column sorting
                                                     $('#minerTable').DataTable().on('order.dt', function() {
+
+                                                        $('#minerTable').attr('colIndex', $('#minerTable').DataTable().order()[0][0]);
+                                                        $('#minerTable').attr('orderType', $('#minerTable').DataTable().order()[0][1]);
+                                                        console.log("Order:", $('#minerTable').DataTable().order()[0][0], $('#minerTable').DataTable().order()[0][1]);
+
                                                         // If the table is sorted by the "Slot ID & Breaker" column, group the rows by container
-                                                        if ($('#minerTable').DataTable().order()[0][0] === 1) {
+                                                        const slotIDBreakerIndex = Array.from($('#minerTable th')).findIndex(th => th.textContent.includes('Slot ID & Breaker'));
+                                                        console.log("Slot ID Breaker Index:", slotIDBreakerIndex);
+                                                        if ($('#minerTable').DataTable().order()[0][0] === slotIDBreakerIndex) {
                                                             // Group rows by container
                                                             let currentContainer = null;
                                                             let containerGroup = null;
                                                             $('#minerTable tbody tr').each(function() {
                                                                 // If the row isn't hidden via display: none, group it
                                                                 if ($(this).css('display') !== 'none') {
-                                                                    let container = `Container ` + $(this).find('td:eq(1)').text().split('-')[0].substring(1);
+                                                                    let container = `Container ` + $(this).find(`td:eq(${slotIDBreakerIndex})`).text().split('-')[0].substring(1);
                                                                     if (!/\d/.test(container)) {
                                                                         container = "Unknown";
                                                                     }
                                                                     if (container !== currentContainer) {
                                                                         currentContainer = container;
-                                                                        containerGroup = $('<tr class="container-group"><td colspan="4" style="text-align: left; padding-left: 10px; background-color: #444947; color: white; height: 20px !important; padding: 5px; margin: 0px;">' + container + '</td></tr>');
+                                                                        const colCount = $('#minerTable thead tr th').length;
+                                                                        containerGroup = $('<tr class="container-group"><td colspan="' + colCount + '" style="text-align: left; padding-left: 10px; background-color: #444947; color: white; height: 20px !important; padding: 5px; margin: 0px;">' + container + '</td></tr>');
                                                                         $(this).before(containerGroup);
                                                                     }
                                                                 }
                                                             });
 
                                                             // Set that the table is grouped
-                                                            $('#minerTable').attr('data-grouped', 'true');
+                                                            $('#minerTable').attr('isGrouped', 'true');
                                                         } else {
                                                             // Remove the container groups
                                                             $('.container-group').remove();
 
                                                             // Set that the table is not grouped
-                                                            $('#minerTable').attr('data-grouped', 'false');
+                                                            $('#minerTable').attr('isGrouped', 'false');
                                                         }
                                                     });
 
@@ -2452,6 +2571,7 @@ function OptiFleetSpecificLogic() {
                                             minersScanData[minerID].downTimes = minerDownTimes;
                                             minersScanData[minerID].overallHashRate = overallHashRate;
                                             minersScanData[minerID].onlineHashRate = onlineHashRate;
+                                            minersScanData[minerID].miner = currentMiner;
                 
                                             // Run next miner
                                             runNextMiner();
@@ -2462,7 +2582,7 @@ function OptiFleetSpecificLogic() {
                                     runNextMiner();
                                 }
                             }
-                            parseMinerUpTimeData(currentMiner.id, timeFrame);
+                            parseMinerUpTimeData(issueMiners[0], timeFrame);
 
                             const waitTillDone = setInterval(() => {
                                 if (Object.keys(minersScanData).length === Object.keys(issueMiners).length) {
@@ -2474,7 +2594,7 @@ function OptiFleetSpecificLogic() {
                                     clearInterval(scanningInterval);
 
                                     // Create a popup element for showing the results
-                                    const cols = ['Miner', 'Offline Count', 'Overall Hash Efficiency', 'Online Hash Efficiency', 'Slot ID', 'Serial Number'];
+                                    const cols = ['IP', 'Miner', 'Offline Count', 'Overall Hash Efficiency', 'Online Hash Efficiency', 'Slot ID', 'Serial Number'];
                                     createPopUpTable(`Offline Count List (${scanTimeFrameText})`, cols, false, (popupResultElement) => {
 
                                         // Add the close button
@@ -2517,8 +2637,9 @@ function OptiFleetSpecificLogic() {
                                         // Add the miner data to the table body
                                         const popupTableBody = popupResultElement.querySelector('tbody');
                                         Object.keys(minersScanData).forEach(minerID => {
-                                            const currentMiner = issueMinersLookup[minerID];
+                                            const currentMiner =  minersScanData[minerID].miner;
                                             const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                                            const minerIP = currentMiner.ipAddress;
                                             const row = document.createElement('tr');
                                             const model = currentMiner.modelName;
                                             const rebootCount = minersScanData[minerID].downTimes;
@@ -2527,6 +2648,7 @@ function OptiFleetSpecificLogic() {
                                             const minerSlotID = currentMiner.locationName;
                                             const minerSerialNumber = currentMiner.serialNumber;
                                             row.innerHTML = `
+                                                <td style="text-align: left;"><a href="http://root:root@${minerIP}/" target="_blank" style="color: white;">${minerIP}</a></td>
                                                 <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a></td>
                                                 <td style="text-align: left;">${rebootCount}</td>
                                                 <td style="text-align: left;">${overallHashRate}%</td>
