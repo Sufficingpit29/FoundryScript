@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.9
+// @version      2.1.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -471,8 +471,6 @@ function OptiFleetSpecificLogic() {
 
         var config = { attributes: true, childList: true, characterData: true };
 
-
-
         const observerInterval = setInterval(() => {
             const autoRefreshChip = document.querySelector('m-chip[c-id="siteOverview_autoRefreshChip"]');
             if (autoRefreshChip) {
@@ -675,7 +673,12 @@ function OptiFleetSpecificLogic() {
 
             copyTextToClipboard(textToCopy);
             //window.open("https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3", 'Paste Data').focus();
-            window.open(urlLookupExcel[type], 'Paste Data').focus();
+            if(type === "Bitmain") {
+                window.open("https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3", 'Looking').focus();
+            } else {
+                window.open(urlLookupExcel[type], 'Paste Data').focus();
+            }
+            
         }
 
         function createDataInputPopup() {
@@ -711,6 +714,10 @@ function OptiFleetSpecificLogic() {
                     </form>
                 </div>
             `;
+
+            // Hide the Edit Links button for the meantime
+            popupElement.querySelector('#linksBtn').style.display = 'none';
+
             // Function to submit Issue and Log
             function submitIssueLog() {
                 const issue = document.getElementById("issue").value;
@@ -2973,45 +2980,167 @@ if(currentUrl.includes("https://foundryoptifleet.com")) {
 
 if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
     // If there is a taskName/Notes in storage, then create a overlay on the right side of the page that says Go to Planner
-    const taskName = GM_SuperValue.get("taskName", "");
+    let taskName = GM_SuperValue.get("taskName", "");
     const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
+    const minerType = detailsData['type'];
 
     if (taskName !== "") {
-        const overlay = document.createElement('div');
-        overlay.style.position = 'fixed';
-        overlay.style.top = '20px';
-        overlay.style.right = '20px';
-        overlay.style.backgroundColor = '#f2f2f2';
-        overlay.style.padding = '10px';
-        overlay.style.borderRadius = '5px';
-        overlay.style.color = '#333';
-        overlay.style.fontSize = '14px';
-        overlay.style.fontWeight = 'bold';
-        overlay.style.outline = '2px solid #333'; // Add outline
-        let plannerUrl = urlLookupPlanner[detailsData['type']];
-        overlay.innerHTML = `
-            <p>Model: ${detailsData['model']}</p>
-            <p>Serial Number: ${detailsData['serialNumber']}</p>
-            <p>Slot ID: ${detailsData['facility']}-${detailsData['locationID']}</p>
-            <button style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
-            <a href="${plannerUrl}" style="color: #fff; text-decoration: none;">Go to Planner</a>
-            </button>
-            <button id="cancelButton" style="background-color: red; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
-            Cancel
-            </button>
-        `;
-        // Make sure it is always layered on top
-        overlay.style.zIndex = '9999';
-        document.body.appendChild(overlay);
+        // When the page is loaded
+        window.addEventListener('load', () => {
 
-        const cancelButton = document.getElementById('cancelButton');
-        cancelButton.addEventListener('click', () => {
-            GM_SuperValue.set('taskName', '');
-            GM_SuperValue.set('taskNotes', '');
-            GM_SuperValue.set('taskComment', '');
-            GM_SuperValue.set('detailsData', {});
-            document.body.removeChild(overlay);
-        });
+            // If the minerType is contained in the URL, then we probably opened up the right excel sheet
+            if(currentUrl.toLowerCase().includes(minerType.toLowerCase())) {
+                console.log("Opened the right excel sheet");
+                GM_SuperValue.set('openedExcel', true);
+            }
+
+            setTimeout(() => {
+                const overlay = document.createElement('div');
+                overlay.style.position = 'fixed';
+                overlay.style.top = '20px';
+                overlay.style.right = '20px';
+                overlay.style.backgroundColor = '#f2f2f2';
+                overlay.style.padding = '10px';
+                overlay.style.borderRadius = '5px';
+                overlay.style.color = '#333';
+                overlay.style.fontSize = '14px';
+                overlay.style.fontWeight = 'bold';
+                overlay.style.outline = '2px solid #333'; // Add outline
+                let plannerUrl = urlLookupPlanner[detailsData['type']];
+                overlay.innerHTML = `
+                    <p>Model: ${detailsData['model']}</p>
+                    <p>Serial Number: ${detailsData['serialNumber']}</p>
+                    <p>Slot ID: ${detailsData['facility']}-${detailsData['locationID']}</p>
+                    <button style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
+                    <a href="${plannerUrl}" style="color: #fff; text-decoration: none;">Go to Planner</a>
+                    </button>
+                    <button id="cancelButton" style="background-color: red; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
+                    Cancel
+                    </button>
+                `;
+                // Make sure it is always layered on top
+                overlay.style.zIndex = '9999';
+                document.body.appendChild(overlay);
+
+                const cancelButton = document.getElementById('cancelButton');
+                cancelButton.addEventListener('click', () => {
+                    GM_SuperValue.set('taskName', '');
+                    GM_SuperValue.set('taskNotes', '');
+                    GM_SuperValue.set('taskComment', '');
+                    GM_SuperValue.set('detailsData', {});
+                    document.body.removeChild(overlay);
+
+                    // Close the window
+                    window.close();
+                });
+
+                // If the page is the planner page, then fill in the task name and notes
+                if (currentUrl.includes("/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3")) {
+                    // Select the parent element
+                    const parentElement = document.querySelector('.ms-List-page');
+
+                    // Get all inner elements with the specified attributes
+                    const innerElements = parentElement.querySelectorAll('div[data-is-focusable="true"][role="row"][data-is-draggable="false"][draggable="false"]');
+
+                    // Initialize an array to store elements with the required aria-label
+                    const matchingElements = [];
+                    var backUpElement = null;
+
+                    // Loop through each inner element and check the aria-label
+                    innerElements.forEach(element => {
+                        const ariaLabel = element.getAttribute('aria-label').toLowerCase();
+                        if (ariaLabel.includes(minerType.toLowerCase()) && ariaLabel.includes('minden') && ariaLabel.includes('gv')) {
+                            // Extract the number between "bitmain" and "minden"
+                            const match = ariaLabel.match(new RegExp(`${minerType.toLowerCase()}\\s*(\\d+)\\s*minden`, 'i'));
+                            if (match) {
+                                const number = parseInt(match[1], 10);
+                                matchingElements.push({ element, number });
+                            }
+                        }
+
+                        if (ariaLabel.includes(minerType.toLowerCase())) {
+                            backUpElement = element;
+                        }
+                    });
+
+                    // Find the element with the largest number
+                    let largestElement = null;
+                    let largestNumber = 0;
+
+                    matchingElements.forEach(item => {
+                        if (item.number > largestNumber) {
+                            largestNumber = item.number;
+                            largestElement = item.element;
+                        }
+                    });
+
+                    if(largestElement === null) {
+                        largestElement = backUpElement;
+                    }
+
+                    // Click the largest element link (find the button with the role 'link')
+                    const linkButton = largestElement.querySelector('button[role="link"]');
+                    if (linkButton) {
+                        // Scroll to the element
+                        linkButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                        // Highlight the element
+                        largestElement.style.backgroundColor = 'yellow';
+
+                        setTimeout(() => {
+                            // Instant scroll, in case the smooth scroll didn't make it/got interrupted
+                            linkButton.scrollIntoView({ behavior: 'auto', block: 'center' });
+
+                            // Simulate a click on the link button
+                            GM_SuperValue.set('openedExcel', false);
+                            linkButton.click();
+                            
+
+                            // Inteval checking if taskname is empty to close the page
+                            const interval = setInterval(() => {
+                                let excelOpened = GM_SuperValue.get('openedExcel', false);
+                                taskName = GM_SuperValue.get("taskName", "");
+                                if (taskName === "" || excelOpened) {
+                                    window.close();
+                                }
+                            }, 100);
+
+                            // Simulate a right click and copy the link
+                            //linkButton.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+
+                            // Another timer which adds to overlay that it failed to open and that you need to allow 'pop ups'
+                            setTimeout(() => {
+                                const overlay2 = document.createElement('div');
+                                overlay2.style.position = 'fixed';
+                                overlay2.style.top = '20px';
+                                overlay2.style.right = '20px';
+                                overlay2.style.backgroundColor = '#f2f2f2';
+                                overlay2.style.padding = '10px';
+                                overlay2.style.borderRadius = '5px';
+                                overlay2.style.color = '#333';
+                                overlay2.style.fontSize = '14px';
+                                overlay2.style.fontWeight = 'bold';
+                                overlay2.style.outline = '2px solid #333'; // Add outline
+                                overlay2.innerHTML = `
+                                    <p>Failed to open the link.</p>
+                                    <p>Please set 'Always allow pop-ups and redirects' on this page.</p>
+                                `;
+                                // Make sure it is always layered on top
+                                overlay2.style.zIndex = '9999';
+                                document.body.appendChild(overlay2);
+
+                                // Timeout for one tick
+                                setTimeout(() => {
+                                    // Position the old overlay below the new overlay
+                                    const overlay2Rect = overlay2.getBoundingClientRect();
+                                    overlay.style.top = `${overlay2Rect.bottom + 20}px`;
+                                }, 0);
+                            }, 1000);
+                        }, 500);
+                    }
+                }
+            }, 500);
+        });       
     }
 
 } else if (currentUrl.includes("planner.cloud.microsoft/foundrydigital.com/Home/Planner/")) {
@@ -3210,6 +3339,8 @@ if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
             GM_SuperValue.set('taskNotes', '');
             GM_SuperValue.set('taskComment', '');
             GM_SuperValue.set('detailsData', '{}');
+            document.body.removeChild(popup);
+
             window.close();
         });
 
@@ -3372,6 +3503,20 @@ if (ipURLMatch) {
             if (!oldErrorTab) {
 
                 const errorsToSearch = {
+                    'Bad Hashboard Chain': {
+                        icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
+                        start: ["get pll config err", /Chain\[0\]: find .* asic, times 0/],
+                        end: ["stop_mining: soc init failed"],
+                        conditions: (text) => {
+                            return text.includes('only find');
+                        }
+                    },
+                    'SOC INIT Fail': {
+                        icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
+                        start: "ERROR_SOC_INIT",
+                        end: "ERROR_SOC_INIT",
+                        onlySeparate: true
+                    },
                     'Voltage Abnormity': {
                         icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
                         start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
@@ -3391,20 +3536,6 @@ if (ipURLMatch) {
                         icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
                         start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
                         end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
-                    },
-                    'Bad Hashboard Chain': {
-                        icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
-                        start: ["get pll config err", "Chain[0]:"],
-                        end: ["stop_mining: soc init failed"],
-                        conditions: (text) => {
-                            return text.includes('only find');
-                        }
-                    },
-                    'SOC INIT Fail': {
-                        icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
-                        start: "ERROR_SOC_INIT",
-                        end: "ERROR_SOC_INIT",
-                        onlySeparate: true
                     },
                     'Bad Chain ID': {
                         icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
@@ -3443,7 +3574,20 @@ if (ipURLMatch) {
                         }
 
                         for (const start of errorData.start) {
-                            const curIndex = logText.indexOf(start, lastEndIndex);
+                            let curIndex;
+                            if (typeof start === 'string') {
+                                curIndex = logText.indexOf(start, lastEndIndex);
+                            } else if (start instanceof RegExp) {
+                                const match = logText.slice(lastEndIndex).match(start);
+                                if (match) {
+                                    curIndex = lastEndIndex + match.index;
+                                } else {
+                                    curIndex = -1; // No match found
+                                }
+                            } else {
+                                throw new Error('Unsupported type for start');
+                            }
+
                             if (curIndex !== -1 && (startIndex === -1 || curIndex < startIndex)) {
                                 startIndex = curIndex;
                             }
@@ -3457,7 +3601,19 @@ if (ipURLMatch) {
 
                             const separatorTexts = ["start the http log", "****power off hashboard****"];
                             for (const end of errorData.end) {
-                                const curIndex = logText.indexOf(end, startIndex);
+                                let curIndex;
+                                if (typeof end === 'string') {
+                                    curIndex = logText.indexOf(end, startIndex);
+                                } else if (end instanceof RegExp) {
+                                    const match = logText.slice(startIndex).match(end);
+                                    if (match) {
+                                        curIndex = startIndex + match.index;
+                                    } else {
+                                        curIndex = -1; // No match found
+                                    }
+                                } else {
+                                    throw new Error('Unsupported type for end');
+                                }
                                 if (curIndex !== -1 && (endIndex === -1 || curIndex > endIndex)) {
                                     // Make sure another start doesn't appear before the end & make sure a separator doesn't appear between the start and end
                                     const lineAfterStart = logText.indexOf('\n', startIndex);
