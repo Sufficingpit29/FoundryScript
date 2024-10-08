@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.2.7
+// @version      2.2.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -28,6 +28,7 @@
 // @resource     https://cdn.datatables.net/colreorder/1.6.2/css/colReorder.dataTables.min.css
 // @resource     https://cdn.datatables.net/responsive/2.4.0/css/responsive.dataTables.min.css
 // @resource     https://cdn.jsdelivr.net/npm/datatables.net-colresize@1.1.0/css/dataTables.colResize.min.css
+// @run-at       document-start
 // ==/UserScript==
 
 const currentUrl = window.location.href;
@@ -3505,6 +3506,20 @@ if (ipURLMatch) {
             // Get the width left for the homePage based on how much layout-l fl takes up
             const layoutL = document.querySelector('.layout-l');
             if (layoutL) {
+                
+
+                const logContent = document.querySelector('.log-content');
+                const footer = document.querySelector('.footer.clearfix');
+                const mainContent = document.querySelector('.main-content');
+                if (logContent) {
+                    mainContent.style.paddingBottom = '0';
+                    footer.style.display = 'none';
+                } else {
+                    const footerHeight = footer.offsetHeight;
+                    mainContent.style.paddingBottom = `${footerHeight}px`;
+                    footer.style.display = 'block';
+                }
+
                 const layoutLWidth = layoutL.offsetWidth;
                 const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
                 homePage.style.width = `calc(100% - ${layoutLWidth+scrollBarWidth}px)`;
@@ -3517,15 +3532,7 @@ if (ipURLMatch) {
                     console.error('Head clearfix not found');
                 }
 
-                const dashboard = document.querySelector('#Dashboard');
-                if (dashboard) {
-                    const mainContent = document.querySelector('.main-content');
-                    const footerHeight = footer.offsetHeight;
-                    mainContent.style.paddingBottom = `${footerHeight}px`;
-                }
-
                 // Find the footer and set the width to the same as homePage
-                const footer = document.querySelector('.footer.clearfix');
                 if (footer) {
                     footer.style.width = homePage.style.width;
                 } else {
@@ -3543,9 +3550,6 @@ if (ipURLMatch) {
             return;
         }
         lastRunTime = Date.now();
-
-        // Locate the footer element
-        const footer = document.querySelector('.footer.clearfix');
 
         // Locate the log content element
         const logContent = document.querySelector('.log-content');
@@ -3569,8 +3573,9 @@ if (ipURLMatch) {
                 oldSeparator.remove();
             }
         }
-        // Check if both elements are found
-        if (footer && logContent) {
+
+        // If the log content exists, run the error tab setup
+        if (logContent) {
             // On tab change
             const tabs = document.querySelectorAll('.tab span');
             tabs.forEach(tab => {
@@ -3790,6 +3795,28 @@ if (ipURLMatch) {
                     // Locate the menu element
                     const menu = document.querySelector('.menu-t.menu');
                     if (menu) {
+                        // Set the menu's scroll bar to be a nice skinny dark one
+                        menu.style.overflowY = 'auto';
+                        menu.style.scrollbarWidth = 'thin';
+                        menu.style.scrollbarColor = '#444 #222';
+
+                        const style = document.createElement('style');
+                        style.textContent = `
+                            .menu-t.menu::-webkit-scrollbar {
+                                width: 8px;
+                            }
+                            .menu-t.menu::-webkit-scrollbar-track {
+                                background: #222;
+                            }
+                            .menu-t.menu::-webkit-scrollbar-thumb {
+                                background-color: #444;
+                                border-radius: 10px;
+                                border: 2px solid #222;
+                            }
+                        `;
+                        document.head.appendChild(style);
+                        
+
                         // Add line separator
                         const separator = document.createElement('li');
                         separator.style.borderBottom = '1px solid #ccc';
@@ -4037,10 +4064,12 @@ if (ipURLMatch) {
                     } else {
                         console.error('Menu element not found');
                     }
+
+                    adjustLayout();
                 }
             }
 
-            setTimeout(adjustLayout, 100);
+            //setTimeout(adjustLayout, 500);
         } else {
             removeOldErrorTab();
         }
@@ -4057,4 +4086,14 @@ if (ipURLMatch) {
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
+}
+
+// Should fix darkmode messing with the form...?
+if(currentUrl.includes("https://forms.office.com/pages/responsepage.aspx")) {
+    //Opt out of darkmode, insert <meta name="color-scheme" content="only light"> into head
+    const head = document.querySelector('head');
+    const meta = document.createElement('meta');
+    meta.setAttribute('name', 'color-scheme');
+    meta.setAttribute('content', 'only light');
+    head.appendChild(meta);
 }
