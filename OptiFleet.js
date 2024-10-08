@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.2.6
+// @version      2.2.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -3516,13 +3516,28 @@ if (ipURLMatch) {
                 } else {
                     console.error('Head clearfix not found');
                 }
+
+                const dashboard = document.querySelector('#Dashboard');
+                if (dashboard) {
+                    const mainContent = document.querySelector('.main-content');
+                    const footerHeight = footer.offsetHeight;
+                    mainContent.style.paddingBottom = `${footerHeight}px`;
+                }
+
+                // Find the footer and set the width to the same as homePage
+                const footer = document.querySelector('.footer.clearfix');
+                if (footer) {
+                    footer.style.width = homePage.style.width;
+                } else {
+                    console.error('Footer not found');
+                }
             }
         }
     }  
 
     // Function to check the current URL
     var lastRunTime = 0;
-    function handleFooter() {
+    function runAntMinerGUIAdjustments() {
         // Check if the last run was less than 1 second ago
         if (Date.now() - lastRunTime < 1000) {
             return;
@@ -3534,28 +3549,6 @@ if (ipURLMatch) {
 
         // Locate the log content element
         const logContent = document.querySelector('.log-content');
-
-        // Locate main-content
-        const mainContent = document.querySelector('.main-content');
-        if (mainContent) {
-            mainContent.style.paddingBottom = '0';
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.attributeName === 'style') {
-                        const currentPadding = mainContent.style.paddingBottom;
-                        if (currentPadding !== '0px') {
-                            mainContent.style.paddingBottom = '0';
-                        }
-                    }
-                    // Run the footer handling logic on any change
-                    handleFooter();
-                });
-            });
-
-            observer.observe(mainContent, { attributes: true });
-        } else {
-            console.error('Main content element not found');
-        }
 
         function removeOldErrorTab() {
             // If it found the error tab, remove it
@@ -3576,49 +3569,20 @@ if (ipURLMatch) {
                 oldSeparator.remove();
             }
         }
-
         // Check if both elements are found
         if (footer && logContent) {
-
             // On tab change
             const tabs = document.querySelectorAll('.tab span');
             tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
                     removeOldErrorTab();
-                    setTimeout(handleFooter, 500);
+                    setTimeout(runAntMinerGUIAdjustments, 500);
                 });
             });
 
             // Make sure the log content is not overlayed over anything
             logContent.style.position = 'relative';
 
-            // Remove the old footer clone if it exists
-            const oldFooterClone = document.querySelector('.footer-clone');
-            if (oldFooterClone) {
-                oldFooterClone.remove();
-            }
-
-            // Clone the footer element
-            const footerClone = footer.cloneNode(true);
-            footerClone.classList.add('footer-clone');
-
-            // Hide the original footer element
-            footer.style.display = 'none';
-
-            // Locate the target element to append the footer clone after
-            const targetElement = document.querySelector('#blogPage .tab');
-            if (targetElement) {
-                // Append the cloned footer element at the end of the target element's parent
-                targetElement.parentNode.appendChild(footerClone);
-            } else {
-                console.error('Target element not found');
-            }
-
-            // Make sure the footer clone is not overlayed over anything
-            footerClone.style.position = 'relative';
-
-            // Make the footer size to the log content size
-            footerClone.style.width = '100%';
 
             // If we didn't already add the error tab, add it
             const oldErrorTab = document.querySelector('[data-id="errors"]');
@@ -4078,16 +4042,6 @@ if (ipURLMatch) {
 
             setTimeout(adjustLayout, 100);
         } else {
-            if (!footer) {
-                //console.error('Footer element not found');
-            } else {
-                footer.style.display = 'block';
-                //console.log('Footer element shown');
-            }
-            if (!logContent) {
-                //console.error('Log content element not found');
-            }
-
             removeOldErrorTab();
         }
     }
@@ -4096,7 +4050,7 @@ if (ipURLMatch) {
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             if (mutation.addedNodes.length > 0) {
-                setTimeout(handleFooter, 500);
+                setTimeout(runAntMinerGUIAdjustments, 500);
             }
             adjustLayout();
         });
