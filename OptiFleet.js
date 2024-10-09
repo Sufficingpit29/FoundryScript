@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.3.7
+// @version      2.3.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -4044,23 +4044,71 @@ window.addEventListener('load', function () {
                             icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
                             start: "bad chain id",
                             end: "stop_mining: basic init failed!",
+                            unimportant: true
                         },
                         'Firmware Error': {
                             icon: "https://img.icons8.com/?size=100&id=hbCljOlfk4WP&format=png&color=FFFFFF",
                             start: "Firmware registration failed",
-                            end: "Firmware registration failed",
+                            unimportant: true
                         },
                         'ASIC Error': {
                             icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
                             start: "test_loop_securely_find_asic_num",
-                            end: "test_loop_securely_find_asic_num"
+                            unimportant: true
+                        },
+                        'Defendkey Error': {
+                            start: "defendkey: probe of defendkey failed with error",
+                            unimportant: true
+                        },
+                        'SN File Error': {
+                            start: "Open miner sn file /config/sn error",
+                            unimportant: true
+                        },
+                        'Allocate Memory Error': {
+                            start: "failed to allocate memory for node linux",
+                            unimportant: true
+                        },
+                        'Modalias Failure': {
+                            start: "modalias failure",
+                            unimportant: true
+                        },
+                        'CLKMSR Failure': {
+                            start: "clkmsr ffd18004.meson_clk_msr: failed to get msr",
+                            unimportant: true
+                        },
+                        'Unpack Failure': {
+                            start: "Initramfs unpacking failed",
+                            unimportant: true
+                        },
+                        'I2C Device': {
+                            start: "Failed to create I2C device",
+                            unimportant: true
+                        },
+                        'No Ports': {
+                            start: "hub doesn't have any ports",
+                            unimportant: true
+                        },
+                        'Thermal Binding': {
+                            start: "binding zone soc_thermal with cdev thermal",
+                            unimportant: true
+                        },
+                        'PTP Init Failure': {
+                            start: "fail to init PTP",
+                            unimportant: true
+                        },
+                        'Ram Error': {
+                            start: "persistent_ram: uncorrectable error in header",
+                            unimportant: true
                         }
                     }
 
+                    // Ignore these errors when checking for unknown errors
+                    const errorBlacklist = [
+                    ]
+
                     // Search through the log and locate errors
                     const logText = logContent.innerText;
-                    var errorFound = [];
-
+                    var errorsFound = []; // Array to store the errors found
                     for (const error in errorsToSearch) {
                         const errorData = errorsToSearch[error];
                         var lastEndIndex = 0;
@@ -4097,6 +4145,12 @@ window.addEventListener('load', function () {
                             }
 
                             if (startIndex !== -1) {
+
+                                // If errorData.end isn't found, just set it to be start
+                                if (!errorData.end || errorData.end === "" || errorData.end === undefined) {
+                                    errorData.end = errorData.start;
+                                }
+
                                 var endIndex = -1;
                                 if (!Array.isArray(errorData.end)) {
                                     errorData.end = [errorData.end];
@@ -4149,7 +4203,7 @@ window.addEventListener('load', function () {
                                     // if onlySeparate is true, only add the error if it doesn't appear in another start/end as another error
                                     var errorTextAlreadyFound = false;
                                     if(errorData.onlySeparate) {
-                                        if(errorFound.some(err => err.text.includes(errorText))) {
+                                        if(errorsFound.some(err => err.text.includes(errorText))) {
                                             console.log('Error text already found');
                                             errorTextAlreadyFound = true;
                                         }
@@ -4157,12 +4211,13 @@ window.addEventListener('load', function () {
 
                                     // Check if the error text meets the conditions
                                     if (typeof errorData.conditions === 'function' ? errorData.conditions(errorText) : true && !errorTextAlreadyFound) {
-                                        errorFound.push({
+                                        errorsFound.push({
                                             name: error,
                                             icon: errorData.icon,
                                             text: errorText.trimEnd(),
                                             start: startIndex,
-                                            end: endIndex
+                                            end: endIndex,
+                                            unimportant: errorData.unimportant || false
                                         });
                                         setEndIndexAfter = endIndex;
                                     } else {
@@ -4183,302 +4238,319 @@ window.addEventListener('load', function () {
                         }
                     }
 
-                    // Find all the times 'error' is mentioned in the log, if it isn't already found, mark is as an Unknown Error
+                    // Find all the times 'error' or 'fail' is mentioned in the log if it isn't already found in the defined errors, mark is as an Unknown Error
                     const errorRegex = /error/gi;
                     const failRegex = /fail/gi;
                     const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
                     for (const match of errorMatches) {
+                        
+                        // Check if the error is already found
                         const matchIndex = match.index;
-                        if (!errorFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
+                        if (!errorsFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
+                            // Find the start and end of the line
                             const start = logText.lastIndexOf('\n', matchIndex) + 1;
                             const end = logText.indexOf('\n', matchIndex) + 1;
                             const errorText = logText.substring(start, end);
-                            errorFound.push({
+
+                            // Check if the error is in the blacklist
+                            if (errorBlacklist.some(blacklistError => errorText.includes(blacklistError))) {
+                                continue;
+                            }
+
+                            // Add the error to the list of errors
+                            errorsFound.push({
                                 name: 'Unknown Error',
                                 text: errorText.trimEnd(),
                                 start: start,
-                                end: end
+                                end: end,
+                                unimportant: true
                             });
                         }
                     }
 
-                    // Create a new element to display the errors
-                    if (errorFound.length > 0) {
-                        // Locate the menu element
-                        const menu = document.querySelector('.menu-t.menu');
-                        if (menu) {
-                            // Set the menu's scroll bar to be a nice skinny dark one
-                            menu.style.overflowY = 'auto';
-                            menu.style.scrollbarWidth = 'thin';
-                            menu.style.scrollbarColor = '#444 #222';
+                    function createErrorTab(title, errors) {
+                        // Create a new element to display the errors
+                        if (errors.length > 0) {
+                            // Locate the menu element
+                            const menu = document.querySelector('.menu-t.menu');
+                            if (menu) {
+                                // Set the menu's scroll bar to be a nice skinny dark one
+                                menu.style.overflowY = 'auto';
+                                menu.style.scrollbarWidth = 'thin';
+                                menu.style.scrollbarColor = '#444 #222';
 
-                            const style = document.createElement('style');
-                            style.textContent = `
-                                .menu-t.menu::-webkit-scrollbar {
-                                    width: 8px;
-                                }
-                                .menu-t.menu::-webkit-scrollbar-track {
-                                    background: #222;
-                                }
-                                .menu-t.menu::-webkit-scrollbar-thumb {
-                                    background-color: #444;
-                                    border-radius: 10px;
-                                    border: 2px solid #222;
-                                }
-                            `;
-                            document.head.appendChild(style);
-                            
-
-                            // Add line separator
-                            const separator = document.createElement('li');
-                            separator.style.borderBottom = '1px solid #ccc';
-                            separator.style.margin = '10px 0';
-                            separator.classList.add('separator');
-                            menu.appendChild(separator);
-
-                            // Create a new list item for errors
-                            const errorTab = document.createElement('li');
-                            errorTab.classList.add('item');
-                            errorTab.setAttribute('data-id', 'errors');
-                            errorTab.innerHTML = '<i class="error-ico icon"></i> <span class="itm-name" data-locale="errors">Errors</span> <i class="drop-icon"></i>';
-
-                            // Check if errorTab is pressed
-                            errorTab.addEventListener('click', () => {
-                                setTimeout(adjustLayout, 0);
-                            });
-
-                            // Create a sub-menu for the errors
-                            const errorSubMenu = document.createElement('ul');
-                            errorSubMenu.classList.add('sub-menu', 'menu');
-                            errorSubMenu.id = 'errorSubMenu';
-                            
-                            // Find and replace the drop icon so it doesn't flip when the other sub-menu is opened
-                            const dropIcon = errorTab.querySelector('.drop-icon');
-                            if (dropIcon) {
-                                dropIcon.remove();
-
-                                const errorIcon = document.createElement('i');
-                                errorIcon.classList.add('icon');
-                                errorIcon.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=2760&format=png&color=FFFFFF)';
-                                errorIcon.style.width = '16px';
-                                errorIcon.style.height = '16px';
-                                errorIcon.style.display = 'inline-block';
-                                errorIcon.style.backgroundSize = 'contain';
-                                errorIcon.style.marginRight = '5px';
-                                errorTab.appendChild(errorIcon);
-                            }
-
-                            // Swap the left empty icon source with the error icon
-                            const errorIcon = errorTab.querySelector('.error-ico');
-                            if (errorIcon) {
-                                errorIcon.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=24552&format=png&color=FFFFFF)';
-                                
-                                errorIcon.style.display = 'inline-block';
-                                errorIcon.style.backgroundSize = 'contain';
-                                errorIcon.style.marginRight = '5px';
-                            }
-
-
-                            // Populate the sub-menu with error details
-                            errorFound.forEach((error, index) => {
-                                const errorItem = document.createElement('li');
-                                errorItem.classList.add('item');
-                                errorItem.setAttribute('data-id', `error-${index}`);
-                                errorItem.innerHTML = `<i class="error-detail-ico icon"></i> <span class="itm-name">${error.name}</span>`;
-                                errorItem.addEventListener('click', () => {
-                                    // Check if the error element already exists
-                                    const existingErrorElement = document.getElementById(`errorLogElement`);
-                                    if (existingErrorElement) {
-                                        existingErrorElement.remove();
-                                        
-                                        // Remove any children of the log content
-                                        while (logContent.firstChild) {
-                                            logContent.removeChild(logContent.firstChild);
-                                        }
-
-                                        // Re-add the original log content
-                                        logContent.textContent = logText;
+                                const style = document.createElement('style');
+                                style.textContent = `
+                                    .menu-t.menu::-webkit-scrollbar {
+                                        width: 8px;
                                     }
+                                    .menu-t.menu::-webkit-scrollbar-track {
+                                        background: #222;
+                                    }
+                                    .menu-t.menu::-webkit-scrollbar-thumb {
+                                        background-color: #444;
+                                        border-radius: 10px;
+                                        border: 2px solid #222;
+                                    }
+                                `;
+                                document.head.appendChild(style);
+                                
 
-                                    // Create a new element to highlight the error
-                                    const errorElement = document.createElement('span');
-                                    errorElement.style.backgroundColor = '#ffcccc';
-                                    errorElement.style.color = 'black';
-                                    errorElement.style.width = '100%';
-                                    errorElement.style.display = 'block';
+                                // Add line separator, if it doesn't already exist
+                                if (!document.querySelector('.separator')) {
+                                    const separator = document.createElement('li');
+                                    separator.style.borderBottom = '1px solid #ccc';
+                                    separator.style.margin = '10px 0';
+                                    separator.classList.add('separator');
+                                    menu.appendChild(separator);
+                                }
 
-                                    errorElement.setAttribute('data-original-text', error.text);
-                                    errorElement.textContent = error.text;
-                                    errorElement.setAttribute('data-original-text', error.text);
+                                // Create a new list item for errors
+                                const errorTab = document.createElement('li');
+                                errorTab.classList.add('item');
+                                errorTab.setAttribute('data-id', 'errors');
+                                errorTab.innerHTML = `<i class="error-ico icon"></i> <span class="itm-name" data-locale="errors">${title}</span> <i class="drop-icon"></i>`;
 
-                                    errorElement.id = `errorLogElement`;
+                                // Check if errorTab is pressed
+                                errorTab.addEventListener('click', () => {
+                                    setTimeout(adjustLayout, 0);
+                                });
 
-                                    // In bottom right corner add a copy button
-                                    const copyButton = document.createElement('button');
-                                    copyButton.textContent = 'Copy';
-                                    copyButton.style.position = 'absolute';
-                                    copyButton.style.bottom = '0';
-                                    copyButton.style.right = '0';
-                                    copyButton.style.backgroundColor = 'transparent';
-                                    copyButton.style.border = 'none';
-                                    copyButton.style.color = 'black';
-                                    copyButton.style.cursor = 'pointer';
-                                    copyButton.style.padding = '5px';
-                                    copyButton.style.fontSize = '12px';
-                                    copyButton.style.fontWeight = 'bold';
-                                    copyButton.style.zIndex = '1';
-                                    copyButton.addEventListener('click', () => {
-                                        // Copy the error text to the clipboard
-                                        if (navigator.clipboard) {
-                                            navigator.clipboard.writeText(error.text).then(() => {
-                                                console.log('Text copied to clipboard');
-                                            }).catch(err => {
-                                                console.error('Failed to copy text: ', err);
-                                            });
-                                        } else {
-                                            // Fallback method for older browsers
-                                            const textArea = document.createElement('textarea');
-                                            textArea.value = error.text;
-                                            document.body.appendChild(textArea);
-                                            textArea.select();
-                                            try {
-                                                document.execCommand('copy');
-                                                console.log('Text copied to clipboard');
-                                            } catch (err) {
-                                                console.error('Failed to copy text: ', err);
+                                // Create a sub-menu for the errors
+                                const errorSubMenu = document.createElement('ul');
+                                errorSubMenu.classList.add('sub-menu', 'menu');
+                                errorSubMenu.id = 'errorSubMenu';
+                                
+                                // Find and replace the drop icon so it doesn't flip when the other sub-menu is opened
+                                const dropIcon = errorTab.querySelector('.drop-icon');
+                                if (dropIcon) {
+                                    dropIcon.remove();
+
+                                    const errorIcon = document.createElement('i');
+                                    errorIcon.classList.add('icon');
+                                    errorIcon.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=2760&format=png&color=FFFFFF)';
+                                    errorIcon.style.width = '16px';
+                                    errorIcon.style.height = '16px';
+                                    errorIcon.style.display = 'inline-block';
+                                    errorIcon.style.backgroundSize = 'contain';
+                                    errorIcon.style.marginRight = '5px';
+                                    errorTab.appendChild(errorIcon);
+                                }
+
+                                // Swap the left empty icon source with the error icon
+                                const errorIcon = errorTab.querySelector('.error-ico');
+                                if (errorIcon) {
+                                    errorIcon.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=24552&format=png&color=FFFFFF)';
+                                    
+                                    errorIcon.style.display = 'inline-block';
+                                    errorIcon.style.backgroundSize = 'contain';
+                                    errorIcon.style.marginRight = '5px';
+                                }
+
+
+                                // Populate the sub-menu with error details
+                                errors.forEach((error, index) => {
+                                    const errorItem = document.createElement('li');
+                                    errorItem.classList.add('item');
+                                    errorItem.setAttribute('data-id', `error-${index}`);
+                                    errorItem.innerHTML = `<i class="error-detail-ico icon"></i> <span class="itm-name">${error.name}</span>`;
+                                    errorItem.addEventListener('click', () => {
+                                        // Check if the error element already exists
+                                        const existingErrorElement = document.getElementById(`errorLogElement`);
+                                        if (existingErrorElement) {
+                                            existingErrorElement.remove();
+                                            
+                                            // Remove any children of the log content
+                                            while (logContent.firstChild) {
+                                                logContent.removeChild(logContent.firstChild);
                                             }
-                                            document.body.removeChild(textArea);
+
+                                            // Re-add the original log content
+                                            logContent.textContent = logText;
                                         }
 
-                                        // Change the button text to copied
-                                        copyButton.textContent = 'Copied!';
-                                        setTimeout(() => {
-                                            copyButton.textContent = 'Copy';
-                                        }, 1000);
+                                        // Create a new element to highlight the error
+                                        const errorElement = document.createElement('span');
+                                        errorElement.style.backgroundColor = '#ffcccc';
+                                        errorElement.style.color = 'black';
+                                        errorElement.style.width = '100%';
+                                        errorElement.style.display = 'block';
+
+                                        errorElement.setAttribute('data-original-text', error.text);
+                                        errorElement.textContent = error.text;
+                                        errorElement.setAttribute('data-original-text', error.text);
+
+                                        errorElement.id = `errorLogElement`;
+
+                                        // In bottom right corner add a copy button
+                                        const copyButton = document.createElement('button');
+                                        copyButton.textContent = 'Copy';
+                                        copyButton.style.position = 'absolute';
+                                        copyButton.style.bottom = '0';
+                                        copyButton.style.right = '0';
+                                        copyButton.style.backgroundColor = 'transparent';
+                                        copyButton.style.border = 'none';
+                                        copyButton.style.color = 'black';
+                                        copyButton.style.cursor = 'pointer';
+                                        copyButton.style.padding = '5px';
+                                        copyButton.style.fontSize = '12px';
+                                        copyButton.style.fontWeight = 'bold';
+                                        copyButton.style.zIndex = '1';
+                                        copyButton.addEventListener('click', () => {
+                                            // Copy the error text to the clipboard
+                                            if (navigator.clipboard) {
+                                                navigator.clipboard.writeText(error.text).then(() => {
+                                                    console.log('Text copied to clipboard');
+                                                }).catch(err => {
+                                                    console.error('Failed to copy text: ', err);
+                                                });
+                                            } else {
+                                                // Fallback method for older browsers
+                                                const textArea = document.createElement('textarea');
+                                                textArea.value = error.text;
+                                                document.body.appendChild(textArea);
+                                                textArea.select();
+                                                try {
+                                                    document.execCommand('copy');
+                                                    console.log('Text copied to clipboard');
+                                                } catch (err) {
+                                                    console.error('Failed to copy text: ', err);
+                                                }
+                                                document.body.removeChild(textArea);
+                                            }
+
+                                            // Change the button text to copied
+                                            copyButton.textContent = 'Copied!';
+                                            setTimeout(() => {
+                                                copyButton.textContent = 'Copy';
+                                            }, 1000);
+                                        });
+                                        
+                                        // Add as child of error element
+                                        errorElement.style.position = 'relative'; // Ensure the errorElement is positioned relative
+                                        errorElement.appendChild(copyButton);
+
+                                        // While hovering over the error element, show the copy button
+                                        errorElement.addEventListener('mouseover', () => {
+                                            copyButton.style.display = 'block';
+                                        });
+
+                                        errorElement.addEventListener('mouseout', () => {
+                                            copyButton.style.display = 'none';
+                                        });
+
+                                        // When hover, change the copy button color
+                                        copyButton.addEventListener('mouseover', () => {
+                                            copyButton.style.color = 'green';
+                                        });
+
+                                        copyButton.addEventListener('mouseout', () => {
+                                            copyButton.style.color = 'black';
+                                        });
+
+                                        // Replace the error text in the log with the highlighted version
+                                        const logTextNode = logContent.childNodes[0];
+                                        const beforeErrorText = logTextNode.textContent.substring(0, error.start);
+                                        const afterErrorText = logTextNode.textContent.substring(error.end);
+
+                                        logTextNode.textContent = beforeErrorText;
+                                        logContent.insertBefore(errorElement, logTextNode.nextSibling);
+                                        logContent.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
+
+                                        // Scroll to the highlighted error
+                                        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    });
+                                    errorSubMenu.appendChild(errorItem);
+
+                                    // Set the icon for the error <i class="error-detail-ico icon"></i>
+                                    const errorDetailIcon = errorItem.querySelector('.error-detail-ico');
+                                    if (errorDetailIcon) {
+                                        errorDetailIcon.style.backgroundImage = error.icon !== undefined ? `url(${error.icon})` : 'url(https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF)';
+                                        errorDetailIcon.style.display = 'inline-block';
+                                        errorDetailIcon.style.backgroundSize = 'contain';
+                                        errorDetailIcon.style.marginRight = '5px';
+                                    }
+                                    // Create an info icon to the right that will show the error text
+                                    const infoIcon = document.createElement('div');
+                                    infoIcon.style.width = '14px';
+                                    infoIcon.style.height = '14px';
+                                    infoIcon.style.borderRadius = '50%';
+                                    infoIcon.style.backgroundColor = '#0078d4';
+                                    infoIcon.style.color = 'white';
+                                    infoIcon.style.textAlign = 'center';
+                                    infoIcon.style.lineHeight = '14px';
+                                    infoIcon.style.fontSize = '8px';
+                                    infoIcon.style.border = '1px solid black';
+                                    infoIcon.style.fontWeight = 'bold';
+                                    infoIcon.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
+                                    infoIcon.style.cursor = 'pointer';
+                                    infoIcon.style.position = 'relative';
+                                    infoIcon.style.float = 'right';
+                                    infoIcon.textContent = 'i';
+                                                                
+                                    // Create the tooltip
+                                    const tooltip = document.createElement('div');
+                                    tooltip.style.display = 'none';
+                                    tooltip.style.position = 'absolute';
+                                    tooltip.style.backgroundColor = '#444947';
+                                    tooltip.style.color = 'white';
+                                    tooltip.style.padding = '5px';
+                                    tooltip.style.borderRadius = '5px';
+                                    tooltip.style.zIndex = '9999';
+                                    tooltip.style.whiteSpace = 'pre-wrap'; // Use pre-wrap to preserve newlines
+                                    tooltip.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.5)';
+                                    tooltip.textContent = error.text;
+                                    document.body.appendChild(tooltip);
+
+                                    // Position the tooltip relative to the infoIcon
+                                    infoIcon.addEventListener('mouseenter', () => {
+                                        const rect = infoIcon.getBoundingClientRect();
+                                        tooltip.style.left = `${rect.left + window.scrollX}px`;
+                                        tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
+                                        tooltip.style.display = 'block';
+                                    });
+
+                                    infoIcon.addEventListener('mouseleave', () => {
+                                        tooltip.style.display = 'none';
+                                    });
+
+                                    // Position the tooltip relative to the infoIcon
+                                    infoIcon.addEventListener('mouseenter', () => {
+                                        const rect = infoIcon.getBoundingClientRect();
+                                        tooltip.style.left = `${rect.left + window.scrollX}px`;
+                                        tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
+                                        tooltip.style.display = 'block';
                                     });
                                     
-                                    // Add as child of error element
-                                    errorElement.style.position = 'relative'; // Ensure the errorElement is positioned relative
-                                    errorElement.appendChild(copyButton);
-
-                                    // While hovering over the error element, show the copy button
-                                    errorElement.addEventListener('mouseover', () => {
-                                        copyButton.style.display = 'block';
+                                    infoIcon.addEventListener('mouseleave', () => {
+                                        tooltip.style.display = 'none';
                                     });
 
-                                    errorElement.addEventListener('mouseout', () => {
-                                        copyButton.style.display = 'none';
-                                    });
+                                    // Append the info icon to the error item
+                                    errorItem.appendChild(infoIcon);
 
-                                    // When hover, change the copy button color
-                                    copyButton.addEventListener('mouseover', () => {
-                                        copyButton.style.color = 'green';
-                                    });
-
-                                    copyButton.addEventListener('mouseout', () => {
-                                        copyButton.style.color = 'black';
-                                    });
-
-                                    // Replace the error text in the log with the highlighted version
-                                    const logTextNode = logContent.childNodes[0];
-                                    const beforeErrorText = logTextNode.textContent.substring(0, error.start);
-                                    const afterErrorText = logTextNode.textContent.substring(error.end);
-
-                                    logTextNode.textContent = beforeErrorText;
-                                    logContent.insertBefore(errorElement, logTextNode.nextSibling);
-                                    logContent.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
-
-                                    // Scroll to the highlighted error
-                                    errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                });
-                                errorSubMenu.appendChild(errorItem);
-
-                                // Set the icon for the error <i class="error-detail-ico icon"></i>
-                                const errorDetailIcon = errorItem.querySelector('.error-detail-ico');
-                                if (errorDetailIcon) {
-                                    errorDetailIcon.style.backgroundImage = error.icon !== undefined ? `url(${error.icon})` : 'url(https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF)';
-                                    errorDetailIcon.style.display = 'inline-block';
-                                    errorDetailIcon.style.backgroundSize = 'contain';
-                                    errorDetailIcon.style.marginRight = '5px';
-                                }
-                                // Create an info icon to the right that will show the error text
-                                const infoIcon = document.createElement('div');
-                                infoIcon.style.width = '14px';
-                                infoIcon.style.height = '14px';
-                                infoIcon.style.borderRadius = '50%';
-                                infoIcon.style.backgroundColor = '#0078d4';
-                                infoIcon.style.color = 'white';
-                                infoIcon.style.textAlign = 'center';
-                                infoIcon.style.lineHeight = '14px';
-                                infoIcon.style.fontSize = '8px';
-                                infoIcon.style.border = '1px solid black';
-                                infoIcon.style.fontWeight = 'bold';
-                                infoIcon.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
-                                infoIcon.style.cursor = 'pointer';
-                                infoIcon.style.position = 'relative';
-                                infoIcon.style.float = 'right';
-                                infoIcon.textContent = 'i';
-                                                            
-                                // Create the tooltip
-                                const tooltip = document.createElement('div');
-                                tooltip.style.display = 'none';
-                                tooltip.style.position = 'absolute';
-                                tooltip.style.backgroundColor = '#444947';
-                                tooltip.style.color = 'white';
-                                tooltip.style.padding = '5px';
-                                tooltip.style.borderRadius = '5px';
-                                tooltip.style.zIndex = '9999';
-                                tooltip.style.whiteSpace = 'pre-wrap'; // Use pre-wrap to preserve newlines
-                                tooltip.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.5)';
-                                tooltip.textContent = error.text;
-                                document.body.appendChild(tooltip);
-
-                                // Position the tooltip relative to the infoIcon
-                                infoIcon.addEventListener('mouseenter', () => {
-                                    const rect = infoIcon.getBoundingClientRect();
-                                    tooltip.style.left = `${rect.left + window.scrollX}px`;
-                                    tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
-                                    tooltip.style.display = 'block';
                                 });
 
-                                infoIcon.addEventListener('mouseleave', () => {
-                                    tooltip.style.display = 'none';
+                                // Append the error tab and sub-menu to the menu
+                                menu.appendChild(errorTab);
+                                menu.appendChild(errorSubMenu);
+
+                                // Add event listener to toggle the sub-menu
+                                errorTab.addEventListener('click', () => {
+                                    const isVisible = errorSubMenu.style.display === 'block';
+                                    errorSubMenu.style.display = isVisible ? 'none' : 'block';
                                 });
 
-                                // Position the tooltip relative to the infoIcon
-                                infoIcon.addEventListener('mouseenter', () => {
-                                    const rect = infoIcon.getBoundingClientRect();
-                                    tooltip.style.left = `${rect.left + window.scrollX}px`;
-                                    tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
-                                    tooltip.style.display = 'block';
-                                });
-                                
-                                infoIcon.addEventListener('mouseleave', () => {
-                                    tooltip.style.display = 'none';
-                                });
+                                console.log('Error tab and sub-menu added successfully');
+                            } else {
+                                console.error('Menu element not found');
+                            }
 
-                                // Append the info icon to the error item
-                                errorItem.appendChild(infoIcon);
-
-                            });
-
-                            // Append the error tab and sub-menu to the menu
-                            menu.appendChild(errorTab);
-                            menu.appendChild(errorSubMenu);
-
-                            // Add event listener to toggle the sub-menu
-                            errorTab.addEventListener('click', () => {
-                                const isVisible = errorSubMenu.style.display === 'block';
-                                errorSubMenu.style.display = isVisible ? 'none' : 'block';
-                            });
-
-                            console.log('Error tab and sub-menu added successfully');
-                        } else {
-                            console.error('Menu element not found');
+                            adjustLayout();
                         }
-
-                        adjustLayout();
                     }
+                    createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant));
+                    createErrorTab("Other Errors", errorsFound.filter(error => error.unimportant));
                 }
 
                 //setTimeout(adjustLayout, 500);
