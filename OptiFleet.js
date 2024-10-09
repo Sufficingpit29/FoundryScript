@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.3.8
+// @version      2.3.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -847,7 +847,7 @@ window.addEventListener('load', function () {
 
                         // If we found the miner, open the miner page
                         if(minerID) {
-                            window.location.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                            window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`).focus();
                         }
                     }, 500);
                 }
