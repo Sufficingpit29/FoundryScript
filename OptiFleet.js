@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.3.9
+// @version      2.4.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -98,7 +98,8 @@ window.addEventListener('load', function () {
 
             const alertAmount = GM_SuperValue.get("alertAmount", 10);
             const majorAlertAmount = GM_SuperValue.get("majorAlertAmount", 50);
-            const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", true);
+            const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", "true") === "true";
+            const alertEnabled = GM_SuperValue.get("alertEnabled", "true") === "true";
 
             const popup = document.createElement('div');
             popup.style.position = 'fixed';
@@ -156,9 +157,29 @@ window.addEventListener('load', function () {
             onlyNonHashingLabelText.style.color = '#fff'; // Set text color to white for better contrast
             onlyNonHashingLabelText.style.marginBottom = '10px';
 
-
             onlyNonHashingContainer.appendChild(onlyNonHashingInput);
             onlyNonHashingContainer.appendChild(onlyNonHashingLabelText);
+
+            const alertEnabledContainer = document.createElement('div');
+            alertEnabledContainer.style.display = 'flex';
+            alertEnabledContainer.style.alignItems = 'center';
+            
+            const alertEnabledInput = document.createElement('input');
+            alertEnabledInput.type = 'checkbox';
+            alertEnabledInput.checked = alertEnabled;
+            alertEnabledInput.style.marginBottom = '10px';
+            alertEnabledInput.style.width = '20px'; // Set the width smaller
+            alertEnabledInput.style.height = '20px'; // Set the height smaller
+            alertEnabledInput.style.marginRight = '10px'; // Add some space to the right
+
+            const alertEnabledLabelText = document.createElement('span');
+            alertEnabledLabelText.innerText = 'Enable/Disable notifications.';
+            alertEnabledLabelText.style.color = '#fff'; // Set text color to white for better contrast
+            alertEnabledLabelText.style.marginBottom = '10px';
+
+            alertEnabledContainer.appendChild(alertEnabledInput);
+            alertEnabledContainer.appendChild(alertEnabledLabelText);
+            
 
             const saveButton = document.createElement('button');
             saveButton.innerText = 'Save';
@@ -186,8 +207,10 @@ window.addEventListener('load', function () {
                 if (!isNaN(newAlertAmount) && !isNaN(newMajorAlertAmount)) {
                     GM_SuperValue.set("alertAmount", newAlertAmount);
                     GM_SuperValue.set("majorAlertAmount", newMajorAlertAmount);
-                    GM_SuperValue.set("onlyNonHashing", onlyNonHashingInput.checked);
                 }
+
+                GM_SuperValue.set("onlyNonHashing", onlyNonHashingInput.checked.toString());
+                GM_SuperValue.set("alertEnabled", alertEnabledInput.checked.toString());
                 
                 popup.remove();
 
@@ -223,6 +246,7 @@ window.addEventListener('load', function () {
             popup.appendChild(majorAlertLabel);
             popup.appendChild(majorAlertInput);
             popup.appendChild(onlyNonHashingContainer);
+            popup.appendChild(alertEnabledContainer);
             popup.appendChild(saveButton);
             popup.appendChild(cancelButton);
 
@@ -268,7 +292,16 @@ window.addEventListener('load', function () {
                 let minerCount = issueMiners.length;
                 const alertAmount = GM_SuperValue.get("alertAmount", 10);
                 const majorAlertAmount = GM_SuperValue.get("majorAlertAmount", 50);
-                const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", true);
+                const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", "true") === "true";
+                const alertEnabled = GM_SuperValue.get("alertEnabled", "true") === "true";
+
+                if (!alertEnabled) { return; }
+
+                // Remove the current notification if it exists
+                const existingNotification = document.querySelector('.miner-issue-notification');
+                if (existingNotification) {
+                    existingNotification.remove();
+                }
 
                 // Only get the actual non hashing miners
                 issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
@@ -289,6 +322,7 @@ window.addEventListener('load', function () {
 
                     // Create a notification element
                     const notification = document.createElement('div');
+                    notification.className = 'miner-issue-notification';
                     notification.style.position = 'fixed';
                     notification.style.bottom = '20px';
                     notification.style.right = '20px';
@@ -336,6 +370,15 @@ window.addEventListener('load', function () {
                         document.body.click();
                         const audio = new Audio('https://cdn.freesound.org/previews/521/521973_311243-lq.mp3');
                         audio.play();
+
+                        // if over 500, repeat the sound every 5 seconds for 60 seconds
+                        if(minerCount >= 500) {
+                            const interval = setInterval(() => {
+                                const audio1 = new Audio('https://cdn.freesound.org/previews/521/521973_311243-lq.mp3');
+                                audio1.play();
+                            }, 800);
+                            setTimeout(() => clearInterval(interval), 60000);
+                        }
                     }
 
                     // Edit button to be able to input custom notification amount
@@ -365,7 +408,7 @@ window.addEventListener('load', function () {
                             editAmountButton.style.transition = 'opacity 0.5s ease';
                             setTimeout(() => editAmountButton.style.opacity = '1', 10);
                         }
-                    }, 30000);
+                    }, 55000);
                 }
             });
         }
@@ -1787,7 +1830,7 @@ window.addEventListener('load', function () {
                                     
                                         // If the miner has a lastRebootTime and it is at or more than 15 minutes and still has a 0 hash rate, then we can flag it to be hard rebooted, or if the miner last uptime is the same as the current uptime
                                         var minTime = 15*60*1000; // 15 minutes
-                                        var forgetTime = 2*60*60*1000; // 2 hours
+                                        var forgetTime = 60*60*1000; // 1 hours
 
                                         var isPastMinTime = timeSinceLastSoftReboot >= minTime;
                                         var notPastForgetTime = timeSinceLastSoftReboot < forgetTime;
@@ -3958,6 +4001,30 @@ window.addEventListener('load', function () {
             }
             lastRunTime = Date.now();
 
+            // Add link to firmware downloads if on firmware upgrade page
+            const formsContent = document.querySelector('.forms-content');
+            const formsTitle = document.querySelector('.forms-title[data-locale="update"]');
+            
+            if (formsContent && formsTitle) {
+                const linkAlreadyExists = formsContent.querySelector('a[href="https://shop.bitmain.com/support/download"]');
+                if (linkAlreadyExists) { return; }
+                const link = document.createElement('a');
+                link.href = 'https://shop.bitmain.com/support/download';
+                link.target = '_blank'; // Open in a new tab
+                link.textContent = 'Firmware Downloads Page';
+                link.style.display = 'block';
+                link.style.marginBottom = '10px';
+                formsContent.insertBefore(link, formsContent.firstChild);
+
+                // on press, save the current miner type and algorithm
+                link.addEventListener('click', () => {
+                    const minerType = document.querySelector('.miner-type').textContent;
+                    const algorithm = document.querySelector('.algorithm').textContent;
+                    GM_SuperValue.set('minerType', minerType);
+                    GM_SuperValue.set('algorithm', algorithm);
+                });
+            }
+
             // Locate the log content element
             const logContent = document.querySelector('.log-content');
 
@@ -4023,7 +4090,7 @@ window.addEventListener('load', function () {
                         'Voltage Abnormity': {
                             icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
                             start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
-                            end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed", "stop_mining: get power type version failed!"],
+                            end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!"],
                         },
                         'Temperature Overheat': {
                             icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
@@ -4097,14 +4164,11 @@ window.addEventListener('load', function () {
                             unimportant: true
                         },
                         'Ram Error': {
+                            icon: "https://img.icons8.com/?size=100&id=2lS2aIm5uhCG&format=png&color=FFFFFF",
                             start: "persistent_ram: uncorrectable error in header",
                             unimportant: true
                         }
                     }
-
-                    // Ignore these errors when checking for unknown errors
-                    const errorBlacklist = [
-                    ]
 
                     // Search through the log and locate errors
                     const logText = logContent.innerText;
@@ -4251,11 +4315,6 @@ window.addEventListener('load', function () {
                             const start = logText.lastIndexOf('\n', matchIndex) + 1;
                             const end = logText.indexOf('\n', matchIndex) + 1;
                             const errorText = logText.substring(start, end);
-
-                            // Check if the error is in the blacklist
-                            if (errorBlacklist.some(blacklistError => errorText.includes(blacklistError))) {
-                                continue;
-                            }
 
                             // Add the error to the list of errors
                             errorsFound.push({
@@ -4570,6 +4629,87 @@ window.addEventListener('load', function () {
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // Auto select saved miner type and algorithm
+    if (currentUrl.includes("https://shop.bitmain.com/support/download")){
+        setTimeout(() => {
+            var minerType = GM_SuperValue.get('minerType', '').toLowerCase();
+            var algorithm = GM_SuperValue.get('algorithm', '').toLowerCase();
+
+            if(algorithm === "sha256d") {
+                algorithm = "sha256";
+            }
+
+            // Remove the saved values
+            GM_SuperValue.set('minerType', '');
+            GM_SuperValue.set('algorithm', '');
+
+            if (minerType !== '' && algorithm !== '') {
+                const algorithmDropdown = document.querySelector('.filter-box .filter:nth-child(1) input');
+                const modelDropdown = document.querySelector('.filter-box .filter:nth-child(2) input');
+
+                if (algorithmDropdown && modelDropdown) {
+                   
+
+                    var algorithmDropdownFound = false;
+                    var modelDropdownFound = false;
+
+                    const intervalAlgorithm = setInterval(() => {
+                        algorithmDropdown.focus();
+                        algorithmDropdown.click();
+    
+                        algorithmDropdown.style.backgroundColor = '#ffcc99';
+
+                        setTimeout(() => {
+                            const algorithmOptions = document.querySelectorAll('.filter-box .filter:nth-child(1) ul li');
+                            algorithmOptions.forEach(option => {
+                                console.log(option.textContent);
+                                if (option.textContent.toLocaleLowerCase().trim().includes(algorithm)) {
+                                    option.focus();
+                                    option.click();
+                                    algorithmDropdown.style.backgroundColor = '#99ff99';
+                                    algorithmDropdownFound = true;
+                                    clearInterval(intervalAlgorithm);
+                                    const intervalModel = setInterval(() => {
+                                        modelDropdown.focus();
+                                        modelDropdown.click();
+                
+                                        modelDropdown.style.backgroundColor = '#ffcc99';
+                
+                                        setTimeout(() => {
+                                            const modelOptions = document.querySelectorAll('.filter ul li');
+                                            modelOptions.forEach(option => {
+                                                if (option.textContent.toLocaleLowerCase().trim() === minerType) {
+                                                    option.focus();
+                                                    option.click();
+                                                    // set it a light green color
+                                                    modelDropdown.style.backgroundColor = '#99ff99';
+                                                    modelDropdownFound = true;
+                                                    clearInterval(intervalModel);
+                                                    return;
+                                                }
+                                            });
+                
+                                            // If the algorithm wasn't found, set it to red
+                                            if(!modelDropdownFound) {
+                                                modelDropdown.style.backgroundColor = '#ff6666';
+                                            }
+                                        }, 100);
+                                    }, 200);
+                                    return;
+                                }
+                            });
+
+                            // If the algorithm wasn't found, set it to red
+                            if (!algorithmDropdownFound) {
+                                algorithmDropdown.style.backgroundColor = '#ff6666';
+                            }
+                        }, 100);
+                    }, 200);
+                }
+            }
+        }, 800);
     }
 });
 
