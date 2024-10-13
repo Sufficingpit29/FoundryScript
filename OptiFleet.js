@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.4.2
+// @version      2.5.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -89,17 +89,18 @@ window.addEventListener('load', function () {
             });
         }
 
-        function editAlertAmount() {
+        function editalertThreshold() {
             // Check to see if the popup already exists and if so, don't create another
             const existingPopup = document.querySelector('.alert-amount-popup');
             if (existingPopup) {
                 return;
             }
 
-            const alertAmount = GM_SuperValue.get("alertAmount", 10);
-            const majorAlertAmount = GM_SuperValue.get("majorAlertAmount", 50);
+            const alertThreshold = GM_SuperValue.get("alertThreshold", 10);
+            const majoralertThreshold = GM_SuperValue.get("majoralertThreshold", 110);
             const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", "true") === "true";
             const alertEnabled = GM_SuperValue.get("alertEnabled", "true") === "true";
+            const majorAlertEnabled = GM_SuperValue.get("majorAlertEnabled", "true") === "true";
 
             const popup = document.createElement('div');
             popup.style.position = 'fixed';
@@ -119,7 +120,7 @@ window.addEventListener('load', function () {
 
             const alertInput = document.createElement('input');
             alertInput.type = 'number';
-            alertInput.value = alertAmount;
+            alertInput.value = alertThreshold;
             alertInput.style.marginBottom = '10px';
             alertInput.style.width = '100%';
             alertInput.style.height = '30px'; // Set the height a bit bigger
@@ -133,7 +134,7 @@ window.addEventListener('load', function () {
 
             const majorAlertInput = document.createElement('input');
             majorAlertInput.type = 'number';
-            majorAlertInput.value = majorAlertAmount;
+            majorAlertInput.value = majoralertThreshold;
             majorAlertInput.style.marginBottom = '10px';
             majorAlertInput.style.width = '100%';
             majorAlertInput.style.height = '30px'; // Set the height a bit bigger
@@ -180,6 +181,25 @@ window.addEventListener('load', function () {
             alertEnabledContainer.appendChild(alertEnabledInput);
             alertEnabledContainer.appendChild(alertEnabledLabelText);
             
+            const majorAlertEnabledContainer = document.createElement('div');
+            majorAlertEnabledContainer.style.display = 'flex';
+            majorAlertEnabledContainer.style.alignItems = 'center';
+
+            const majorAlertEnabledInput = document.createElement('input');
+            majorAlertEnabledInput.type = 'checkbox';
+            majorAlertEnabledInput.checked = majorAlertEnabled;
+            majorAlertEnabledInput.style.marginBottom = '10px';
+            majorAlertEnabledInput.style.width = '20px'; // Set the width smaller
+            majorAlertEnabledInput.style.height = '20px'; // Set the height smaller
+            majorAlertEnabledInput.style.marginRight = '10px'; // Add some space to the right
+
+            const majorAlertEnabledLabelText = document.createElement('span');
+            majorAlertEnabledLabelText.innerText = 'Enable/Disable major notifications.';
+            majorAlertEnabledLabelText.style.color = '#fff'; // Set text color to white for better contrast
+            majorAlertEnabledLabelText.style.marginBottom = '10px';
+
+            majorAlertEnabledContainer.appendChild(majorAlertEnabledInput);
+            majorAlertEnabledContainer.appendChild(majorAlertEnabledLabelText);
 
             const saveButton = document.createElement('button');
             saveButton.innerText = 'Save';
@@ -202,15 +222,16 @@ window.addEventListener('load', function () {
             });
 
             saveButton.addEventListener('click', () => {
-                const newAlertAmount = parseInt(alertInput.value);
-                const newMajorAlertAmount = parseInt(majorAlertInput.value);
-                if (!isNaN(newAlertAmount) && !isNaN(newMajorAlertAmount)) {
-                    GM_SuperValue.set("alertAmount", newAlertAmount);
-                    GM_SuperValue.set("majorAlertAmount", newMajorAlertAmount);
+                const newalertThreshold = parseInt(alertInput.value);
+                const newMajoralertThreshold = parseInt(majorAlertInput.value);
+                if (!isNaN(newalertThreshold) && !isNaN(newMajoralertThreshold)) {
+                    GM_SuperValue.set("alertThreshold", newalertThreshold);
+                    GM_SuperValue.set("majoralertThreshold", newMajoralertThreshold);
                 }
 
                 GM_SuperValue.set("onlyNonHashing", onlyNonHashingInput.checked.toString());
                 GM_SuperValue.set("alertEnabled", alertEnabledInput.checked.toString());
+                GM_SuperValue.set("majorAlertEnabled", majorAlertEnabledInput.checked.toString());
                 
                 popup.remove();
 
@@ -247,6 +268,7 @@ window.addEventListener('load', function () {
             popup.appendChild(majorAlertInput);
             popup.appendChild(onlyNonHashingContainer);
             popup.appendChild(alertEnabledContainer);
+            popup.appendChild(majorAlertEnabledContainer);
             popup.appendChild(saveButton);
             popup.appendChild(cancelButton);
 
@@ -280,7 +302,7 @@ window.addEventListener('load', function () {
             });
 
             editAmountButton.addEventListener('click', () => {
-                editAlertAmount();
+                editalertThreshold();
             });
 
             document.body.appendChild(editAmountButton);
@@ -290,16 +312,22 @@ window.addEventListener('load', function () {
         function minerIssueNotification() {
             retrieveIssueMiners((issueMiners) => {
                 let minerCount = issueMiners.length;
-                const alertAmount = GM_SuperValue.get("alertAmount", 10);
-                const majorAlertAmount = GM_SuperValue.get("majorAlertAmount", 50);
+                const alertThreshold = GM_SuperValue.get("alertThreshold", 10);
+                const majoralertThreshold = GM_SuperValue.get("majoralertThreshold", 50);
                 const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", "true") === "true";
                 const alertEnabled = GM_SuperValue.get("alertEnabled", "true") === "true";
+                const majorAlertEnabled = GM_SuperValue.get("majorAlertEnabled", "true") === "true";
 
                 if (!alertEnabled) { return; }
 
                 // Remove the current notification if it exists
                 const existingNotification = document.querySelector('.miner-issue-notification');
                 if (existingNotification) {
+                    const editAmountButton = document.getElementById('editAmountButton');
+                    if (editAmountButton) {
+                        editAmountButton.style.display = 'block';
+                        editAmountButton.style.opacity = '1';
+                    }
                     existingNotification.remove();
                 }
 
@@ -313,7 +341,7 @@ window.addEventListener('load', function () {
                 if(onlyNonHashing) {
                     minerCount = nonHashingMinerCount;
                 }
-                if(minerCount >= alertAmount) {
+                if(minerCount >= alertThreshold) {
                     // Find if editAmountButton exists and if so, hide it
                     const editAmountButton = document.getElementById('editAmountButton');
                     if (editAmountButton) {
@@ -362,7 +390,7 @@ window.addEventListener('load', function () {
                     document.body.appendChild(notification);
 
                     // If at major alert amount, make the notification red & play a sound
-                    if(minerCount >= majorAlertAmount) {
+                    if(minerCount >= majoralertThreshold && majorAlertEnabled) {
                         notification.style.backgroundColor = 'red';
                         notification.style.color = 'white';
                         notification.style.fontWeight = 'bold';
@@ -370,6 +398,11 @@ window.addEventListener('load', function () {
                         document.body.click();
                         const audio = new Audio('https://cdn.freesound.org/previews/521/521973_311243-lq.mp3');
                         audio.play();
+
+                        
+                        var msg = new SpeechSynthesisUtterance();
+                        msg.text = "There are " + allMiners + " miners with issues. " + nonHashingMinerCount + " are non hashing. " + lowHashingMinerCount + " are low hashing.";
+                        window.speechSynthesis.speak(msg);
 
                         // if over 500, repeat the sound every 5 seconds for 60 seconds
                         if(minerCount >= 500) {
@@ -393,7 +426,7 @@ window.addEventListener('load', function () {
                     editButton.style.marginLeft = '10px';
 
                     editButton.addEventListener('click', () => {
-                        editAlertAmount();
+                        editalertThreshold();
                     });
 
                     notification.appendChild(editButton);
@@ -819,7 +852,7 @@ window.addEventListener('load', function () {
             }, 500);
         }
 
-        // Scan Miner SN Logic
+        // SN Scanner Logic
         if(currentUrl.includes("https://foundryoptifleet.com/")) {
 
             // Check is the user ever inputs something
@@ -1736,21 +1769,22 @@ window.addEventListener('load', function () {
                                             return;
                                         }
 
-                                        var min15 = 15*60;
-                                        var minSoftRebootUpTime = 60*60; // 1 hour
-                                        var upTime = currentMiner.uptimeValue;
-                                        var container = location.split("_")[1].split("-")[0].replace(/\D/g, '').replace(/^0+/, '');
-                                        var maxTemp = 78;
-                                        var containerTemp = containerTempData[container].temp;
+                                        const min15 = 15*60;
+                                        const minSoftRebootUpTime = 60*60; // 1 hour
+                                        const upTime = currentMiner.uptimeValue;
+                                        const container = location.split("_")[1].split("-")[0].replace(/\D/g, '').replace(/^0+/, '');
+                                        const maxTemp = 78;
+                                        const containerTemp = containerTempData[container].temp;
+                                        const powerMode = currentMiner.powerModeName;
 
-                                        var isOnline = currentMiner.connectivity === 'Online';
-                                        var moreThanOneHour = upTime > minSoftRebootUpTime;
-                                        var belowMaxTemp = containerTemp <= maxTemp;
+                                        const isOnline = currentMiner.connectivity === 'Online';
+                                        let moreThanOneHour = upTime > minSoftRebootUpTime;
+                                        const belowMaxTemp = containerTemp <= maxTemp;
 
-                                        var minerRebootTimesData = lastRebootTimes[minerID] || {};
-                                        var softRebootTimes = minerRebootTimesData.softRebootsTimes || [];
-                                        var lastSoftRebootTime = softRebootTimes[softRebootTimes.length-1] || false;
-                                        var timeSinceLastSoftReboot = lastSoftRebootTime ? (new Date() - new Date(lastSoftRebootTime)) : false;
+                                        const minerRebootTimesData = lastRebootTimes[minerID] || {};
+                                        const softRebootTimes = minerRebootTimesData.softRebootsTimes || [];
+                                        const lastSoftRebootTime = softRebootTimes[softRebootTimes.length-1] || false;
+                                        const timeSinceLastSoftReboot = lastSoftRebootTime ? (new Date() - new Date(lastSoftRebootTime)) : false;
                                         
                                         if(timeSinceLastSoftReboot && timeSinceLastSoftReboot < 60*60*1000) { // Mainly if the page was reloaded or something and another scan was started before the miner uptime data could change so it still thinks it hasn't been rebooted IE the uptime hasn't changed
                                             moreThanOneHour = false;
@@ -1771,7 +1805,7 @@ window.addEventListener('load', function () {
 
                                                 if(rebootCount < maxRebootAllowed) {
                                                     // Reboot the miner
-                                                    var minerIdList = [minerID];
+                                                    const minerIdList = [minerID];
                                                     
                                                     rebootData[minerID].details.main = "Sent Soft Reboot";
                                                     rebootData[minerID].details.sub = [
@@ -1815,7 +1849,7 @@ window.addEventListener('load', function () {
                                                     rebootData[minerID].details.color = 'yellow';
                                                     const formattedTime = new Date(lastSoftRebootTime).toLocaleTimeString();
                                                     rebootData[minerID].details.sub.push("Soft Reboot sent at: " + formattedTime);
-                                                    var timeLeft = (min15*1000 - timeSinceLastSoftReboot)/1000;
+                                                    const timeLeft = (min15*1000 - timeSinceLastSoftReboot)/1000;
                                                     rebootData[minerID].details.sub.push("Time Left: " + formatUptime(timeLeft));
                                                 } else {
                                                     rebootData[minerID].details.main = "Soft Reboot Skipped";
@@ -1826,14 +1860,18 @@ window.addEventListener('load', function () {
                                                     }
                                                 }
                                             }
+
+                                            if(powerMode === "Low Power") {
+                                                rebootData[minerID].details.sub.push("Miner is in Low Power Mode.");
+                                            }
                                         }
                                     
                                         // If the miner has a lastRebootTime and it is at or more than 15 minutes and still has a 0 hash rate, then we can flag it to be hard rebooted, or if the miner last uptime is the same as the current uptime
-                                        var minTime = 15*60*1000; // 15 minutes
-                                        var forgetTime = 60*60*1000; // 1 hours
+                                        const minTime = 15*60*1000; // 15 minutes
+                                        const forgetTime = 60*60*1000; // 1 hours
 
-                                        var isPastMinTime = timeSinceLastSoftReboot >= minTime;
-                                        var notPastForgetTime = timeSinceLastSoftReboot < forgetTime;
+                                        const isPastMinTime = timeSinceLastSoftReboot >= minTime;
+                                        const notPastForgetTime = timeSinceLastSoftReboot < forgetTime;
 
                                         // Loops through the softRebootsTimes and remove any that are more than 6 hours old
                                         lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
@@ -1842,24 +1880,24 @@ window.addEventListener('load', function () {
                                             return (new Date() - new Date(time)) < 6*60*60*1000;
                                         });
 
-                                        var numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
-                                        var moreThan3SoftReboots = numOfSoftReboots >= 3;
+                                        const numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
+                                        const moreThan3SoftReboots = numOfSoftReboots >= 3;
 
                                         // Check if the miner is at 0 uptime and is online, if so that might indicate it is stuck, but we only do it if the normal soft reboot conditions have gone through and is now skipping
-                                        var stuckAtZero = upTime === 0 && isOnline && rebootData[minerID].details.main === "Soft Reboot Skipped";
+                                        const stuckAtZero = upTime === 0 && isOnline && rebootData[minerID].details.main === "Soft Reboot Skipped";
                                         if(stuckAtZero) {
                                             rebootData[minerID].details.sub.push("Miner might be stuck at 0 uptime? Please wait for confirmation check...");
                                         }
 
-                                        var hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
-                                        var timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
-                                        var hardRebootAttempted = (timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000) || hardRebootAttemptedTime === true;
+                                        const hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
+                                        const timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
+                                        const hardRebootAttempted = (timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000) || hardRebootAttemptedTime === true;
 
-                                        var hardRebootRecommended = lastRebootTimes[minerID].hardRebootRecommended || false;
-                                        var timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
-                                        var hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 6*60*60*1000; // 6 hours
+                                        let hardRebootRecommended = lastRebootTimes[minerID].hardRebootRecommended || false;
+                                        const timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
+                                        hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 6*60*60*1000; // 6 hours
 
-                                        var manualHardReboot = lastRebootTimes[minerID].manualHardReboot || false;
+                                        const manualHardReboot = lastRebootTimes[minerID].manualHardReboot || false;
                                         
                                         if( !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || manualHardReboot)) {
                                             lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
@@ -1904,8 +1942,8 @@ window.addEventListener('load', function () {
                                                 const formattedTime = new Date(hardRebootAttemptedTime).toLocaleTimeString();
                                                 rebootData[minerID].details.sub.push("15 Minutes has not passed since hard reboot mark time.");
                                                 rebootData[minerID].details.sub.push("Hard Reboot Marked at: " + formattedTime);
-                                                var timeSinceSent = new Date() - new Date(hardRebootAttemptedTime);
-                                                var timeLeft = (min15*1000 - timeSinceSent)/1000;
+                                                const timeSinceSent = new Date() - new Date(hardRebootAttemptedTime);
+                                                const timeLeft = (min15*1000 - timeSinceSent)/1000;
                                                 rebootData[minerID].details.sub.push("Time Left: " + formatUptime(timeLeft));
                                             }
 
@@ -1916,8 +1954,14 @@ window.addEventListener('load', function () {
                                             }
                                         }
 
+                                        if(powerMode === "Sleep") {
+                                            rebootData[minerID].details.main = "Sleep Mode";
+                                            rebootData[minerID].details.sub.push("Miner is in Sleep Mode.");
+                                        }
+
                                         if(!belowMaxTemp) {
-                                            rebootData[minerID].details.sub.push("Miner is above 78°F.");
+                                            rebootData[minerID].details.main = "Container Over Temp";
+                                            rebootData[minerID].details.sub.push("Container is above 78°F.");
                                         }
 
                                         lastRebootTimes[minerID].previousUpTime = upTime;
@@ -2858,6 +2902,9 @@ window.addEventListener('load', function () {
                                                         scanningElement.remove();
                                                         progressLog.remove();
                                                         clearInterval(scanningInterval);
+
+                                                        // Set page title back to the original title
+                                                        document.title = orginalTitle;
                                                     };
 
                                                     // Add the miner data to the table body
@@ -3511,6 +3558,76 @@ window.addEventListener('load', function () {
                 }
             }, 1000);
         }
+
+        // Add temps for all containers if in overview page
+        if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
+            let lastRan = 0;
+            function addTemperatureData() {
+                const containers = document.querySelectorAll('.m-box.stat-panel.good');
+                if (containers.length === 0) {
+                    setTimeout(addTemperatureData, 10);
+                    return;
+                }
+
+                console.log('Adding temperature data to containers:', containers.length);
+                
+                containers.forEach(container => {
+                    // Add the temperature title if it doesn't exist
+                    if (!container.querySelector('.temp-text-title')) {
+                        const tempElement = document.createElement('div');
+                        tempElement.className = 'temp-text-title';
+                        tempElement.innerText = 'Temperature:';
+                        container.appendChild(tempElement);
+                    }
+                });
+
+                function getTemp() {
+                    if (Date.now() - lastRan < 5000) {
+                        return;
+                    }
+                    lastRan = Date.now();
+                    retrieveContainerTempData((containerTempData) => {
+                        containers.forEach(container => {
+                            const containerNum = parseInt(container.querySelector('.m-heading').innerText.split('_')[1].substring(1));
+                            if (isNaN(containerNum) || !containerTempData[containerNum]) {
+                                return;
+                            }
+                            const tempValue = containerTempData[containerNum].temp.toFixed(2);
+                            let tempElement = container.querySelector('.temp-text');
+                            if(!tempElement) {
+                                tempElement = document.createElement('div');
+                                tempElement.className = 'temp-text';
+                                container.appendChild(tempElement);
+                            }
+                            tempElement.innerText = tempValue + '°F';
+                            if (tempValue > 80) {
+                                tempElement.style.color = 'red';
+                            } else if (tempValue > 70) {
+                                tempElement.style.color = 'yellow';
+                            } else {
+                                tempElement.style.color = 'white';
+                            }
+                        });
+                    });
+                }
+
+                getTemp();
+            }
+
+            addTemperatureData();
+            setInterval(() => {
+                addTemperatureData();
+            }, 5000);
+
+            // Observer any changes, if 'temp-text-title' is no longer there, then re-add it
+            const observer = new MutationObserver((mutationsList, observer) => {
+                addTemperatureData();
+            });
+
+            // Start observing the container
+            observer.observe(document.body, { childList: true, subtree: true });
+            
+        }
     }
 
     // Only run on the OptiFleet website
@@ -3993,10 +4110,12 @@ window.addEventListener('load', function () {
         }  
 
         // Function to check the current URL
-        var lastRunTime = 0;
+        var lastRunTime = 0; // Note this run time is refering to last time the function was run, not the miner run/uptime time
+        var lastRealUpTime = 0;
+        var lastUpTimeInterval = null;
         function runAntMinerGUIAdjustments() {
-            // Check if the last run was less than 1 second ago
-            if (Date.now() - lastRunTime < 1000) {
+            // Check if the last run was less than 10ms ago, stops it from running too often
+            if (Date.now() - lastRunTime < 10) {
                 return;
             }
             lastRunTime = Date.now();
@@ -4090,7 +4209,7 @@ window.addEventListener('load', function () {
                         'Voltage Abnormity': {
                             icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
                             start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
-                            end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!"],
+                            end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!"],
                         },
                         'Temperature Overheat': {
                             icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
@@ -4618,6 +4737,86 @@ window.addEventListener('load', function () {
             }
         }
 
+        // Function to update the estimated time
+        function updateEstimatedTime() {
+            const minerRunningTimeElement = document.querySelector('td span[data-locale="mRunTm"]');
+            if (!minerRunningTimeElement || !minerRunningTimeElement.nextElementSibling) {
+                setTimeout(updateEstimatedTime, 0);
+                return;
+            }
+
+            // Function to parse the current running time
+            function parseRunningTime(stringReturn = false) {
+                const timeElements = minerRunningTimeElement.nextElementSibling.querySelectorAll('.num');
+                const days = parseInt(timeElements[0].textContent, 10);
+                const hours = parseInt(timeElements[1].textContent, 10);
+                const minutes = parseInt(timeElements[2].textContent, 10);
+                const seconds = parseInt(timeElements[3].textContent, 10);
+                if (stringReturn) {
+                    return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+                }
+
+                return { days, hours, minutes, seconds };
+            }
+
+            // Function to format the time
+            function formatTime({ days, hours, minutes, seconds }) {
+                return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+            }
+
+            // Get the current estimated time element
+            let estimatedTimeElement = document.querySelector('.estimated-time');
+            if (estimatedTimeElement) {
+                if (lastRealUpTime === parseRunningTime(true)) {
+                    return;
+                } else {
+                    clearInterval(lastUpTimeInterval);
+                }
+            }
+            lastRealUpTime = parseRunningTime(true);
+            
+
+            // Create a new element for the estimated time if it doesn't already exist
+            if(!estimatedTimeElement) {
+                estimatedTimeElement = document.createElement('span');
+                estimatedTimeElement.className = 'estimated-time';
+                estimatedTimeElement.style.display = 'block';
+                minerRunningTimeElement.parentNode.appendChild(estimatedTimeElement);
+            }
+
+            // Function to increment the time
+            function incrementTime(time) {
+                time.seconds++;
+                if (time.seconds >= 60) {
+                    time.seconds = 0;
+                    time.minutes++;
+                }
+                if (time.minutes >= 60) {
+                    time.minutes = 0;
+                    time.hours++;
+                }
+                if (time.hours >= 24) {
+                    time.hours = 0;
+                    time.days++;
+                }
+                return time;
+            }
+
+            // Initial time
+            let currentTime = parseRunningTime();
+            currentTime = incrementTime(currentTime);
+            estimatedTimeElement.textContent = `Estimated Live: ${formatTime(currentTime)}`;
+
+            // Update the estimated time every second
+            lastUpTimeInterval = setInterval(() => {
+                currentTime = incrementTime(currentTime);
+                estimatedTimeElement.textContent = `Estimated Live: ${formatTime(currentTime)}`;
+            }, 1000);
+        }
+
+        // Call the function to start updating the estimated time
+        updateEstimatedTime();
+
         // Run the check on mutation
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
@@ -4625,6 +4824,7 @@ window.addEventListener('load', function () {
                     setTimeout(runAntMinerGUIAdjustments, 500);
                 }
                 adjustLayout();
+                updateEstimatedTime();
             });
         });
 
