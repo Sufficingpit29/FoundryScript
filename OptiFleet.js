@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.5.2
+// @version      2.5.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -485,46 +485,73 @@ window.addEventListener('load', function () {
             siteName = pageInstance.getSelectedSiteName();
             companyId = pageInstance.getSelectedCompanyId();
 
+            // In case we swap company/site (Not actually sure if it matters for site, but might as well)
+            serviceInstance = new OptiFleetService();
+            pageInstance = new OptiFleetPage();
+
+            __awaiter(this, void 0, void 0, function* () {
+                serviceInstance.get(`/MinerInfo?siteId=${siteId}&zoneId=${-1}&zoneName=All%20Zones`)
+                    .then((resp) => {
+                    resp.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
+                    let miners = resp.miners;
+                    console.log("Miners Data:", miners);
+
+                    // Get first miner in the list and if it existed before/changed any
+                    const firstMiner = miners[0];
+                    if (miners.length > 0) {
+                        //console.log("First Miner:", !lastMinersLookup[firstMiner.id]);
+                        //console.log("Last Site ID:", lastSiteId, "Current Site ID:", siteId);
+                        //console.log(lastSiteId === '-1' || siteId === '-1', Object.keys(lastMinersLookup).length, miners.length);
+                        // Either the a miner no longer exists or we've swaped from/to an all sites and the length changed, if either of those are true we can assume the data has changed
+                        // Or hasRefreshed so let's reload the data regardless, just in case anything changed
+                        if (!lastMinersLookup[firstMiner.id] || (lastSiteId === '-1' || siteId === '-1') && Object.keys(lastMinersLookup).length !== miners.length || hasRefreshed) {
+                            lastMinerDataUpdate = Date.now();
+                            reloadCards = true;
+                            hasRefreshed = false;
+                            console.log("Miner data updated");
+                        }
+                    }
+    
+                    if(keepTrying && Date.now() - lastMinerDataUpdate > 1000) {
+                        console.log("Retrying to get miner data");
+                        setTimeout(function() {
+                            updateAllMinersData(true);
+                        }, 500);
+                    }
+    
+                    // Sets up a lookup table
+                    miners.forEach(miner => {
+                        allMinersLookup[miner.id] = miner;
+                    });
+    
+                    // Get the miners data
+                    allMinersData = miners;
+    
+                    // Call the callback function if it exists
+                    if (callback) {
+                        callback(miners);
+                    }
+                }).catch((error) => {
+                    console.error("Error fetching miners data:", error);
+
+                    if(keepTrying) {
+                        console.log("Retrying to get miner data");
+                        setTimeout(function() {
+                            updateAllMinersData(true, callback);
+                        }, 500);
+                    }
+                });
+                
+            });
+
+            /*
             // Call the getMiners method
             viewServiceInstance.getMiners(companyId, siteId).then(function(miners) {
-                // Get first miner in the list and if it existed before/changed any
-                const firstMiner = miners.miners[0];
-                if (miners.miners.length > 0) {
-                    //console.log("First Miner:", !lastMinersLookup[firstMiner.id]);
-                    //console.log("Last Site ID:", lastSiteId, "Current Site ID:", siteId);
-                    //console.log(lastSiteId === '-1' || siteId === '-1', Object.keys(lastMinersLookup).length, miners.miners.length);
-                    // Either the a miner no longer exists or we've swaped from/to an all sites and the length changed, if either of those are true we can assume the data has changed
-                    // Or hasRefreshed so let's reload the data regardless, just in case anything changed
-                    if (!lastMinersLookup[firstMiner.id] || (lastSiteId === '-1' || siteId === '-1') && Object.keys(lastMinersLookup).length !== miners.miners.length || hasRefreshed) {
-                        lastMinerDataUpdate = Date.now();
-                        reloadCards = true;
-                        hasRefreshed = false;
-                        console.log("Miner data updated");
-                    }
-                }
-
-                if(keepTrying && Date.now() - lastMinerDataUpdate > 1000) {
-                    console.log("Retrying to get miner data");
-                    setTimeout(function() {
-                        updateAllMinersData(true);
-                    }, 500);
-                }
-
-                // Sets up a lookup table
-                miners.miners.forEach(miner => {
-                    allMinersLookup[miner.id] = miner;
-                });
-
-                // Get the miners data
-                allMinersData = miners.miners;
-
-                // Call the callback function if it exists
-                if (callback) {
-                    callback(miners.miners);
-                }
+               
             }).catch(function(error) {
-                console.error("Error fetching miners data:", error);
+                
             });
+            */
         }
         updateAllMinersData();
 
@@ -1569,7 +1596,7 @@ window.addEventListener('load', function () {
                     }
 
                     var orginalTitle = document.title;
-                    function startScan(timeFrame, autoreboot, stage) {
+                    function startScan(timeFrame, autoreboot, rebootAllMiners) {
                         var rebootData = {};
 
                         // Get saved last reboot times
@@ -1578,15 +1605,25 @@ window.addEventListener('load', function () {
 
                         function getTotalRebootCount() {
                             var rebootCount = 0;
+                            var earliestTime = new Date();
+                            var timeLeft = '';
                             for (const [minerID, rebootData] of Object.entries(lastRebootTimes)) {
                                 var softRebootTimes = rebootData.softRebootsTimes || [];
                                 var lastSoftRebootTime = softRebootTimes[softRebootTimes.length-1] || false;
                                 var timeSinceLastSoftReboot = lastSoftRebootTime ? (new Date() - new Date(lastSoftRebootTime)) : false;
                                 if(timeSinceLastSoftReboot && timeSinceLastSoftReboot < 15*60*1000) {
                                     rebootCount++;
+                                    if(new Date(lastSoftRebootTime) <= earliestTime) {
+                                        earliestTime = new Date(lastSoftRebootTime);
+                                        const timeToReset = new Date(earliestTime.getTime() + 15*60*1000);
+                                        timeLeft = Math.floor((timeToReset - new Date()) / 1000);
+                                        const minutes = Math.floor(timeLeft / 60);
+                                        const seconds = timeLeft % 60;
+                                        timeLeft = ` | ${minutes}m ${seconds}s`;
+                                    }
                                 }
                             }
-                            return rebootCount;
+                            return [rebootCount, timeLeft];
                         }
 
                         // Close the dropdown
@@ -1634,13 +1671,7 @@ window.addEventListener('load', function () {
                         // Set the webpage title
                         document.title = orginalTitle + ' | Retrieving Miner Data...';
                         retrieveContainerTempData((containerTempData) => {
-                            retrieveIssueMiners((issueMiners) => {
-
-                                // If we are in auto reboot mode, remove any miner that isn't completely non-hashing
-                                if (autoreboot) {
-                                    issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
-                                }
-
+                            function rebootLogic(rebootMiners) {
                                 var minersScanData = {};
                                 var maxRebootAllowed = 100;
 
@@ -1661,11 +1692,11 @@ window.addEventListener('load', function () {
                                 percentageText.style.fontSize = '1em';
                                 scanningElement.appendChild(percentageText);
 
-                                //var currentMiner = issueMiners[0];
+                                //var currentMiner = rebootMiners[0];
                                 var currentMinerIndex = 0;
                                 var updatePercentageTextInteval = setInterval(() => {
                                     // Calculate the progress percentage
-                                    var totalMiners = issueMiners.length;
+                                    var totalMiners = rebootMiners.length;
                                     var minersScanned = currentMinerIndex;
                                     const progressPercentage = (minersScanned / totalMiners) * 100;
 
@@ -1708,7 +1739,19 @@ window.addEventListener('load', function () {
 
                                 // Loop through allMinersData and get the uptime
                                 var firstScan = true;
-                                function parseMinerUpTimeData(currentMiner, timeFrame) {
+                                let stackDepth = 0;
+                                const maxStackDepth = 65;
+                                function parseMinerUpTimeData(currentMiner, timeFrame, callback) {
+                                    stackDepth++;
+
+                                    if(stackDepth >= maxStackDepth) {
+                                        stackDepth = 0;
+                                        setTimeout(() => { // Time out to try and fix max call stack error
+                                            parseMinerUpTimeData(currentMiner, timeFrame, callback);
+                                        }, 0);
+                                        return
+                                    }
+
                                     let minerID = currentMiner.id;
 
                                     // Add to progress log
@@ -1776,6 +1819,10 @@ window.addEventListener('load', function () {
                                         const maxTemp = 78;
                                         const containerTemp = containerTempData[container].temp;
                                         const powerMode = currentMiner.powerModeName;
+                                        let hashRateEfficiency = currentMiner.hashRatePercent;
+                                        if(!rebootAllMiners) {
+                                            hashRateEfficiency = false;
+                                        }
 
                                         const isOnline = currentMiner.connectivity === 'Online';
                                         let moreThanOneHour = upTime > minSoftRebootUpTime;
@@ -1798,10 +1845,10 @@ window.addEventListener('load', function () {
                                         rebootData[minerID].miner = currentMiner;
 
                                         if(isOnline) {
-                                            if(moreThanOneHour && belowMaxTemp) { // If the miner passed the conditions, then we can reboot it
+                                            if(moreThanOneHour && belowMaxTemp && (!hashRateEfficiency || hashRateEfficiency > 0)) { // If the miner passed the conditions, then we can reboot it
 
                                                 // Loop through lastRebootTimes, and get the last reboot time for each miner, if it has been less than 15 minutes, we will count that as activly rebooting
-                                                var rebootCount = getTotalRebootCount();
+                                                var rebootCount = getTotalRebootCount()[0];
 
                                                 if(rebootCount < maxRebootAllowed) {
                                                     // Reboot the miner
@@ -1812,6 +1859,10 @@ window.addEventListener('load', function () {
                                                         "Miner has been online for more than 1 hour.",
                                                         "Miner is below 78°F."
                                                     ];
+                                                    
+                                                    const formattedTime = new Date(new Date().toISOString()).toLocaleTimeString();
+                                                    rebootData[minerID].details.sub.push("Soft Reboot sent at: " + formattedTime);
+                                                    rebootData[minerID].details.sub.push("Soft Reboot ends at: " + new Date(new Date(new Date().toISOString()).getTime() + min15*1000).toLocaleTimeString());
 
                                                     // Update the lastRebootTimes
                                                     lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
@@ -1849,6 +1900,7 @@ window.addEventListener('load', function () {
                                                     rebootData[minerID].details.color = 'yellow';
                                                     const formattedTime = new Date(lastSoftRebootTime).toLocaleTimeString();
                                                     rebootData[minerID].details.sub.push("Soft Reboot sent at: " + formattedTime);
+                                                    rebootData[minerID].details.sub.push("Soft Reboot ends at: " + new Date(new Date(lastSoftRebootTime).getTime() + min15*1000).toLocaleTimeString());
                                                     const timeLeft = (min15*1000 - timeSinceLastSoftReboot)/1000;
                                                     rebootData[minerID].details.sub.push("Time Left: " + formatUptime(timeLeft));
                                                 } else {
@@ -1964,12 +2016,14 @@ window.addEventListener('load', function () {
                                             rebootData[minerID].details.sub.push("Container is above 78°F.");
                                         }
 
+                                        if(hashRateEfficiency) {
+                                            rebootData[minerID].details.sub.push("Hash Rate Efficiency: " + (hashRateEfficiency*100).toFixed(1));
+                                        }
+
                                         lastRebootTimes[minerID].previousUpTime = upTime;
                                     }
 
                                     function runNextMiner() {
-                                        // Stop if we have reached the end of the scan
-
                                         // Make it a checkmark
                                         const checkmark = document.createElement('span');
                                         checkmark.textContent = '✓';
@@ -2021,8 +2075,8 @@ window.addEventListener('load', function () {
                                         // Run the next miner
                                         if(firstScan) {
                                             currentMinerIndex++;
-                                            if (currentMinerIndex < Object.keys(issueMiners).length) {
-                                                currentMiner = issueMiners[currentMinerIndex];
+                                            if (currentMinerIndex < Object.keys(rebootMiners).length) {
+                                                currentMiner = rebootMiners[currentMinerIndex];
                                                 parseMinerUpTimeData(currentMiner, timeFrame);
                                             }
                                         }
@@ -2033,7 +2087,7 @@ window.addEventListener('load', function () {
                                             return;
                                         }
 
-                                        if (currentMinerIndex === Object.keys(issueMiners).length) {
+                                        if (currentMinerIndex === Object.keys(rebootMiners).length) {
                                             reachedScanEnd = true;
                                             
                                             // Save the rebootData
@@ -2061,6 +2115,9 @@ window.addEventListener('load', function () {
 
                                                     // Add a "Refreshing in (60s)" text
                                                     let countdown = 60;
+                                                    if(rebootAllMiners) {
+                                                        countdown = 60*15;
+                                                    }
                                                     const refreshText = document.createElement('div');
                                                     refreshText.textContent = `Refreshing in (${countdown}s)`;
                                                     refreshText.style.color = 'white';
@@ -2625,6 +2682,14 @@ window.addEventListener('load', function () {
 
                                                     // Refresh button functionality
                                                     refreshAutoRebootButton.onclick = function() {
+
+                                                        if(rebootAllMiners) {
+                                                            const finishedHardRebootsButton = document.querySelector('#finishedHardReboots');
+                                                            finishedHardRebootsButton.click();
+                                                            startScan(timeFrame, autoreboot, rebootAllMiners);
+                                                            return
+                                                        }
+
                                                         var currentTableScroll = popupResultElement.querySelector('#minerTableDiv').scrollTop;
 
                                                         refreshText.textContent = `Refreshing...`;
@@ -2647,14 +2712,13 @@ window.addEventListener('load', function () {
                                                         
                                                         rebootData = {};
 
-                                                        retrieveIssueMiners((issueMiners) => {
-                                                            // Only get the actual non hashing miners
-                                                            issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
-                                                            console.log("Refreshed issue miners:", issueMiners);
+                                                        function refreshTableLogic(rebootMiners) {
+                                                            
+                                                            console.log("Refreshed issue miners:", rebootMiners);
 
-                                                            let issueMinersLookup = {};
-                                                            issueMiners.forEach(miner => {
-                                                                issueMinersLookup[miner.id] = miner;
+                                                            let rebootMinersLookup = {};
+                                                            rebootMiners.forEach(miner => {
+                                                                rebootMinersLookup[miner.id] = miner;
                                                             });
 
                                                             // Get what we're currently sorting by
@@ -2667,7 +2731,7 @@ window.addEventListener('load', function () {
                                                             var tableRows = popupResultElement.querySelectorAll('tbody tr');
                                                             tableRows.forEach((row, index) => {
                                                                 let minerID = row.minerID;
-                                                                let currentMiner = issueMinersLookup[minerID];
+                                                                let currentMiner = rebootMinersLookup[minerID];
 
                                                                 if(minerID) {
                                                                     rebootData[minerID] = rebootData[minerID] || {};
@@ -2686,16 +2750,17 @@ window.addEventListener('load', function () {
                                                                         rebootData[minerID].details.color = '#218838';
                                                                         setUpRowData(row, rowMinerDataCopy);
                                                                     } else if(currentMiner) {
-                                                                        parseMinerUpTimeData(currentMiner, timeFrame);
-                                                                        setUpRowData(row, currentMiner);
+                                                                        parseMinerUpTimeData(currentMiner, timeFrame, (currentMiner, timeFrame,) => {
+                                                                            setUpRowData(row, currentMiner);
+                                                                        });
                                                                     }
                                                                 }
                                                             });
 
                                                             
-                                                            // Find any new miners in the issueMiners that are not in the table
+                                                            // Find any new miners in the rebootMiners that are not in the table
                                                             console.log("Checking for new miners to add to the table...");
-                                                            for (const miner of issueMiners) {
+                                                            for (const miner of rebootMiners) {
                                                                 if (miner === undefined || miner === null || !miner.id) {
                                                                     continue;
                                                                 }
@@ -2712,18 +2777,20 @@ window.addEventListener('load', function () {
 
                                                                 if (!found) {
                                                                     console.log('Adding new miner to the table:', miner.id);
-                                                                    parseMinerUpTimeData(miner, timeFrame);
-                                                                    rebootData[miner.id] = rebootData[miner.id] || {};
-                                                                    rebootData[miner.id].details = rebootData[miner.id].details || {};
-                                                                    rebootData[miner.id].details.sub = rebootData[miner.id].details.sub || [];
-                                                                    rebootData[miner.id].details.sub.push("Just added to the table.");
-                                                                    var newRow = document.createElement('tr');
-                                                                    popupResultElement.querySelector('tbody').appendChild(newRow);
-                                                                    setUpRowData(newRow, miner);
+                                                                    parseMinerUpTimeData(miner, timeFrame, (miner) => {
+                                                                        rebootData[miner.id] = rebootData[miner.id] || {};
+                                                                        rebootData[miner.id].details = rebootData[miner.id].details || {};
+                                                                        rebootData[miner.id].details.sub = rebootData[miner.id].details.sub || [];
+                                                                        rebootData[miner.id].details.sub.push("Just added to the table.");
+                                                                        var newRow = document.createElement('tr');
+                                                                        popupResultElement.querySelector('tbody').appendChild(newRow);
+                                                                        setUpRowData(newRow, miner);
 
-
-                                                                    // draw the row
-                                                                    $('#minerTable').DataTable().row.add(newRow).draw();
+                                                                        // draw the row
+                                                                        setTimeout(() => {
+                                                                            $('#minerTable').DataTable().row.add(newRow).draw();
+                                                                        }, 0);
+                                                                    });
                                                                 }
                                                             }
 
@@ -2758,7 +2825,42 @@ window.addEventListener('load', function () {
                                                             $('#minerTable').attr('orderType', orderType);
                                                             $('#minerTable').attr('isGrouped', grouped);
                                                             console.log("Refreshed table with order:", orderColumn, orderType);
-                                                        });
+                                                        }
+
+                                                        if(rebootAllMiners) {
+                                                            updateAllMinersData(true, (allMiners) => {
+                                                                //Loop through the allMiners and check their hashrate efficiency
+                                                                for (let index = allMiners.length - 1; index >= 0; index--) {
+                                                                    const currentMiner = allMiners[index];
+                                                                    console.log("Checking miner:", currentMiner);
+                                                                    const expectedHash = currentMiner.expectedHashRate || 0;
+                                                                    const currentHash = currentMiner.hashrate || "error";
+                                                                    const hashEfficiency = currentHash !== "error" ? Math.round((currentHash / expectedHash) * 100) : "error";
+
+                                                                    let hashRatePercent = currentMiner.hashRatePercent || 0;
+                                                                    hashRatePercent = hashRatePercent * 100;
+                                                                    // If the miner is at or above 100% efficiency, then we can remove it from the list
+                                                                    if(hashEfficiency >= rebootAllMiners || currentHash === "error" || hashRatePercent >= rebootAllMiners) {
+                                                                        allMiners.splice(index, 1);
+                                                                        continue;
+                                                                    }
+
+                                                                    // if locationName contains Minden_C18, remove it
+                                                                    if(currentMiner.locationName.includes("Minden_C18")) {
+                                                                        allMiners.splice(index, 1);
+                                                                        continue;
+                                                                    }
+                                                                }
+
+                                                                refreshTableLogic(allMiners);
+                                                            });
+                                                        } else {
+                                                            retrieveIssueMiners((issueMiners) => {
+                                                                // Only get the actual non hashing miners
+                                                                issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                                                                refreshTableLogic(issueMiners);
+                                                            });
+                                                        }
                                                     };
 
                                                     // Add text saying the current soft rebooting miners from getTotalRebootCount() that updates
@@ -2774,11 +2876,13 @@ window.addEventListener('load', function () {
                                                     softRebootingMinersText.style.left = '30px';
                                                     softRebootingMinersText.style.position = 'absolute';
                                                     firstDiv.appendChild(softRebootingMinersText);
-                                                    softRebootingMinersText.textContent = `Sent Soft Reboots: ${getTotalRebootCount()}/${maxRebootAllowed}`;
+                                                    softRebootingMinersText.textContent = `Sent Soft Reboots: ${getTotalRebootCount()[0]}/${maxRebootAllowed}${getTotalRebootCount()[1]}`;
 
                                                     const softRebootingMinersTextInterval = setInterval(() => {
-                                                        const rebootCount = getTotalRebootCount();
-                                                        softRebootingMinersText.textContent = `Sent Soft Reboots: ${rebootCount}/${maxRebootAllowed}`;
+                                                        const rebootData = getTotalRebootCount();
+                                                        const resetTime = rebootData[1];
+                                                        const firstReboot = lastRebootTimes[Object.keys(lastRebootTimes)[0]];
+                                                        softRebootingMinersText.textContent = `Sent Soft Reboots: ${rebootData[0]}/${maxRebootAllowed}${resetTime}`;
                                                     }, 1000);
 
                                                     // Set the progress bar to show up above the table
@@ -2858,7 +2962,32 @@ window.addEventListener('load', function () {
                                                         toggleSkippedMiners();
                                                     };
 
+                                                    /*
+                                                    // Add a checkbox for "Include Low Hashing Miners"
+                                                    const includeLowHashingMinersContainer = document.createElement('div');
+                                                    includeLowHashingMinersContainer.style.cssText = `
+                                                        display: flex;
+                                                        align-items: center;
+                                                        margin-top: 10px;
+                                                        align-self: flex-end;
+                                                    `;
+                                                    firstDiv.appendChild(includeLowHashingMinersContainer);
+                                                    
 
+                                                    const includeLowHashingMinersCheckbox = document.createElement('input');
+                                                    includeLowHashingMinersCheckbox.id = 'includeLowHashingMinersCheckbox';
+                                                    includeLowHashingMinersCheckbox.type = 'checkbox';
+                                                    includeLowHashingMinersCheckbox.style.cssText = `
+                                                        margin-right: 5px;
+                                                    `;
+                                                    includeLowHashingMinersContainer.appendChild(includeLowHashingMinersCheckbox);
+
+                                                    // Add a label for the checkbox
+                                                    const includeLowHashingMinersLabel = document.createElement('label');
+                                                    includeLowHashingMinersLabel.htmlFor = 'includeLowHashingMinersCheckbox';
+                                                    includeLowHashingMinersLabel.textContent = 'Include Low Hashing Miners';
+                                                    includeLowHashingMinersContainer.appendChild(includeLowHashingMinersLabel);
+                                                    */
 
                                                     // Add the "Finished Hard Reboots" button
                                                     const finishedButton = document.createElement('button');
@@ -3080,11 +3209,15 @@ window.addEventListener('load', function () {
                                         checkMiner(minerID);
                                         runNextMiner();
                                     }
+
+                                    if(callback) {
+                                        callback(currentMiner, timeFrame);
+                                    }
                                 }
-                                parseMinerUpTimeData(issueMiners[0], timeFrame);
+                                parseMinerUpTimeData(rebootMiners[0], timeFrame);
 
                                 const waitTillDone = setInterval(() => {
-                                    if (Object.keys(minersScanData).length === Object.keys(issueMiners).length) {
+                                    if (Object.keys(minersScanData).length === Object.keys(rebootMiners).length) {
                                         clearInterval(waitTillDone);
 
                                         // Remove the scanning element
@@ -3203,7 +3336,46 @@ window.addEventListener('load', function () {
                                         });
                                     }
                                 }, 500);
-                            });
+                            }
+
+                            if(rebootAllMiners) {
+                                console.log("Rebooting all miners...");
+                                updateAllMinersData(true, (allMiners) => {
+
+                                    //Loop through the allMiners and check their hashrate efficiency
+                                    for (let index = allMiners.length - 1; index >= 0; index--) {
+                                        const currentMiner = allMiners[index];
+                                        console.log("Checking miner:", currentMiner);
+                                        const expectedHash = currentMiner.expectedHashRate || 0;
+                                        const currentHash = currentMiner.hashrate || "error";
+                                        const hashEfficiency = currentHash !== "error" ? Math.round((currentHash / expectedHash) * 100) : "error";
+
+                                        let hashRatePercent = currentMiner.hashRatePercent || 0;
+                                        hashRatePercent = hashRatePercent * 100;
+                                        // If the miner is at or above 100% efficiency, then we can remove it from the list
+                                        if(hashEfficiency >= rebootAllMiners || currentHash === "error" || hashRatePercent >= rebootAllMiners) {
+                                            allMiners.splice(index, 1);
+                                            continue;
+                                        }
+
+                                        // if locationName contains Minden_C18, remove it
+                                        if(currentMiner.locationName.includes("Minden_C18")) {
+                                            allMiners.splice(index, 1);
+                                            continue;
+                                        }
+                                    }
+
+                                    rebootLogic(allMiners);
+                                });
+                            } else {
+                                retrieveIssueMiners((issueMiners) => {
+                                    // If we are in auto reboot mode, remove any miner that isn't completely non-hashing
+                                    if (autoreboot) {
+                                        issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                                    }
+                                    rebootLogic(issueMiners)
+                                });
+                            }
                         });
                     }
 
@@ -3244,11 +3416,126 @@ window.addEventListener('load', function () {
                         autoRebootButton.onclick = function(event) {
                             event.preventDefault(); // Prevent the default behavior of the button
 
-                            startScan(60*60*24*7, true, 1);
+                            startScan(60*60*24*7, true, false);
                         };
 
                         // Add the auto reboot button to the right of the dropdown
                         actionsDropdown.before(autoRebootButton);
+
+                        // Create a 'full' auto reboot button to the right of the dropdown
+                        const fullAutoRebootButton = document.createElement('button');
+                        fullAutoRebootButton.classList.add('m-button');
+                        fullAutoRebootButton.style.marginLeft = '10px';
+                        fullAutoRebootButton.textContent = 'Full Auto Reboot';
+                        fullAutoRebootButton.onclick = function(event) {
+                            event.preventDefault(); // Prevent the default behavior of the button
+
+                            // Create popup to type in what percentage efficiency to reboot at
+                            const popup = document.createElement('div');
+                            popup.style.cssText = `
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                width: 100%;
+                                height: 100%;
+                                background-color: rgba(0, 0, 0, 0.5);
+                                z-index: 1000;
+                                display: flex;
+                                justify-content: center;
+                                align-items: center;
+                            `;
+                            document.body.appendChild(popup);
+
+                            const popupContent = document.createElement('div');
+                            popupContent.style.cssText = `
+                                padding: 20px;
+                                background-color: #333;
+                                border-radius: 10px;
+                            `;
+                            popup.appendChild(popupContent);
+
+                            const popupTitle = document.createElement('h2');
+                            popupTitle.textContent = 'Efficiency percentage to reboot miners when at/below:';
+                            popupTitle.style.color = 'white';
+                            popupTitle.style.marginBottom = '10px';
+                            popupContent.appendChild(popupTitle);
+
+                            const currentEfficiency = GM_SuperValue.get('rebootEfficiency', 90);
+                            const efficiencyInput = document.createElement('input');
+                            efficiencyInput.type = 'number';
+                            efficiencyInput.min = 0;
+                            efficiencyInput.max = 100;
+                            efficiencyInput.value = currentEfficiency;
+                            efficiencyInput.style.width = '100%';
+                            efficiencyInput.style.padding = '10px';
+                            efficiencyInput.style.marginBottom = '10px';
+                            efficiencyInput.style.color = 'white';
+                            popupContent.appendChild(efficiencyInput);
+
+                            const buttonsDiv = document.createElement('div');
+                            buttonsDiv.style.display = 'flex';
+                            buttonsDiv.style.justifyContent = 'space-between';
+                            popupContent.appendChild(buttonsDiv);
+                            
+
+                            const submitButton = document.createElement('button');
+                            submitButton.textContent = 'Submit';
+                            submitButton.style.padding = '10px 20px';
+                            submitButton.style.backgroundColor = '#0078d4';
+                            submitButton.style.color = 'white';
+                            submitButton.style.border = 'none';
+                            submitButton.style.cursor = 'pointer';
+                            submitButton.style.borderRadius = '5px';
+                            submitButton.style.transition = 'background-color 0.3s';
+                            submitButton.style.display = 'block';
+                            submitButton.style.marginTop = '10px';
+                            buttonsDiv.appendChild(submitButton);
+
+                            submitButton.addEventListener('mouseenter', function() {
+                                this.style.backgroundColor = '#005a9e';
+                            });
+
+                            submitButton.addEventListener('mouseleave', function() {
+                                this.style.backgroundColor = '#0078d4';
+                            });
+
+                            submitButton.onclick = function() {
+                                const efficiency = efficiencyInput.value;
+                                console.log('Rebooting at efficiency:', efficiency);
+                                GM_SuperValue.set('rebootEfficiency', efficiency);
+                                startScan(60*60*24*7, true, efficiency);
+                                popup.remove();
+                            }
+
+                            const closeButton = document.createElement('button');
+                            closeButton.textContent = 'Cancel';
+                            closeButton.style.padding = '10px 20px';
+                            closeButton.style.backgroundColor = '#ff5e57';
+                            closeButton.style.color = 'white';
+                            closeButton.style.border = 'none';
+                            closeButton.style.cursor = 'pointer';
+                            closeButton.style.borderRadius = '5px';
+                            closeButton.style.transition = 'background-color 0.3s';
+                            closeButton.style.display = 'block';
+                            closeButton.style.marginTop = '10px';
+                            closeButton.style.marginLeft = '10px';
+                            buttonsDiv.appendChild(closeButton);
+
+                            closeButton.addEventListener('mouseenter', function() {
+                                this.style.backgroundColor = '#ff3832';
+                            });
+
+                            closeButton.addEventListener('mouseleave', function() {
+                                this.style.backgroundColor = '#ff5e57';
+                            });
+
+                            closeButton.onclick = function() {
+                                popup.remove();
+                            }
+                        };
+
+                        // Add the full auto reboot button to the right of the dropdown
+                        actionsDropdown.before(fullAutoRebootButton);
                     }
                 }
 
