@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.6.9
+// @version      2.7.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1595,40 +1595,7 @@ window.addEventListener('load', function () {
                         return `${minutes}m ${seconds}s`;
                     }
 
-                    var orginalTitle = document.title;
-                    function startScan(timeFrame, autoreboot, rebootAllMiners) {
-                        var rebootData = {};
-
-                        // Get saved last reboot times
-                        var lastRebootTimes = GM_SuperValue.get('lastRebootTimes', {});
-                        var reachedScanEnd = false;
-
-                        function getTotalRebootCount() {
-                            var rebootCount = 0;
-                            var earliestTime = new Date();
-                            var timeLeft = '';
-                            for (const [minerID, rebootData] of Object.entries(lastRebootTimes)) {
-                                var softRebootTimes = rebootData.softRebootsTimes || [];
-                                var lastSoftRebootTime = softRebootTimes[softRebootTimes.length-1] || false;
-                                var timeSinceLastSoftReboot = lastSoftRebootTime ? (new Date() - new Date(lastSoftRebootTime)) : false;
-                                if(timeSinceLastSoftReboot && timeSinceLastSoftReboot < 15*60*1000) {
-                                    rebootCount++;
-                                    if(new Date(lastSoftRebootTime) <= earliestTime) {
-                                        earliestTime = new Date(lastSoftRebootTime);
-                                        const timeToReset = new Date(earliestTime.getTime() + 15*60*1000);
-                                        timeLeft = Math.floor((timeToReset - new Date()) / 1000);
-                                        const minutes = Math.floor(timeLeft / 60);
-                                        const seconds = timeLeft % 60;
-                                        timeLeft = ` | ${minutes}m ${seconds}s`;
-                                    }
-                                }
-                            }
-                            return [rebootCount, timeLeft];
-                        }
-
-                        // Close the dropdown
-                        issues.toggleDropdownMenu('newActionsDropdown');
-
+                    function createScanOverlayUI() {
                         // Create an element to completely cover the page
                         var scanningElement = document.createElement('div');
                         scanningElement.style.position = 'fixed';
@@ -1668,6 +1635,176 @@ window.addEventListener('load', function () {
                         scanningText.style.textAlign = 'left';
                         scanningElement.appendChild(scanningText);
 
+                        // Add percentage text to top left of the screen
+                        var percentageText = document.createElement('div');
+                        percentageText.textContent = '';
+                        percentageText.style.position = 'absolute';
+                        percentageText.style.left = '10px';
+                        percentageText.style.top = '10px';
+                        percentageText.style.color = 'white';
+                        percentageText.style.fontSize = '1em';
+                        scanningElement.appendChild(percentageText);
+
+                        // Add the progress log on the right side of the screen
+                        var progressLog = document.createElement('div');
+                        progressLog.style.position = 'fixed';
+                        progressLog.style.top = '0';
+                        progressLog.style.right = '0';
+                        progressLog.style.width = '300px';
+                        progressLog.style.height = '100%';
+                        progressLog.style.backgroundColor = 'rgba(10, 10, 10, 1)';
+                        progressLog.style.color = 'white';
+                        progressLog.style.fontSize = '1em';
+                        progressLog.style.zIndex = '9998'; // Set the zIndex to be above everything
+                        progressLog.style.overflow = 'auto';
+                        document.body.appendChild(progressLog);
+
+                        // Spin rotation to be used in the loading icon
+                        let rotation = 0;
+
+                        // Add a message to the progress log
+                        const logMessage = document.createElement('div');
+                        logMessage.textContent = 'Progress Log';
+                        logMessage.style.padding = '10px';
+                        logMessage.style.borderTop = '1px solid white';
+                        progressLog.appendChild(logMessage);
+                        var logEntries = {};
+
+                        function setPreviousLogDone(currentMinerId, symbol, additionalText) {
+                            let logEntry = logEntries[currentMinerId];
+                            if (!logEntry) { return; }
+
+                            const wasScrollAtBottom = progressLog.scrollTop + progressLog.clientHeight >= progressLog.scrollHeight-10;
+
+                            symbol = symbol || '✓';
+
+                            // Make it a checkmark
+                            const checkmark = document.createElement('span');
+                            checkmark.textContent = symbol;
+                            checkmark.style.display = 'inline-block';
+                            checkmark.style.position = 'absolute';
+                            checkmark.style.right = '10px';
+
+                            // Remove the spinning 'loading' icon from the log entry
+                            const loadingIcon = logEntry.querySelector('span');
+                            if (loadingIcon) {
+                                // Add the checkmark right before the loading icon
+                                logEntry.insertBefore(checkmark, loadingIcon);
+
+                                // Stop the spinning
+                                clearInterval(loadingIcon.loadingIconInterval);
+                                loadingIcon.remove();
+                            }
+
+                            if (additionalText) {
+                                logEntry.appendChild(document.createElement('br'));
+                                const additionalTextNode = document.createTextNode(additionalText);
+                                const additionalTextLines = additionalText.split('\n');
+                                additionalTextLines.forEach((line, index) => {
+                                    logEntry.appendChild(document.createTextNode(line));
+                                    if (index < additionalTextLines.length - 1) {
+                                        logEntry.appendChild(document.createElement('br'));
+                                    }
+                                });
+                            }
+
+                            // Scroll to the bottom of the progress log
+                            if (wasScrollAtBottom) {
+                                progressLog.scrollTop = progressLog.scrollHeight;
+                            }
+                        }
+
+                        function addToProgressLog(currentMiner) {
+                            const wasScrollAtBottom = progressLog.scrollTop + progressLog.clientHeight >= progressLog.scrollHeight-10;
+                            
+                            // Add to progress log
+                            const logEntry = document.createElement('div');
+                            const logLink = document.createElement('a');
+                            const minerID = currentMiner.id;
+                            const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                            const minerModel = currentMiner.modelName;
+                            logLink.textContent = `Miner ${minerModel}`;
+                            logLink.href = minerLink; // Make it clickable
+                            logLink.target = '_blank'; // Open in a new tab
+                            logLink.style.color = 'inherit'; // To keep the link color same as text color
+                            //logLink.style.textDecoration = 'none'; // To remove underline from the link
+
+                            logEntry.style.borderTop = '1px solid white';
+                            logEntry.style.padding = '10px';
+                            logEntry.appendChild(logLink);
+
+                            logEntries[minerID] = logEntry;
+                            progressLog.appendChild(logEntry);
+
+                            // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
+                            const loadingIcon = document.createElement('span');
+                            loadingIcon.textContent = '↻';
+                            loadingIcon.style.display = 'none';
+                            loadingIcon.style.position = 'absolute';
+                            loadingIcon.style.right = '10px';
+                            logEntry.appendChild(loadingIcon);
+
+                            // Make it spin
+                            loadingIcon.loadingIconInterval = setInterval(() => {
+                                rotation = (rotation + 0.5) % 360;
+                                loadingIcon.style.transform = `rotate(${rotation}deg)`;
+                            }, 1);
+                            loadingIcon.style.display = 'inline-block';  // Show the icon
+
+                            // Add location to the log entry
+                            const minerSlotID = currentMiner.locationName;
+                            const locationLog = document.createElement('div');
+                            locationLog.textContent = `${minerSlotID}`;
+                            locationLog.style.padding = '10px';
+                            locationLog.style.paddingTop = '0';
+                            locationLog.style.paddingLeft = '0px';
+                            logEntry.appendChild(locationLog);
+
+                            // Scroll to the bottom of the progress log
+                            if (wasScrollAtBottom) {
+                                progressLog.scrollTop = progressLog.scrollHeight;
+                            }
+                        }
+
+                        return [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone];
+                    }
+
+                    var orginalTitle = document.title;
+                    function startScan(timeFrame, autoreboot, rebootAllMiners) {
+                        var rebootData = {};
+
+                        // Get saved last reboot times
+                        var lastRebootTimes = GM_SuperValue.get('lastRebootTimes', {});
+                        var reachedScanEnd = false;
+
+                        function getTotalRebootCount() {
+                            var rebootCount = 0;
+                            var earliestTime = new Date();
+                            var timeLeft = '';
+                            for (const [minerID, rebootData] of Object.entries(lastRebootTimes)) {
+                                var softRebootTimes = rebootData.softRebootsTimes || [];
+                                var lastSoftRebootTime = softRebootTimes[softRebootTimes.length-1] || false;
+                                var timeSinceLastSoftReboot = lastSoftRebootTime ? (new Date() - new Date(lastSoftRebootTime)) : false;
+                                if(timeSinceLastSoftReboot && timeSinceLastSoftReboot < 15*60*1000) {
+                                    rebootCount++;
+                                    if(new Date(lastSoftRebootTime) <= earliestTime) {
+                                        earliestTime = new Date(lastSoftRebootTime);
+                                        const timeToReset = new Date(earliestTime.getTime() + 15*60*1000);
+                                        timeLeft = Math.floor((timeToReset - new Date()) / 1000);
+                                        const minutes = Math.floor(timeLeft / 60);
+                                        const seconds = timeLeft % 60;
+                                        timeLeft = ` | ${minutes}m ${seconds}s`;
+                                    }
+                                }
+                            }
+                            return [rebootCount, timeLeft];
+                        }
+
+                        // Close the dropdown
+                        issues.toggleDropdownMenu('newActionsDropdown');
+
+                        let [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone] = createScanOverlayUI();
+
                         // Set the webpage title
                         document.title = orginalTitle + ' | Retrieving Miner Data...';
                         retrieveContainerTempData((containerTempData) => {
@@ -1681,16 +1818,6 @@ window.addEventListener('load', function () {
                                     dots = (dots + 1) % 4;
                                     scanningText.textContent = 'Scanning' + '.'.repeat(dots);
                                 }, 500);
-
-                                // Add percentage text to top left of the screen
-                                var percentageText = document.createElement('div');
-                                percentageText.textContent = '';
-                                percentageText.style.position = 'absolute';
-                                percentageText.style.left = '10px';
-                                percentageText.style.top = '10px';
-                                percentageText.style.color = 'white';
-                                percentageText.style.fontSize = '1em';
-                                scanningElement.appendChild(percentageText);
 
                                 //var currentMiner = rebootMiners[0];
                                 var currentMinerIndex = 0;
@@ -1712,31 +1839,6 @@ window.addEventListener('load', function () {
                                     }
                                 }, 50);
 
-                                // Add the progress log on the right side of the screen
-                                var progressLog = document.createElement('div');
-                                progressLog.style.position = 'fixed';
-                                progressLog.style.top = '0';
-                                progressLog.style.right = '0';
-                                progressLog.style.width = '300px';
-                                progressLog.style.height = '100%';
-                                progressLog.style.backgroundColor = 'rgba(10, 10, 10, 1)';
-                                progressLog.style.color = 'white';
-                                progressLog.style.fontSize = '1em';
-                                progressLog.style.zIndex = '9998'; // Set the zIndex to be above everything
-                                progressLog.style.overflow = 'auto';
-                                document.body.appendChild(progressLog);
-
-                                // Spin rotation to be used in the loading icon
-                                let rotation = 0;
-
-                                // Add a message to the progress log
-                                const logMessage = document.createElement('div');
-                                logMessage.textContent = 'Progress Log';
-                                logMessage.style.padding = '10px';
-                                logMessage.style.borderTop = '1px solid white';
-                                progressLog.appendChild(logMessage);
-                                var logEntries = {};
-
                                 // Loop through allMinersData and get the uptime
                                 var firstScan = true;
                                 let stackDepth = 0;
@@ -1754,50 +1856,7 @@ window.addEventListener('load', function () {
 
                                     let minerID = currentMiner.id;
 
-                                    // Add to progress log
-                                    const logEntry = document.createElement('div');
-                                    const logLink = document.createElement('a');
-                                    const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                                    const minerModel = currentMiner.modelName;
-                                    logLink.textContent = `Miner ${minerModel}`;
-                                    logLink.href = minerLink; // Make it clickable
-                                    logLink.target = '_blank'; // Open in a new tab
-                                    logLink.style.color = 'inherit'; // To keep the link color same as text color
-                                    //logLink.style.textDecoration = 'none'; // To remove underline from the link
-
-                                    logEntry.style.borderTop = '1px solid white';
-                                    logEntry.style.padding = '10px';
-                                    logEntry.appendChild(logLink);
-
-                                    logEntries[minerID] = logEntry;
-                                    progressLog.appendChild(logEntry);
-
-                                    // Add spinning 'loading' icon into the log entry, such as that it shows up as far right as possible
-                                    const loadingIcon = document.createElement('span');
-                                    loadingIcon.textContent = '↻';
-                                    loadingIcon.style.display = 'none';
-                                    loadingIcon.style.position = 'absolute';
-                                    loadingIcon.style.right = '10px';
-                                    logEntry.appendChild(loadingIcon);
-
-                                    // Make it spin
-                                    loadingIcon.loadingIconInterval = setInterval(() => {
-                                        rotation = (rotation + 0.5) % 360;
-                                        loadingIcon.style.transform = `rotate(${rotation}deg)`;
-                                    }, 1);
-                                    loadingIcon.style.display = 'inline-block';  // Show the icon
-
-                                    // Add location to the log entry
-                                    const minerSlotID = currentMiner.locationName;
-                                    const locationLog = document.createElement('div');
-                                    locationLog.textContent = `${minerSlotID}`;
-                                    locationLog.style.padding = '10px';
-                                    locationLog.style.paddingTop = '0';
-                                    locationLog.style.paddingLeft = '0px';
-                                    logEntry.appendChild(locationLog);
-
-                                    // Scroll to the bottom of the progress log
-                                    progressLog.scrollTop = progressLog.scrollHeight;
+                                    addToProgressLog(currentMiner);
 
                                     function checkMiner(minerID) {
                                         var location = currentMiner.locationName;
@@ -2024,26 +2083,7 @@ window.addEventListener('load', function () {
                                     }
 
                                     function runNextMiner() {
-                                        // Make it a checkmark
-                                        const checkmark = document.createElement('span');
-                                        checkmark.textContent = '✓';
-                                        checkmark.style.display = 'inline-block';
-                                        checkmark.style.position = 'absolute';
-                                        checkmark.style.right = '10px';
-
-                                        // Remove the spinning 'loading' icon from the log entry
-                                        let logEntry = logEntries[currentMiner.id];
-                                        if (logEntry) {
-                                            const loadingIcon = logEntry.querySelector('span');
-                                            if (loadingIcon) {
-                                                // Add the checkmark right before the loading icon
-                                                logEntry.insertBefore(checkmark, loadingIcon);
-
-                                                // Stop the spinning
-                                                clearInterval(loadingIcon.loadingIconInterval);
-                                                loadingIcon.remove();
-                                            }
-                                        }
+                                        setPreviousLogDone(currentMiner.id);
 
                                         // Add if it sent reboot or skipped
                                         if(autoreboot) {
@@ -3409,20 +3449,48 @@ window.addEventListener('load', function () {
                     errorScanButton.onclick = function(event) {
                         event.preventDefault(); // Prevent the default behavior of the button
 
-                        // overlay the page with a div to prevent the user from clicking anything
-                        const overlayDiv = document.createElement('div');
-                        overlayDiv.style.cssText = `
-                            position: fixed;
-                            top: 0;
-                            left: 0;
-                            width: 100%;
-                            height: 100%;
-                            background-color: rgba(0,0,0,0.5);
-                            z-index: 1000;
-                        `;
-                        document.body.appendChild(overlayDiv);
-
+                        //
+                        let [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone] = createScanOverlayUI();
                         retrieveIssueMiners((issueMiners) => {
+                            let currentWindow = null;
+                            let currentCheckLoadedInterval = null;
+
+                            // Animate the dots cycling
+                            let dots = 0;
+                            let scanningInterval = setInterval(() => {
+                                dots = (dots + 1) % 4;
+                                scanningText.textContent = 'Scanning' + '.'.repeat(dots);
+                            }, 500);
+
+                            // Add 'cancel' button to bottom left of the scanning element
+                            const cancelButton = document.createElement('button');
+                            cancelButton.classList.add('m-button');
+                            cancelButton.style.position = 'absolute';
+                            cancelButton.style.bottom = '10px';
+                            cancelButton.style.left = '10px';
+                            cancelButton.style.backgroundColor = '#ff3832';
+                            cancelButton.textContent = 'Cancel';
+                            cancelButton.onclick = function() {
+                                clearInterval(currentCheckLoadedInterval);
+                                currentCheckLoadedInterval = null;
+                                clearInterval(scanningInterval);
+                                scanningElement.remove();
+                                progressLog.remove();
+                                if(currentWindow) {
+                                    currentWindow.close();
+                                }
+                            };
+                            scanningElement.appendChild(cancelButton);
+
+                            // Hover effect for the cancel button
+                            cancelButton.addEventListener('mouseenter', function() {
+                                this.style.backgroundColor = '#ff5e57';
+                            });
+
+                            cancelButton.addEventListener('mouseleave', function() {
+                                this.style.backgroundColor = '#ff3832';
+                            });
+
                             // Only get the actual non hashing miners
                             issueMiners = issueMiners.filter(miner => (miner.currentHashRate === 0 || miner.issueType === 'Non Hashing') && miner.connectivity === 'Online' && !miner.firmwareVersion.includes('BCFMiner'));
                             GM_SuperValue.set('errorScanMiners', issueMiners);
@@ -3434,9 +3502,18 @@ window.addEventListener('load', function () {
                             });
                             let openedWindows = [];
 
+                            let failLoadCount = 0;
+                            let noErrorCount = 0;
+
                             function openMinerGUILog() {
                                 // Get the error scan miners
                                 let errorScanMiners = GM_SuperValue.get('errorScanMiners', []);
+
+                                // Update the percentage text
+                                percentageText.textContent = `${Math.round(((issueMiners.length - errorScanMiners.length) / issueMiners.length) * 100)}% (${issueMiners.length - errorScanMiners.length}/${issueMiners.length})`;
+
+                                // Update the progress bar
+                                progressFill.style.width = `${((issueMiners.length - errorScanMiners.length) / issueMiners.length) * 100}%`;
 
                                 // Check if there are no miners left to scan
                                 if (errorScanMiners.length === 0) {
@@ -3444,41 +3521,63 @@ window.addEventListener('load', function () {
                                 }
 
                                 // Get first miner
-                                const firstMiner = errorScanMiners[0];
-                                const minerIP = firstMiner.ipAddress;
+                                const currentMiner = errorScanMiners[0];
+                                const minerIP = currentMiner.ipAddress;
                                 const guiLink = `http://root:root@${minerIP}/#blog`;
 
+                                // Set the minerGUILoaded and minerGUINext to false so we can check if the miner gui is loaded
                                 GM_SuperValue.set('minerGUILoaded', false);
                                 GM_SuperValue.set('minerGUINext', false);
 
                                 // Open the miner in a new tab
-                                let logWindow = window.open(guiLink, '_blank', 'width=800,height=600');
-                                openedWindows.push(logWindow);
+                                addToProgressLog(currentMiner);
+                                if(!currentWindow || currentWindow.closed) {
+                                    let logWindow = window.open(guiLink, '_blank', 'width=1,height=1,left=0,top=' + (window.innerHeight - 400));
+                                    openedWindows.push(logWindow);
+                                    currentWindow = logWindow;
+                                } else {
+                                    //redirect the current window to the new miner
+                                    currentWindow.location.href = guiLink;
+                                }
 
                                 // Wait for the miner gui to load
                                 let loaded = false;
-                                const checkLoadedInterval = setInterval(() => {
+                                currentCheckLoadedInterval = setInterval(() => {
                                     const loadedSV = GM_SuperValue.get('minerGUILoaded', false);
                                     if (loadedSV) {
                                         const next = GM_SuperValue.get('minerGUINext', false);
                                         if(next) {
-                                            clearInterval(checkLoadedInterval);
+                                            loaded = true;
+                                            const errorsFound = GM_SuperValue.get('errorsFound', {});
+                                            const minerErrors = errorsFound[currentMiner.id] || [];
+                                            let errorNames = "";
+                                            minerErrors.forEach(error => {
+                                                errorNames += `• ${error.name}\n`;
+                                            });
+                                            // if there are no errors, set the errorNames to "No Errors Found"
+                                            if(errorNames === "") {
+                                                errorNames = "No Errors Found";
+                                                noErrorCount++;
+                                            }
+                                            setPreviousLogDone(currentMiner.id, "✔", errorNames);
+                                            clearInterval(currentCheckLoadedInterval);
                                             errorScanMiners.shift();
                                             GM_SuperValue.set('errorScanMiners', errorScanMiners);
                                             GM_SuperValue.set('minerGUILoaded', false);
                                             GM_SuperValue.set('minerGUINext', false);
-                                            logWindow.close();
+                                            //currentWindow.close();
                                             openMinerGUILog();
                                         } else {
-                                            loaded = true;
                                         }
                                     }
                                 }, 10);
 
                                 // Check if the miner gui loaded in a certain amount of time
                                 setTimeout(() => {
-                                    if (!loaded) {
-                                        clearInterval(checkLoadedInterval);
+                                    if (!loaded && currentCheckLoadedInterval) {
+                                        setPreviousLogDone(currentMiner.id, "✖", "Failed to load miner GUI.");
+                                        failLoadCount++;
+                                        clearInterval(currentCheckLoadedInterval);
 
                                         // Remove the first miner from the list since it failed to load
                                         errorScanMiners.shift();
@@ -3487,7 +3586,7 @@ window.addEventListener('load', function () {
                                         // Move to the next miner
                                         GM_SuperValue.set('minerGUILoaded', false);
                                         GM_SuperValue.set('minerGUINext', false);
-                                        logWindow.close();
+                                        //currentWindow.close();
                                         openMinerGUILog();
                                     }
                                 }, 4000);
@@ -3506,25 +3605,12 @@ window.addEventListener('load', function () {
                                         window.close();
                                     });
 
+                                    cancelButton.remove();
+
                                     const cols = ['Miner Errors'];
                                     createPopUpTable(`Error Log Scan Results`, cols, false, (popupResultElement) => {
                                         
                                         const firstDiv = popupResultElement.querySelector('div');
-
-                                        // Add text saying the current soft rebooting miners from getTotalRebootCount() that updates
-                                        const tipText = document.createElement('div');
-                                        tipText.style.cssText = `
-                                            padding: 10px;
-                                            background-color: #444947;
-                                            border-radius: 10px;
-                                            margin-top: 10px;
-                                        `;
-                                        // Position the text in the top left corner
-                                        tipText.style.top = '20px';
-                                        tipText.style.left = '30px';
-                                        tipText.style.position = 'absolute';
-                                        firstDiv.appendChild(tipText);
-                                        tipText.textContent = `Note: This does not include BCFMiner firmware (Foundry GUI) Miners or Miners that are not online.`;
 
                                         function setUpRowData(row, currentMiner, error) {
                                             let minerID = currentMiner.id;
@@ -3600,6 +3686,53 @@ window.addEventListener('load', function () {
                                             observer.observe(row, { childList: true });
                                         }
 
+                                        // Add text saying the current soft rebooting miners from getTotalRebootCount() that updates
+                                        const tipText = document.createElement('div');
+                                        tipText.style.cssText = `
+                                            padding: 5px;
+                                            background-color: #444947;
+                                            border-radius: 5px;
+                                            margin-top: 10px;
+                                            align-self: flex-start; /* Align to the left side */
+                                            font-size: 0.8em;
+                                        `;
+                                        firstDiv.appendChild(tipText);
+                                        tipText.textContent = `Note: This does not include BCFMiner firmware (Foundry GUI) Miners or Miners that are not online.`;
+
+                                        // Add the count of failLoadCount noErrorCount
+                                        const containerDiv = document.createElement('div');
+                                        containerDiv.style.cssText = `
+                                            display: flex;
+                                            gap: 10px;
+                                            padding: 0px;
+                                            background-color: #444947;
+                                            border-radius: 10px;
+                                            margin-top: 10px;
+                                            align-self: flex-start; /* Align to the left side */
+                                        `;
+
+                                        const failLoadCountText = document.createElement('div');
+                                        failLoadCountText.style.cssText = `
+                                            padding: 5px;
+                                            background-color: #444947;
+                                            border-radius: 5px;
+                                            font-size: 0.8em;
+                                        `;
+                                        failLoadCountText.textContent = `GUI Load Fails: ${failLoadCount}`;
+
+                                        const noErrorCountText = document.createElement('div');
+                                        noErrorCountText.style.cssText = `
+                                            padding: 5px;
+                                            background-color: #444947;  
+                                            border-radius: 5px;
+                                            font-size: 0.8em;
+                                        `;
+                                        noErrorCountText.textContent = `No Errors Found Miners: ${noErrorCount}`;
+
+                                        containerDiv.appendChild(failLoadCountText);
+                                        containerDiv.appendChild(noErrorCountText);
+                                        firstDiv.appendChild(containerDiv);
+
                                         // Add the "Finished Hard Reboots" button
                                         const finishedButton = document.createElement('button');
                                         finishedButton.id = 'finishedHardReboots';
@@ -3618,6 +3751,9 @@ window.addEventListener('load', function () {
                                         finishedButton.textContent = 'Close Error Scan Results';
                                         firstDiv.appendChild(finishedButton);
 
+                                        // Set the popupResultElement to be aligned to the left side
+                                        firstDiv.style.left = '41%'
+
                                         // Now that the button is created, we can attach event listeners
                                         const finishedErrorScan = popupResultElement.querySelector('#finishedHardReboots');
 
@@ -3632,7 +3768,9 @@ window.addEventListener('load', function () {
 
                                         // Close button functionality
                                         finishedErrorScan.onclick = function() {
-                                            overlayDiv.remove();
+                                            scanningElement.remove();
+                                            progressLog.remove();
+                                            clearInterval(scanningInterval);
 
                                             popupResultElement.remove();
                                             popupResultElement = null;
@@ -3688,8 +3826,19 @@ window.addEventListener('load', function () {
                                                 newRow.style.padding = '5px';
                                                 newRow.style.margin = '0px';
                                                 newRow.innerHTML = `
-                                                    <td colspan="7" style="text-align: left; padding-left: 10px;">
-                                                        <a href="http://root:root@${currentMiner.ipAddress}/" target="_blank" style="color: white;">${currentMiner.ipAddress}</a> - <a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a> - ${paddedSlotIDBreaker} - ${minerSerialNumber}
+                                                        <td colspan="7" style="text-align: left; padding-left: 10px;">
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-right: 5px;">
+                                                            <a href="http://root:root@${currentMiner.ipAddress}/#blog" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
+                                                        </span>
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-right: 5px;">
+                                                            <a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a>
+                                                        </span>
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-right: 5px;">
+                                                            ${paddedSlotIDBreaker}
+                                                        </span>
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-right: 5px;">
+                                                            ${minerSerialNumber}
+                                                        </span>
                                                     </td>
                                                 `;
                                                 currentRow.before(newRow);
