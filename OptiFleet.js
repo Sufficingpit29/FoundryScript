@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.7.5
+// @version      2.8.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -3379,7 +3379,6 @@ window.addEventListener('load', function () {
                                     //Loop through the allMiners and check their hashrate efficiency
                                     for (let index = allMiners.length - 1; index >= 0; index--) {
                                         const currentMiner = allMiners[index];
-                                        console.log("Checking miner:", currentMiner);
                                         const expectedHash = currentMiner.expectedHashRate || 0;
                                         const currentHash = currentMiner.hashrate || "error";
                                         const hashEfficiency = currentHash !== "error" ? Math.round((currentHash / expectedHash) * 100) : "error";
@@ -3441,6 +3440,24 @@ window.addEventListener('load', function () {
                         scanTimeFrameText = 'Last 30 Days';
                     }
 
+                    function padSlotID(slotID) {
+                        var splitSlotID = slotID.split('-');
+                        var containerID = splitSlotID[0].split('_')[1];
+                        var rackNum = Number(splitSlotID[1]);
+                        var rowNum = Number(splitSlotID[2]);
+                        var colNum = Number(splitSlotID[3]);
+                        var rowWidth = 4;
+                        var breakerNum = (rowNum-1)*rowWidth + colNum;
+
+                        // Remakes the slot ID, but with added 0 padding
+                        let reconstructedSlotID = `${containerID}-${rackNum.toString().padStart(2, '0')}-${rowNum.toString().padStart(2, '0')}-${colNum.toString().padStart(2, '0')}`;
+
+                        // Adds together the slot ID and breaker number, where the breaker number is padded with spaces
+                        let paddedSlotIDBreaker = `${reconstructedSlotID}  [${breakerNum.toString().padStart(2, '0')}]`;
+
+                        return paddedSlotIDBreaker;
+                    }
+
                     // Create a error scan button
                     const errorScanButton = document.createElement('button');
                     errorScanButton.classList.add('m-button');
@@ -3452,7 +3469,6 @@ window.addEventListener('load', function () {
                         //
                         let [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone] = createScanOverlayUI();
                         retrieveIssueMiners((issueMiners) => {
-                            let currentWindow = null;
                             let currentCheckLoadedInterval = null;
 
                             // Animate the dots cycling
@@ -3476,9 +3492,12 @@ window.addEventListener('load', function () {
                                 clearInterval(scanningInterval);
                                 scanningElement.remove();
                                 progressLog.remove();
-                                if(currentWindow) {
-                                    currentWindow.close();
-                                }
+                                // loop through openedWindows
+                                openedWindows.forEach(curWindow => {
+                                    if (curWindow.window) {
+                                        curWindow.window.close();
+                                    }
+                                });
                             };
                             scanningElement.appendChild(cancelButton);
 
@@ -3493,22 +3512,30 @@ window.addEventListener('load', function () {
 
                             // Only get the actual non hashing miners
                             issueMiners = issueMiners.filter(miner => (miner.currentHashRate === 0 || miner.issueType === 'Non Hashing') && miner.connectivity === 'Online' && !miner.firmwareVersion.includes('BCFMiner'));
-                            GM_SuperValue.set('errorScanMiners', issueMiners);
+                            let errorScanMiners = structuredClone(issueMiners);
+                            let scanComplete = false;
                             GM_SuperValue.set('errorsFound', {});
 
                             const scanMinersLookup = {};
                             issueMiners.forEach(miner => {
                                 scanMinersLookup[miner.id] = structuredClone(miner);
                             });
+
                             let openedWindows = [];
+                            let currentlyScanning = {};
+                            GM_SuperValue.set('currentlyScanning', currentlyScanning);
+
+                            let maxScan = 1; // currently WIP, anythign above 1 will cause issues
+
+                            // fill the openedWindows array with false
+                            for (let i = 0; i < maxScan; i++) {
+                                openedWindows.push({window: false, nextReady: false});
+                            }
 
                             let failLoadCount = 0;
                             let noErrorCount = 0;
 
                             function openMinerGUILog() {
-                                // Get the error scan miners
-                                let errorScanMiners = GM_SuperValue.get('errorScanMiners', []);
-
                                 // Update the percentage text
                                 percentageText.textContent = `${Math.round(((issueMiners.length - errorScanMiners.length) / issueMiners.length) * 100)}% (${issueMiners.length - errorScanMiners.length}/${issueMiners.length})`;
 
@@ -3519,56 +3546,78 @@ window.addEventListener('load', function () {
                                 if (errorScanMiners.length === 0) {
                                     return;
                                 }
-
+                                
                                 // Get first miner
-                                const currentMiner = errorScanMiners[0];
+                                let currentMiner = errorScanMiners[0];
+                                for (let i = 1; i < errorScanMiners.length; i++) {
+                                    if(currentlyScanning[currentMiner.ipAddress]) {
+                                        currentMiner = errorScanMiners[i];
+                                        if (i === errorScanMiners.length - 1) {
+                                            return;
+                                        }
+                                    } else {
+                                        break;
+                                    }
+                                }
+
                                 const minerIP = currentMiner.ipAddress;
                                 const guiLink = `http://root:root@${minerIP}/#blog`;
 
-                                // Set the minerGUILoaded and minerGUINext to false so we can check if the miner gui is loaded
-                                GM_SuperValue.set('minerGUILoaded', false);
-                                GM_SuperValue.set('minerGUINext', false);
+                                console.log("Opening miner GUI for:", currentMiner);
+                                console.log("GUI Link:", guiLink);
 
                                 // Open the miner in a new tab
                                 addToProgressLog(currentMiner);
-                                if(!currentWindow || currentWindow.closed) {
-                                    let logWindow = window.open(guiLink, '_blank', 'width=1,height=1,left=0,top=' + (window.innerHeight - 400));
-                                    openedWindows.push(logWindow);
-                                    currentWindow = logWindow;
-                                } else {
-                                    //redirect the current window to the new miner
-                                    currentWindow.location.href = guiLink;
+
+                                // loop through openedWindows
+                                let currentWindowIndex = 0;
+                                for (let index = 0; index < openedWindows.length; index++) {
+                                    let curWindow = openedWindows[index].window;
+                                    if(!curWindow || curWindow.closed) {
+                                        currentlyScanning[minerIP] = currentMiner;
+                                        GM_SuperValue.set('currentlyScanning', currentlyScanning);
+                                        currentWindowIndex = index;
+                                        let logWindow = window.open(guiLink, '_blank', 'width=1,height=1,left=0,top=' + (window.innerHeight - 400));
+                                        openedWindows[index].window = logWindow;
+                                        openedWindows[index].nextReady = false;
+                                        break;
+                                    } else if(openedWindows[index].nextReady) {
+                                        currentlyScanning[minerIP] = currentMiner;
+                                        GM_SuperValue.set('currentlyScanning', currentlyScanning);
+                                        currentWindowIndex = index;
+                                        openedWindows[index].nextReady = false;
+                                        //redirect the current window to the new miner
+                                        curWindow.location.href = guiLink;
+                                        break;
+                                    }
                                 }
 
                                 // Wait for the miner gui to load
                                 let loaded = false;
                                 currentCheckLoadedInterval = setInterval(() => {
-                                    const loadedSV = GM_SuperValue.get('minerGUILoaded', false);
-                                    if (loadedSV) {
-                                        const next = GM_SuperValue.get('minerGUINext', false);
-                                        if(next) {
-                                            loaded = true;
-                                            const errorsFound = GM_SuperValue.get('errorsFound', {});
-                                            const minerErrors = errorsFound[currentMiner.id] || [];
-                                            let errorNames = "";
-                                            minerErrors.forEach(error => {
-                                                errorNames += `• ${error.name}\n`;
-                                            });
-                                            // if there are no errors, set the errorNames to "No Errors Found"
-                                            if(errorNames === "") {
-                                                errorNames = "No Errors Found";
-                                                noErrorCount++;
-                                            }
-                                            setPreviousLogDone(currentMiner.id, "✔", errorNames);
-                                            clearInterval(currentCheckLoadedInterval);
-                                            errorScanMiners.shift();
-                                            GM_SuperValue.set('errorScanMiners', errorScanMiners);
-                                            GM_SuperValue.set('minerGUILoaded', false);
-                                            GM_SuperValue.set('minerGUINext', false);
-                                            //currentWindow.close();
-                                            openMinerGUILog();
-                                        } else {
+                                    const guiLoaded = GM_SuperValue.get('minerGUILoaded_' + currentMiner.id, false);
+                                    if(guiLoaded) {
+                                        loaded = true;
+                                        const errorsFound = GM_SuperValue.get('errorsFound', {});
+                                        const minerErrors = errorsFound[currentMiner.id] || [];
+                                        let errorNames = "";
+                                        minerErrors.forEach(error => {
+                                            errorNames += `• ${error.name}\n`;
+                                        });
+                                        // if there are no errors, set the errorNames to "No Errors Found"
+                                        if(errorNames === "") {
+                                            errorNames = "No Errors Found";
+                                            noErrorCount++;
                                         }
+                                        setPreviousLogDone(currentMiner.id, "✔", errorNames);
+                                        clearInterval(currentCheckLoadedInterval);
+                                        
+                                        GM_SuperValue.set('minerGUILoaded_' + currentMiner.id, false);
+                                        delete currentlyScanning[minerIP];
+                                        GM_SuperValue.set('currentlyScanning', currentlyScanning);
+                                        openedWindows[currentWindowIndex].nextReady = true;
+                                        errorScanMiners.shift();
+                                        openMinerGUILog();
                                     }
                                 }, 10);
 
@@ -3579,30 +3628,34 @@ window.addEventListener('load', function () {
                                         failLoadCount++;
                                         clearInterval(currentCheckLoadedInterval);
 
-                                        // Remove the first miner from the list since it failed to load
-                                        errorScanMiners.shift();
-                                        GM_SuperValue.set('errorScanMiners', errorScanMiners);
-
                                         // Move to the next miner
-                                        GM_SuperValue.set('minerGUILoaded', false);
-                                        GM_SuperValue.set('minerGUINext', false);
-                                        //currentWindow.close();
+                                        delete currentlyScanning[minerIP];
+                                        console.log("Currently Scanning:", currentlyScanning);
+                                        console.log("Currently Scanning Length:", Object.keys(currentlyScanning).length);
+                                        GM_SuperValue.set('currentlyScanning', currentlyScanning);
+                                        openedWindows[currentWindowIndex].nextReady = true;
+                                        errorScanMiners.shift();
                                         openMinerGUILog();
                                     }
-                                }, 4000);
+                                }, 3000*maxScan);
                             }
-                            openMinerGUILog();
+                            
+                            for (let i = 0; i < maxScan; i++) {
+                                openMinerGUILog();
+                            }
+                            //openMinerGUILog();
 
                             // Keep checking until scan is done
                             const checkScanDoneInterval = setInterval(() => {
-                                let errorScanMiners = GM_SuperValue.get('errorScanMiners', false);
                                 let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
-                                if(errorScanMiners.length === 0 && Object.keys(errorsFoundSave).length > 0) {
+                                if(errorScanMiners.length === 0 && Object.keys(errorsFoundSave).length > 0 && Object.keys(currentlyScanning).length === 0) {
                                     clearInterval(checkScanDoneInterval);
 
                                     // Loop through all the opened windows and make sure they are closed
-                                    openedWindows.forEach(window => {
-                                        window.close();
+                                    openedWindows.forEach(curWindow => {
+                                        if (curWindow.window) {
+                                            curWindow.window.close();
+                                        }
                                     });
 
                                     cancelButton.remove();
@@ -3651,6 +3704,14 @@ window.addEventListener('load', function () {
 
                                                 // Set top position to be the same as the question mark
                                                 tooltip.style.top = `${questionMarkRect.top}px`;
+                                            });
+
+                                            // when clicked, open the error log
+                                            questionMark.addEventListener('click', () => {
+                                                const ip = currentMiner.ipAddress;
+                                                const minerGUI = `http://root:root@${ip}/#blog`;
+                                                GM_SuperValue.set('quickGoToLog', {ip: ip, errorText: error.text});
+                                                window.open(minerGUI, '_blank');
                                             });
 
                                             
@@ -3778,8 +3839,23 @@ window.addEventListener('load', function () {
 
                                         // Add the miner data to the table body
                                         const popupTableBody = popupResultElement.querySelector('tbody');
-                                        Object.keys(scanMinersLookup).forEach(minerID => {
+
+                                        // Resorts the errors alphabetically by slot ID
+                                        issueMiners.sort((a, b) => {
+                                            let aSlotID = a.locationName;
+                                            let bSlotID = b.locationName;
+
+                                            let aSlotIDBreaker = padSlotID(aSlotID);
+                                            let bSlotIDBreaker = padSlotID(bSlotID);
+
+                                            return aSlotIDBreaker.localeCompare(bSlotIDBreaker);
+                                        });
+
+                                        issueMiners.forEach(miner => {
+                                            const minerID = miner.id;
                                             const errors = errorsFoundSave[minerID] || [];
+                                           
+
                                             errors.forEach((error, index) => {
                                                 const row = document.createElement('tr');
 
@@ -3799,20 +3875,8 @@ window.addEventListener('load', function () {
                                             let model = currentMiner.modelName;
                                             let slotID = currentMiner.locationName;
 
-                                            var splitSlotID = slotID.split('-');
-                                            var containerID = splitSlotID[0].split('_')[1];
-                                            var rackNum = Number(splitSlotID[1]);
-                                            var rowNum = Number(splitSlotID[2]);
-                                            var colNum = Number(splitSlotID[3]);
-                                            var rowWidth = 4;
-                                            var breakerNum = (rowNum-1)*rowWidth + colNum;
+                                            let paddedSlotIDBreaker = padSlotID(slotID);       
     
-                                            // Remakes the slot ID, but with added 0 padding
-                                            let reconstructedSlotID = `${containerID}-${rackNum.toString().padStart(2, '0')}-${rowNum.toString().padStart(2, '0')}-${colNum.toString().padStart(2, '0')}`;
-
-                                            // Adds together the slot ID and breaker number, where the breaker number is padded with spaces
-                                            let paddedSlotIDBreaker = `${reconstructedSlotID}  [${breakerNum.toString().padStart(2, '0')}]`;
-
                                             let minerSerialNumber = currentMiner.serialNumber;
                                             let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
                                             //http://root:root@${currentMiner.ipAddress}/
@@ -3826,22 +3890,111 @@ window.addEventListener('load', function () {
                                                 newRow.style.padding = '5px';
                                                 newRow.style.margin = '0px';
                                                 newRow.innerHTML = `
-                                                        <td colspan="7" style="text-align: left; padding-left: 10px;">
-                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-right: 5px;">
+                                                    <td colspan="7" style="text-align: right; padding-right: 6px; padding-left: 6px;">
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
                                                             <a href="http://root:root@${currentMiner.ipAddress}/#blog" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
                                                         </span>
-                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-right: 5px;">
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
                                                             <a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a>
                                                         </span>
-                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-right: 5px;">
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
+                                                            ${minerSerialNumber}
+                                                        </span>
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: right;">
                                                             ${paddedSlotIDBreaker}
                                                         </span>
-                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-right: 5px;">
-                                                            ${minerSerialNumber}
+                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: right;">
+                                                            Error Count: ${errorsFoundSave[minerID].length}
                                                         </span>
                                                     </td>
                                                 `;
+                                                // Add a plus/minus button to expand/collapse the category
+                                                const toggleButtonSpan = document.createElement('span');
+                                                toggleButtonSpan.style.cssText = `
+                                                    padding: 5px;
+                                                    border-radius: 5px;
+                                                    outline: 1px solid #000;
+                                                    margin-left: 5px;
+                                                    float: left;
+                                                    left: 5px;
+                                                `;
+
+                                                // Inject CSS into the document's head
+                                                const style = document.createElement('style');
+                                                style.textContent = `
+                                                    .unselectable {
+                                                        -webkit-user-select: none; /* Safari */
+                                                        -moz-user-select: none;    /* Firefox */
+                                                        -ms-user-select: none;     /* Internet Explorer/Edge */
+                                                        user-select: none;         /* Non-prefixed version, currently supported by Chrome, Opera and Edge */
+                                                    }
+                                                `;
+                                                document.head.appendChild(style);
+
+                                                const toggleButton = document.createElement('button');
+                                                toggleButton.textContent = '-';
+                                                toggleButton.style.cssText = `
+                                                    background-color: #0078d4;
+                                                    color: white;
+                                                    border: none;
+                                                    cursor: pointer;
+                                                    border-radius: 5px;
+                                                    padding: 5px;
+                                                    margin-right: 5px;
+                                                    transition: background-color 0.3s;
+                                                    width: 20px;
+                                                    height: 20px;
+                                                    display: flex;
+                                                    justify-content: center;
+                                                    align-items: center;
+                                                `;
+
+                                                // Add the button to the row
+                                                newRow.querySelector('td').prepend(toggleButtonSpan);
+                                                toggleButtonSpan.appendChild(toggleButton);
+                                                
+                                                // Add the unselectable class to all the elements
+                                                newRow.classList.add('unselectable');
+
+                                                // Add button hover effect
+                                                toggleButton.addEventListener('mouseenter', function() {
+                                                    this.style.backgroundColor = '#005a9e';
+                                                });
+
+                                                toggleButton.addEventListener('mouseleave', function() {
+                                                    this.style.backgroundColor = '#0078d4';
+                                                });
+
+                                                let lastClickTime = 0;
+                                                function expandCollapseRows() {
+                                                    // Prevent double clicking
+                                                    const currentTime = new Date().getTime();
+                                                    if (currentTime - lastClickTime < 10) {
+                                                        return;
+                                                    }
+                                                    lastClickTime = currentTime;
+                                                    const isExpanded = toggleButton.textContent === '-';
+                                                    toggleButton.textContent = isExpanded ? '+' : '-';
+                                                    let nextRow = newRow.nextElementSibling;
+                                                    while (nextRow && nextRow.minerID === minerID) {
+                                                        nextRow.style.display = isExpanded ? 'none' : '';
+                                                        nextRow = nextRow.nextElementSibling;
+                                                    }
+                                                }
+
+                                                // Add click event to toggle the visibility of the rows
+                                                toggleButton.addEventListener('click', function() {
+                                                    expandCollapseRows();
+                                                });
                                                 currentRow.before(newRow);
+
+                                                //Click the button to start collapsed
+                                                toggleButton.click();
+
+                                                // Clicking on the top row will expand/collapse the category
+                                                newRow.addEventListener('click', function() {
+                                                    expandCollapseRows();
+                                                });
                                             }
                                         }
                                             
@@ -4799,19 +4952,25 @@ window.addEventListener('load', function () {
         // Scan Error Log Logic
         let isScanning = false;
         let homePage = document.getElementById('homePage');
-        let errorScanMiners = GM_SuperValue.get('errorScanMiners', false);
-        let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
-        if (errorScanMiners) {
-            const firstMiner = errorScanMiners[0];
-            if (firstMiner && currentUrl.includes(firstMiner.ipAddress)) {
+        let currentlyScanning = GM_SuperValue.get('currentlyScanning', {});
+        let foundMiner = null;
+        if (currentlyScanning && Object.keys(currentlyScanning).length > 0) {
+            // Loop through currentlyScanning via object keys and find if the ipAdress matches any of the miners
+            Object.keys(currentlyScanning).forEach(miner => {
+                let currentMiner = currentlyScanning[miner];
+                if(currentUrl.includes(currentMiner.ipAddress)) {
+                    foundMiner = currentMiner;
+                    return;
+                }
+            });
+
+            if (foundMiner) {
                 if (homePage) {
                     isScanning = true;
-                    GM_SuperValue.set('minerGUILoaded', true);
                 } else {
                     const foundryMinerImage = document.querySelector('img[alt="Foundry Miner"]');
                     if (foundryMinerImage) {
-                        GM_SuperValue.set('minerGUILoaded', true);
-                        GM_SuperValue.set('minerGUINext', true);
+                        GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
                     }
                 }
             }
@@ -4830,8 +4989,6 @@ window.addEventListener('load', function () {
                 // Get the width left for the homePage based on how much layout-l fl takes up
                 const layoutL = document.querySelector('.layout-l');
                 if (layoutL) {
-                    
-
                     const logContent = document.querySelector('.log-content');
                     const footer = document.querySelector('.footer.clearfix');
                     const mainContent = document.querySelector('.main-content');
@@ -5203,6 +5360,15 @@ window.addEventListener('load', function () {
                         }
                     }
 
+                    
+                    const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
+                    let findLog = false;
+                    if(quickGoToLog && currentUrl.includes(quickGoToLog.ip)) {
+                        findLog = quickGoToLog.errorText;
+                        GM_SuperValue.set('quickGoToLog', false);
+                    }
+                        
+
                     function createErrorTab(title, errors) {
                         // Create a new element to display the errors
                         if (errors.length > 0) {
@@ -5281,7 +5447,6 @@ window.addEventListener('load', function () {
                                     errorIcon.style.backgroundSize = 'contain';
                                     errorIcon.style.marginRight = '5px';
                                 }
-
 
                                 // Populate the sub-menu with error details
                                 errors.forEach((error, index) => {
@@ -5397,6 +5562,17 @@ window.addEventListener('load', function () {
                                     });
                                     errorSubMenu.appendChild(errorItem);
 
+                                    if(findLog && error.text.includes(findLog)) {
+                                        // Open the error list
+                                        setTimeout(() => {
+                                            errorTab.click();
+                                        }, 0);
+
+                                        // Go to the error
+                                        errorItem.click();
+                                        findLog = false;
+                                    }
+
                                     // Set the icon for the error <i class="error-detail-ico icon"></i>
                                     const errorDetailIcon = errorItem.querySelector('.error-detail-ico');
                                     if (errorDetailIcon) {
@@ -5486,12 +5662,14 @@ window.addEventListener('load', function () {
                     }
 
                     if(isScanning) {
-                        const minerID = errorScanMiners[0].id;
+                        const minerID = foundMiner.id;
+                        let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
                         errorsFoundSave[minerID] = errorsFound.filter(error => !error.unimportant) || [];
 
                         // Save the errors found
                         GM_SuperValue.set('errorsFound', errorsFoundSave);
-                        GM_SuperValue.set('minerGUINext', true);
+                        GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
+                        console.log('Errors found and saved');
                     }
 
                     createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant));
