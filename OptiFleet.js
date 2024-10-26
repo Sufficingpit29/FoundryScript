@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.8.3
+// @version      2.8.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -30,6 +30,7 @@
 // @resource     https://cdn.jsdelivr.net/npm/datatables.net-colresize@1.1.0/css/dataTables.colResize.min.css
 // @run-at       document-start
 // ==/UserScript==
+
 
 const currentUrl = window.location.href;
 
@@ -652,6 +653,7 @@ window.addEventListener('load', function () {
                 ipAddress: minerDetailsCrude['IpAddress'],
                 locationID: minerDetailsCrude['Rack / Row / Position'],
                 activePool: minerDetailsCrude['Active Pool'],
+                status: minerDetailsCrude['Status'],
             };
 
             return [cleanedText, minerDetails];
@@ -1040,13 +1042,19 @@ window.addEventListener('load', function () {
                 copyTextToClipboard(textToCopy);
             }
 
-            function copyAllDetailsForSharepoint(issue, log, type) {
+            function copyAllDetailsForSharepoint(issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber) {
                 var [cleanedText, minerDetails] = getMinerDetails();
-                const { model, serialNumber, facility, ipAddress, locationID, activePool } = minerDetails;
+                const { model, serialNumber, facility, ipAddress, locationID, activePool, status } = minerDetails;
+                let modelLite = model.replace('Antminer ', '');
+                let modelLiteSplit = modelLite.split(' (');
+                modelLite = modelLiteSplit[0];
+                const hashRate = modelLiteSplit[1].replace(')', '');
+                let modelWithoutParens = model.replace('(', '').replace(')', '');
 
                 minerDetails['type'] = type;
                 minerDetails['issue'] = issue;
                 minerDetails['log'] = log;
+                minerDetails['hashRate'] = hashRate;
 
                 console.log(`${model} - ${serialNumber} - ${issue}`);
                 console.log(cleanedText);
@@ -1057,15 +1065,28 @@ window.addEventListener('load', function () {
                 GM_SuperValue.set("detailsData", JSON.stringify(minerDetails));
 
                 const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
-                const textToCopy = `${serialNumber}\t${facility}\t${ipAddress}\t${facility}-${locationID}\t${activePool}\t${issue}\t${currentDate}`;
+                let textToCopy = `${serialNumber}\t${modelLite}\t${hashRate}\t${issue}\t${status}\t${currentDate}`;
+
+                if(type === "Fortitude") {
+                    textToCopy = `${serialNumber}\t${modelWithoutParens}\t${hbSerialNumber}\t${hbModel}\t${hbVersion}\t${chainIssue}\t${binNumber}`;
+                }
 
                 copyTextToClipboard(textToCopy);
+                /*
                 //window.open("https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3", 'Paste Data').focus();
                 if(type === "Bitmain") {
                     window.open("https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3", 'Looking').focus();
                 } else {
                     window.open(urlLookupExcel[type], 'Paste Data').focus();
+                }*/
+
+                const sharePointLinks = {
+                    "Bitmain": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/EoZ4RPEfVj9EjKlBzWmVHVcBcqZQzo2BiBC8_eM0WoABiw?e=wOZWEz",
+                    "Fortitude": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/En56U6QoEzVCsNkYkXQOqxIBFLcql6OxnNJYBTX_r6ZIsw?e=oEb1JA",
+                    "RAMM": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/EsrLwwsTo8JCr2aO7FT924sBrQ-oP4Nehl8sFROGcirBwg?e=jKhBzT"
                 }
+
+                window.open(sharePointLinks[type], 'Paste Data').focus();
                 
             }
 
@@ -1076,13 +1097,33 @@ window.addEventListener('load', function () {
                     <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #333; color: white; padding: 20px;">
                         <h1>Enter Issue and Log</h1>
                         <form id="issueLogForm">
-                            <div style="margin-bottom: 10px;">
+                            <div id="normalIssueContainer" style="margin-bottom: 10px;">
                                 <label for="issue" style="display: block; font-weight: bold;">Issue:</label>
                                 <input type="text" id="issue" name="issue" required style="width: 100%; padding: 5px; color: white;">
                             </div>
                             <div style="margin-bottom: 10px;">
                                 <label for="log" style="display: block; font-weight: bold;">Log:</label>
                                 <textarea id="log" name="log" required style="width: 100%; height: 100px; padding: 5px; color: white;"></textarea>
+                            </div>
+                            <div id="hbSerialNumberContainer" style="margin-bottom: 10px; display: none;">
+                                <label for="hbSerialNumber" style="display: block; font-weight: bold;">HB Serial Number:</label>
+                                <input type="text" id="hbSerialNumber" name="hbSerialNumber" style="width: 100%; padding: 5px; color: white;">
+                            </div>
+                            <div id="hbModelContainer" style="margin-bottom: 10px; display: none;">
+                                <label for="hbModel" style="display: block; font-weight: bold;">HB Model:</label>
+                                <input type="text" id="hbModel" name="hbModel" style="width: 100%; padding: 5px; color: white;">
+                            </div>
+                            <div id="hbVersionContainer" style="margin-bottom: 10px; display: none;">
+                                <label for="hbVersion" style="display: block; font-weight: bold;">HB Version:</label>
+                                <input type="text" id="hbVersion" name="hbVersion" style="width: 100%; padding: 5px; color: white;">
+                            </div>
+                            <div id="chainIssueContainer" style="margin-bottom: 10px; display: none;">
+                                <label for="chainIssue" style="display: block; font-weight: bold;">Chain Issue:</label>
+                                <input type="text" id="chainIssue" name="chainIssue" style="width: 100%; padding: 5px; color: white;">
+                            </div>
+                            <div id="binNumberContainer" style="margin-bottom: 10px; display: none;">
+                                <label for="binNumber" style="display: block; font-weight: bold;">BIN#:</label>
+                                <input type="text" id="binNumber" name="binNumber" style="width: 100%; padding: 5px; color: white;">
                             </div>
                             <div style="margin-bottom: 10px;">
                                 <label for="type" style="display: block; font-weight: bold;">Type:</label>
@@ -1103,6 +1144,32 @@ window.addEventListener('load', function () {
                     </div>
                 `;
 
+                // Whenever type is changed, update the inputs to hide/show based on the type
+                popupElement.querySelector('#type').addEventListener('change', function() {
+                    const type = this.value;
+                    const hbSerialNumberContainer = popupElement.querySelector('#hbSerialNumberContainer');
+                    const hbModelContainer = popupElement.querySelector('#hbModelContainer');
+                    const hbVersionContainer = popupElement.querySelector('#hbVersionContainer');
+                    const chainIssueContainer = popupElement.querySelector('#chainIssueContainer');
+                    const binNumberContainer = popupElement.querySelector('#binNumberContainer');
+
+                    const normalIssueContainer = popupElement.querySelector('#normalIssueContainer');
+
+                    if (type !== "Fortitude") {
+                        hbSerialNumberContainer.style.display = 'none';
+                        hbModelContainer.style.display = 'none';
+                        hbVersionContainer.style.display = 'none';
+                        chainIssueContainer.style.display = 'none';
+                        binNumberContainer.style.display = 'none';
+                    } else {
+                        hbSerialNumberContainer.style.display = 'block';
+                        hbModelContainer.style.display = 'block';
+                        hbVersionContainer.style.display = 'block';
+                        chainIssueContainer.style.display = 'block';
+                        binNumberContainer.style.display = 'block';
+                    }
+                });
+
                 // Hide the Edit Links button for the meantime
                 popupElement.querySelector('#linksBtn').style.display = 'none';
 
@@ -1112,11 +1179,17 @@ window.addEventListener('load', function () {
                     const log = document.getElementById("log").value;
                     const type = document.getElementById("type").value;
 
+                    const hbSerialNumber = document.getElementById("hbSerialNumber").value;
+                    const hbModel = document.getElementById("hbModel").value;
+                    const hbVersion = document.getElementById("hbVersion").value;
+                    const chainIssue = document.getElementById("chainIssue").value;
+                    const binNumber = document.getElementById("binNumber").value;
+
                     // Remove the popup element
                     popupElement.remove();
 
                     // Copy the details for Quick Sharepoint & Planner and set the taskName and taskNotes
-                    copyAllDetailsForSharepoint(issue, log, type);
+                    copyAllDetailsForSharepoint(issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber);
                 }
 
                 // Function to cancel Issue and Log
@@ -1247,7 +1320,6 @@ window.addEventListener('load', function () {
                         sharepointPasteButton.onclick = function (event) {
                             event.preventDefault();
                             createDataInputPopup();
-                            //copyAllDetailsForSharepoint();
                             showSuccessMessage(container, "Details for Sharepoint copied!");
                         };
                         container.insertBefore(sharepointPasteButton, container.firstChild);
@@ -2874,13 +2946,13 @@ window.addEventListener('load', function () {
                                                                     const currentMiner = allMiners[index];
                                                                     console.log("Checking miner:", currentMiner);
                                                                     const expectedHash = currentMiner.expectedHashRate || 0;
-                                                                    const currentHash = currentMiner.hashrate || "error";
-                                                                    const hashEfficiency = currentHash !== "error" ? Math.round((currentHash / expectedHash) * 100) : "error";
+                                                                    const currentHash = currentMiner.hashrate || 0;
+                                                                    const hashEfficiency = Math.round((currentHash / expectedHash) * 100);
 
                                                                     let hashRatePercent = currentMiner.hashRatePercent || 0;
                                                                     hashRatePercent = hashRatePercent * 100;
-                                                                    // If the miner is at or above 100% efficiency, then we can remove it from the list
-                                                                    if(hashEfficiency >= rebootAllMiners || currentHash === "error" || hashRatePercent >= rebootAllMiners) {
+                                                                    // If the miner is at or above the rebootAllMiners threshold, then remove it from the list
+                                                                    if(hashEfficiency >= rebootAllMiners || hashRatePercent >= rebootAllMiners) {
                                                                         allMiners.splice(index, 1);
                                                                         continue;
                                                                     }
@@ -3458,14 +3530,34 @@ window.addEventListener('load', function () {
                         return paddedSlotIDBreaker;
                     }
 
-                    // Create a error scan button
-                    const errorScanButton = document.createElement('button');
-                    errorScanButton.classList.add('m-button');
-                    errorScanButton.style.marginLeft = '10px';
-                    errorScanButton.textContent = 'Error Scan';
-                    errorScanButton.onclick = function(event) {
-                        event.preventDefault(); // Prevent the default behavior of the button
 
+                    // Create a error scan button
+                    const errorScanDropdown = document.createElement('div');
+                    errorScanDropdown.classList.add('op-dropdown');
+                    errorScanDropdown.style.display = 'inline-block';
+                    errorScanDropdown.innerHTML = `
+                        <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('errorScanDropdown'); return false;">
+                            Error Scan
+                            <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                        </button>
+                        <div id="errorScanDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
+                            <div class="m-menu">
+                                <div class="m-menu-item" onclick="errorScan(true)">
+                                    All Issue Miners Scan
+                                </div>
+                                <div class="m-menu-item" onclick="errorScan(false)">
+                                    Non-Hashing Only Scan
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+
+
+                    // Add the auto reboot button to the right of the dropdown
+                    actionsDropdown.before(errorScanDropdown);
+
+                    errorScan = function(allScan) {
                         //
                         let [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone] = createScanOverlayUI();
                         retrieveIssueMiners((issueMiners) => {
@@ -3511,10 +3603,20 @@ window.addEventListener('load', function () {
                             });
 
                             // Only get the actual non hashing miners
-                            issueMiners = issueMiners.filter(miner => (miner.currentHashRate === 0 || miner.issueType === 'Non Hashing') && miner.connectivity === 'Online' && !miner.firmwareVersion.includes('BCFMiner'));
+                            issueMiners = issueMiners.filter(miner => miner.connectivity === 'Online' && !miner.firmwareVersion.includes('BCFMiner'));
+                            if(!allScan) {
+                                issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                            }
+                            
                             let errorScanMiners = structuredClone(issueMiners);
                             let scanComplete = false;
                             GM_SuperValue.set('errorsFound', {});
+
+                            if (issueMiners.length === 0) {
+                                clearInterval(scanningInterval);
+                                scanningText.textContent = '[No miners to scan]';
+                                return;
+                            }
 
                             const scanMinersLookup = {};
                             issueMiners.forEach(miner => {
@@ -3648,7 +3750,13 @@ window.addEventListener('load', function () {
                             // Keep checking until scan is done
                             const checkScanDoneInterval = setInterval(() => {
                                 let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
-                                if(errorScanMiners.length === 0 && Object.keys(errorsFoundSave).length > 0 && Object.keys(currentlyScanning).length === 0) {
+                                if(errorScanMiners.length === 0 && Object.keys(currentlyScanning).length === 0) {
+
+                                    if(Object.keys(errorsFoundSave).length === 0) {
+                                        clearInterval(scanningInterval);
+                                        scanningText.textContent = '[No errors found]';
+                                    }
+
                                     clearInterval(checkScanDoneInterval);
 
                                     // Loop through all the opened windows and make sure they are closed
@@ -4005,9 +4113,6 @@ window.addEventListener('load', function () {
 
                         });
                     };
-
-                    // Add the auto reboot button to the right of the dropdown
-                    actionsDropdown.before(errorScanButton);
 
                     if(siteName.includes("Minden")) {
                         // Create a auto reboot button to the right of the dropdown
@@ -4617,110 +4722,110 @@ window.addEventListener('load', function () {
                     window.close();
                 });
 
-                // If the page is the planner page, then fill in the task name and notes
-                if (currentUrl.includes("/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3")) {
-                    // Select the parent element
-                    const parentElement = document.querySelector('.ms-List-page');
+                // -- Find the actual list item in the planner and click it
 
-                    // Get all inner elements with the specified attributes
-                    const innerElements = parentElement.querySelectorAll('div[data-is-focusable="true"][role="row"][data-is-draggable="false"][draggable="false"]');
+                // Select the parent element
+                const parentElement = document.querySelector('.ms-List-page');
 
-                    // Initialize an array to store elements with the required aria-label
-                    const matchingElements = [];
-                    var backUpElement = null;
+                // Get all inner elements with the specified attributes
+                const innerElements = parentElement.querySelectorAll('div[data-is-focusable="true"][role="row"][data-is-draggable="false"][draggable="false"]');
 
-                    // Loop through each inner element and check the aria-label
-                    innerElements.forEach(element => {
-                        const ariaLabel = element.getAttribute('aria-label').toLowerCase();
-                        if (ariaLabel.includes(minerType.toLowerCase()) && ariaLabel.includes('minden') && ariaLabel.includes('gv')) {
-                            // Extract the number between "bitmain" and "minden"
-                            const match = ariaLabel.match(new RegExp(`${minerType.toLowerCase()}\\s*(\\d+)\\s*minden`, 'i'));
-                            if (match) {
-                                const number = parseInt(match[1], 10);
-                                matchingElements.push({ element, number });
+                // Initialize an array to store elements with the required aria-label
+                const matchingElements = [];
+                var backUpElement = null;
+
+                // Loop through each inner element and check the aria-label
+                innerElements.forEach(element => {
+                    const ariaLabel = element.getAttribute('aria-label').toLowerCase();
+                    console.log(ariaLabel);
+                    if (ariaLabel.includes(minerType.toLowerCase()) && ariaLabel.includes('minden') && ariaLabel.includes('gv')) {
+                        // Extract the number between "bitmain" and "minden"
+                        const match = ariaLabel.match(new RegExp(`${minerType.toLowerCase()}\\s*(\\d+)\\s*minden`, 'i'));
+                        if (match) {
+                            const number = parseInt(match[1], 10);
+                            matchingElements.push({ element, number });
+                        }
+                    }
+
+                    if (ariaLabel.includes(minerType.toLowerCase())) {
+                        backUpElement = element;
+                    }
+                });
+
+                // Find the element with the largest number
+                let largestElement = null;
+                let largestNumber = 0;
+
+                matchingElements.forEach(item => {
+                    if (item.number > largestNumber) {
+                        largestNumber = item.number;
+                        largestElement = item.element;
+                    }
+                });
+
+                if(largestElement === null) {
+                    largestElement = backUpElement;
+                }
+
+                // Click the largest element link (find the button with the role 'link')
+                const linkButton = largestElement.querySelector('button[role="link"]');
+                if (linkButton) {
+                    // Scroll to the element
+                    linkButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    // Highlight the element
+                    largestElement.style.backgroundColor = 'yellow';
+
+                    setTimeout(() => {
+                        // Instant scroll, in case the smooth scroll didn't make it/got interrupted
+                        linkButton.scrollIntoView({ behavior: 'auto', block: 'center' });
+
+                        // Simulate a click on the link button
+                        GM_SuperValue.set('openedExcel', false);
+                        linkButton.click();
+                        
+
+                        // Inteval checking if taskname is empty to close the page
+                        const interval = setInterval(() => {
+                            let excelOpened = GM_SuperValue.get('openedExcel', false);
+                            taskName = GM_SuperValue.get("taskName", "");
+                            if (taskName === "" || excelOpened) {
+                                window.close();
                             }
-                        }
+                        }, 100);
 
-                        if (ariaLabel.includes(minerType.toLowerCase())) {
-                            backUpElement = element;
-                        }
-                    });
+                        // Simulate a right click and copy the link
+                        //linkButton.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
 
-                    // Find the element with the largest number
-                    let largestElement = null;
-                    let largestNumber = 0;
-
-                    matchingElements.forEach(item => {
-                        if (item.number > largestNumber) {
-                            largestNumber = item.number;
-                            largestElement = item.element;
-                        }
-                    });
-
-                    if(largestElement === null) {
-                        largestElement = backUpElement;
-                    }
-
-                    // Click the largest element link (find the button with the role 'link')
-                    const linkButton = largestElement.querySelector('button[role="link"]');
-                    if (linkButton) {
-                        // Scroll to the element
-                        linkButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-                        // Highlight the element
-                        largestElement.style.backgroundColor = 'yellow';
-
+                        // Another timer which adds to overlay that it failed to open and that you need to allow 'pop ups'
                         setTimeout(() => {
-                            // Instant scroll, in case the smooth scroll didn't make it/got interrupted
-                            linkButton.scrollIntoView({ behavior: 'auto', block: 'center' });
+                            const overlay2 = document.createElement('div');
+                            overlay2.style.position = 'fixed';
+                            overlay2.style.top = '20px';
+                            overlay2.style.right = '20px';
+                            overlay2.style.backgroundColor = '#f2f2f2';
+                            overlay2.style.padding = '10px';
+                            overlay2.style.borderRadius = '5px';
+                            overlay2.style.color = '#333';
+                            overlay2.style.fontSize = '14px';
+                            overlay2.style.fontWeight = 'bold';
+                            overlay2.style.outline = '2px solid #333'; // Add outline
+                            overlay2.innerHTML = `
+                                <p>Failed to open the link.</p>
+                                <p>Please set 'Always allow pop-ups and redirects' on this page.</p>
+                            `;
+                            // Make sure it is always layered on top
+                            overlay2.style.zIndex = '9999';
+                            document.body.appendChild(overlay2);
 
-                            // Simulate a click on the link button
-                            GM_SuperValue.set('openedExcel', false);
-                            linkButton.click();
-                            
-
-                            // Inteval checking if taskname is empty to close the page
-                            const interval = setInterval(() => {
-                                let excelOpened = GM_SuperValue.get('openedExcel', false);
-                                taskName = GM_SuperValue.get("taskName", "");
-                                if (taskName === "" || excelOpened) {
-                                    window.close();
-                                }
-                            }, 100);
-
-                            // Simulate a right click and copy the link
-                            //linkButton.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
-
-                            // Another timer which adds to overlay that it failed to open and that you need to allow 'pop ups'
+                            // Timeout for one tick
                             setTimeout(() => {
-                                const overlay2 = document.createElement('div');
-                                overlay2.style.position = 'fixed';
-                                overlay2.style.top = '20px';
-                                overlay2.style.right = '20px';
-                                overlay2.style.backgroundColor = '#f2f2f2';
-                                overlay2.style.padding = '10px';
-                                overlay2.style.borderRadius = '5px';
-                                overlay2.style.color = '#333';
-                                overlay2.style.fontSize = '14px';
-                                overlay2.style.fontWeight = 'bold';
-                                overlay2.style.outline = '2px solid #333'; // Add outline
-                                overlay2.innerHTML = `
-                                    <p>Failed to open the link.</p>
-                                    <p>Please set 'Always allow pop-ups and redirects' on this page.</p>
-                                `;
-                                // Make sure it is always layered on top
-                                overlay2.style.zIndex = '9999';
-                                document.body.appendChild(overlay2);
-
-                                // Timeout for one tick
-                                setTimeout(() => {
-                                    // Position the old overlay below the new overlay
-                                    const overlay2Rect = overlay2.getBoundingClientRect();
-                                    overlay.style.top = `${overlay2Rect.bottom + 20}px`;
-                                }, 0);
-                            }, 1000);
-                        }, 500);
-                    }
+                                // Position the old overlay below the new overlay
+                                const overlay2Rect = overlay2.getBoundingClientRect();
+                                overlay.style.top = `${overlay2Rect.bottom + 20}px`;
+                            }, 0);
+                        }, 1000);
+                    }, 500);
                 }
             }, 500);
         }
@@ -5044,7 +5149,7 @@ window.addEventListener('load', function () {
                 const link = document.createElement('a');
                 link.href = 'https://shop.bitmain.com/support/download';
                 link.target = '_blank'; // Open in a new tab
-                link.textContent = 'Firmware Downloads Page';
+                link.textContent = 'Bitmain Firmware Downloads Page';
                 link.style.display = 'block';
                 link.style.marginBottom = '10px';
                 formsContent.insertBefore(link, formsContent.firstChild);
@@ -5056,6 +5161,15 @@ window.addEventListener('load', function () {
                     GM_SuperValue.set('minerType', minerType);
                     GM_SuperValue.set('algorithm', algorithm);
                 });
+
+                // Foundry Site Ops Firmware Downloads
+                const foundryLink = document.createElement('a');
+                foundryLink.href = 'https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/Ejr69n4RQN5Nk9JjF4fW00YBnxf38XEYL7Ubf9xIwgh9bA?e=HwAMls';
+                foundryLink.target = '_blank'; // Open in a new tab
+                foundryLink.textContent = 'Foundry Site Ops Firmware Downloads';
+                foundryLink.style.display = 'block';
+                foundryLink.style.marginBottom = '10px';
+                formsContent.insertBefore(foundryLink, link.nextSibling);
             }
 
             // Locate the log content element
