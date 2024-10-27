@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.8.7
+// @version      2.9.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -406,7 +406,7 @@ window.addEventListener('load', function () {
                         window.speechSynthesis.speak(msg);
 
                         // if over 500, repeat the sound every 5 seconds for 60 seconds
-                        if(minerCount >= 500) {
+                        if(minerCount >= 2000) {
                             const interval = setInterval(() => {
                                 const audio1 = new Audio('https://cdn.freesound.org/previews/521/521973_311243-lq.mp3');
                                 audio1.play();
@@ -2767,6 +2767,7 @@ window.addEventListener('load', function () {
 
                                                     var showSkipped = true;
                                                     var showSuccess = true;
+                                                    var showSleepMode = true;
                                                     function toggleSkippedMiners() {
                                                         // Get the current sort order before refreshing
                                                         var reversed = $('#minerTable').DataTable().order()[0][1] === 'desc';
@@ -2779,6 +2780,9 @@ window.addEventListener('load', function () {
                                                             }
                                                             if(curResultText.includes("Successfully Hashing")) {
                                                                 row.style.display = showSuccess ? '' : 'none';
+                                                            }
+                                                            if(curResultText.includes("Sleep Mode")) {
+                                                                row.style.display = showSleepMode ? '' : 'none';
                                                             }
                                                         });
 
@@ -3016,7 +3020,7 @@ window.addEventListener('load', function () {
                                                         align-self: flex-end; /* Align to the right side */
                                                         display: block; /* Ensure the button is displayed as a block element */
                                                     `;
-                                                    showSkippedButton.textContent = 'Toggle Soft Reboot Miners';
+                                                    showSkippedButton.textContent = 'Hide Soft Reboot Miners';
                                                     firstDiv.appendChild(showSkippedButton);
 
                                                     // Add button hover effect
@@ -3032,6 +3036,9 @@ window.addEventListener('load', function () {
                                                     showSkippedButton.onclick = function() {
                                                         showSkipped = !showSkipped;
                                                         toggleSkippedMiners();
+
+                                                        // Set the button text to the opposite of what it was
+                                                        this.textContent = showSkipped ? 'Hide Soft Reboot Miners' : 'Show Soft Reboot Miners';
                                                     };
 
                                                     // Add a toggle button to hide/show successful miners
@@ -3050,7 +3057,7 @@ window.addEventListener('load', function () {
                                                         display: block; /* Ensure the button is displayed as a block element */
                                                     `;
 
-                                                    showSuccessfulButton.textContent = 'Toggle Successful Miners';
+                                                    showSuccessfulButton.textContent = 'Hide Successful Miners';
                                                     firstDiv.appendChild(showSuccessfulButton);
 
                                                     // Add button hover effect
@@ -3066,7 +3073,51 @@ window.addEventListener('load', function () {
                                                     showSuccessfulButton.onclick = function() {
                                                         showSuccess = !showSuccess;
                                                         toggleSkippedMiners();
+
+                                                        // Set the button text to the opposite of what it was
+                                                        this.textContent = showSuccess ? 'Hide Successful Miners' : 'Show Successful Miners';
                                                     };
+
+                                                    // Toggle Sleep Mode Miners
+                                                    const toggleSleepModeButton = document.createElement('button');
+                                                    toggleSleepModeButton.id = 'toggleSleepModeButton';
+                                                    toggleSleepModeButton.style.cssText = `
+                                                        padding: 10px 20px;
+                                                        background-color: #0078d4;
+                                                        color: white;
+                                                        border: none;
+                                                        cursor: pointer;
+                                                        margin-top: 10px;
+                                                        border-radius: 5px;
+                                                        transition: background-color 0.3s;
+                                                        align-self: flex-end; /* Align to the right side */
+                                                        display: block; /* Ensure the button is displayed as a block element */
+                                                    `;
+                                                    toggleSleepModeButton.textContent = 'Hide Sleep Mode Miners';
+                                                    firstDiv.appendChild(toggleSleepModeButton);
+                                                    
+                                                    // Add button hover effect
+                                                    toggleSleepModeButton.addEventListener('mouseenter', function() {
+                                                        this.style.backgroundColor = '#005a9e';
+                                                    });
+
+                                                    toggleSleepModeButton.addEventListener('mouseleave', function() {
+                                                        this.style.backgroundColor = '#0078d4';
+                                                    });
+
+                                                    // Toggle Sleep Mode Miners functionality
+                                                    toggleSleepModeButton.onclick = function() {
+                                                        showSleepMode = !showSleepMode;
+                                                        toggleSkippedMiners();
+
+                                                        // Set the button text to the opposite of what it was
+                                                        this.textContent = showSleepMode ? 'Hide Sleep Mode Miners' : 'Show Sleep Mode Miners';
+                                                    };
+
+                                                    // Get the 3 toggle buttons, find the longest one, and set the other two to the same width
+                                                    const buttons = [showSkippedButton, showSuccessfulButton, toggleSleepModeButton];
+                                                    buttons.forEach(button => button.style.width = `${200}px`);
+                                                    
 
                                                     /*
                                                     // Add a checkbox for "Include Low Hashing Miners"
@@ -3991,6 +4042,81 @@ window.addEventListener('load', function () {
 
                                             // If the previous row is null or a different miner, then we need to create a new row
                                             if (!previousRow || currentRow.minerID !== previousRow.minerID) {
+
+                                                const errorData = errorsFoundSave[minerID] || [];
+                                                let iconLinks = [];
+                                                if(errorData) {
+                                                    errorData.forEach(error => {
+                                                        // Check if the icon already exists, if not add it, if so increment the count
+                                                        if(!iconLinks.find(icon => icon.icon === error.icon)) {
+                                                            iconLinks.push({icon: error.icon, count: 1, name: error.name});
+                                                        } else {
+                                                            iconLinks.find(icon => icon.icon === error.icon).count++;                                                            
+                                                        }
+                                                    });
+                                                }
+
+                                                // Create a span containing all the icons with the count to the bottom right of each.
+                                                const iconSpan = document.createElement('span');
+                                                iconSpan.style.cssText = `
+                                                    display: inline-block;
+                                                    margin-left: 0px;
+                                                    float: right;
+                                                    background-color: #333;
+                                                    padding: 2px;
+                                                    border-radius: 5px;
+                                                    outline: 1px solid #000;
+                                                `;
+                                                iconLinks.forEach(icon => {
+                                                    const iconDiv = document.createElement('div');
+                                                    iconDiv.style.cssText = `
+                                                        display: inline-block;
+                                                        margin-top: 3px;
+                                                        margin-left: -8px;
+                                                    `;
+                                                    iconDiv.innerHTML = `
+                                                        <span style="position: relative; top: -10px; right: -10px; background-color: red; color: white; border-radius: 50%; padding: 1px 3px; font-size: 10px;">${icon.count}</span>
+                                                        <img src="${icon.icon}" style="width: 18px; height: 18px; margin-right: 5px; margin-left: 0px;"/>
+                                                    `;
+                                                    iconSpan.appendChild(iconDiv);
+
+                                                    // Add a tooltip to show the name of the error
+                                                    const iconDivTooltip = iconDiv.querySelector('span');
+                                                    const tooltip = document.createElement('div');
+                                                    tooltip.style.cssText = `
+                                                        display: none;
+                                                        position: absolute;
+                                                        background-color: #444947;
+                                                        color: white;
+                                                        padding: 5px 10px;
+                                                        border-radius: 5px;
+                                                        font-size: 12px;
+                                                        z-index: 9999;
+                                                        white-space: nowrap;
+                                                    `;
+                                                    tooltip.textContent = icon.name;
+                                                    document.body.appendChild(tooltip);
+
+                                                    // Add hover event listeners to show/hide the full details
+                                                    iconDiv.addEventListener('mouseenter', () => {
+                                                        tooltip.style.display = 'block';
+
+                                                        // Calculate the position of the icon relative to the scrollable container
+                                                        const iconRect = iconDiv.getBoundingClientRect();
+                                                        const containerRect = iconDiv.offsetParent.getBoundingClientRect();
+
+                                                        // Position tooltip relative to the iconDiv within the scrollable container
+                                                        const tooltipOffset = 5; // Gap between the icon and tooltip
+                                                        tooltip.style.top = `${iconRect.top}px`;
+                                                        tooltip.style.left = `${iconRect.right}px`; 
+                                                    });
+
+                                                    iconDiv.addEventListener('mouseleave', () => {
+                                                        tooltip.style.display = 'none';
+                                                    });
+                                                });
+
+                                                // Create a new row to contain the miner's information
                                                 const newRow = document.createElement('tr');
                                                 newRow.style.backgroundColor = '#444947';
                                                 newRow.style.color = 'white';
@@ -4016,6 +4142,8 @@ window.addEventListener('load', function () {
                                                         </span>
                                                     </td>
                                                 `;
+                                                newRow.querySelector('td').appendChild(iconSpan);
+
                                                 // Add a plus/minus button to expand/collapse the category
                                                 const toggleButtonSpan = document.createElement('span');
                                                 toggleButtonSpan.style.cssText = `
