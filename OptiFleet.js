@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.9.3
+// @version      2.9.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -5182,126 +5182,20 @@ window.addEventListener('load', function () {
 
     // Return if the URL doesn't match the IP regex
     if (ipURLMatch) {
-        // Scan Error Log Logic
-        let isScanning = false;
-        let homePage = document.getElementById('homePage');
-        let currentlyScanning = GM_SuperValue.get('currentlyScanning', {});
-        let foundMiner = null;
-        if (currentlyScanning && Object.keys(currentlyScanning).length > 0) {
-            // Loop through currentlyScanning via object keys and find if the ipAdress matches any of the miners
-            Object.keys(currentlyScanning).forEach(miner => {
-                let currentMiner = currentlyScanning[miner];
-                if(currentUrl.includes(currentMiner.ipAddress)) {
-                    foundMiner = currentMiner;
-                    return;
-                }
-            });
 
-            if (foundMiner) {
-                if (homePage) {
-                    isScanning = true;
-                } else {
-                    const foundryMinerImage = document.querySelector('img[alt="Foundry Miner"]');
-                    if (foundryMinerImage) {
-                        GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
-                    }
-                }
-            }
+        const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
+        let findLog = false;
+        if(quickGoToLog && currentUrl.includes(quickGoToLog.ip)) {
+            findLog = quickGoToLog.errorText;
+            GM_SuperValue.set('quickGoToLog', false);
         }
 
-        function adjustLayout() {
-            homePage = document.getElementById('homePage');
-            if (homePage) {
-                // At certain zoom levels the homePage seemingly disappears, going down beneath the whole page
-                // This is a workaround to fix that
-                homePage.style.display = 'block';
-                homePage.style.position = 'absolute';
-                homePage.style.top = '0';
-                homePage.style.right = '0';
-
-                // Get the width left for the homePage based on how much layout-l fl takes up
-                const layoutL = document.querySelector('.layout-l');
-                if (layoutL) {
-                    const logContent = document.querySelector('.log-content');
-                    const footer = document.querySelector('.footer.clearfix');
-                    const mainContent = document.querySelector('.main-content');
-                    if (logContent) {
-                        mainContent.style.paddingBottom = '0';
-                        footer.style.display = 'none';
-                    } else {
-                        const footerHeight = footer.offsetHeight;
-                        mainContent.style.paddingBottom = `${footerHeight}px`;
-                        footer.style.display = 'block';
-                    }
-
-                    const layoutLWidth = layoutL.offsetWidth;
-                    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
-                    homePage.style.width = `calc(100% - ${layoutLWidth+scrollBarWidth}px)`;
-                    
-                    // find head clearfix and set the width to the same as homePage
-                    const headClearfix = document.querySelector('.head.clearfix');
-                    if (headClearfix) {
-                        headClearfix.style.width = homePage.style.width;
-                    } else {
-                        console.error('Head clearfix not found');
-                    }
-
-                    // Find the footer and set the width to the same as homePage
-                    if (footer) {
-                        footer.style.width = homePage.style.width;
-                    } else {
-                        console.error('Footer not found');
-                    }
-                }
-            }
-        }  
-
-        // Function to check the current URL
-        var lastRunTime = 0; // Note this run time is refering to last time the function was run, not the miner run/uptime time
-        var lastRealUpTime = 0;
-        var lastUpTimeInterval = null;
-        function runAntMinerGUIAdjustments() {
-            // Check if the last run was less than 10ms ago, stops it from running too often
-            if (Date.now() - lastRunTime < 10) {
-                return;
-            }
-            lastRunTime = Date.now();
-
-            // Add link to firmware downloads if on firmware upgrade page
-            const formsContent = document.querySelector('.forms-content');
-            const formsTitle = document.querySelector('.forms-title[data-locale="update"]');
-            
-            if (formsContent && formsTitle) {
-                const linkAlreadyExists = formsContent.querySelector('a[href="https://shop.bitmain.com/support/download"]');
-                if (linkAlreadyExists) { return; }
-                const link = document.createElement('a');
-                link.href = 'https://shop.bitmain.com/support/download';
-                link.target = '_blank'; // Open in a new tab
-                link.textContent = 'Bitmain Firmware Downloads Page';
-                link.style.display = 'block';
-                link.style.marginBottom = '10px';
-                formsContent.insertBefore(link, formsContent.firstChild);
-
-                // on press, save the current miner type and algorithm
-                link.addEventListener('click', () => {
-                    const minerType = document.querySelector('.miner-type').textContent;
-                    const algorithm = document.querySelector('.algorithm').textContent;
-                    GM_SuperValue.set('minerType', minerType);
-                    GM_SuperValue.set('algorithm', algorithm);
-                });
-
-                // Foundry Site Ops Firmware Downloads
-                const foundryLink = document.createElement('a');
-                foundryLink.href = 'https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/Ejr69n4RQN5Nk9JjF4fW00YBnxf38XEYL7Ubf9xIwgh9bA?e=HwAMls';
-                foundryLink.target = '_blank'; // Open in a new tab
-                foundryLink.textContent = 'Foundry Site Ops Firmware Downloads';
-                foundryLink.style.display = 'block';
-                foundryLink.style.marginBottom = '10px';
-                formsContent.insertBefore(foundryLink, link.nextSibling);
-            }
-
+        let clickedAutoRefresh = false;
+        let changingLog = false;
+        let lastLogChangeTime = 0;
+        function setUpErrorLog(refresh) {
             // Locate the log content element
-            const logContent = document.querySelector('.log-content');
+            const logContent = document.querySelector('.log-content') || document.querySelector('.logBox-pre');
 
             function removeOldErrorTab() {
                 // If it found the error tab, remove it
@@ -5323,6 +5217,10 @@ window.addEventListener('load', function () {
                 }
             }
 
+            if (refresh) {
+                removeOldErrorTab();
+            }
+
             // If the log content exists, run the error tab setup
             if (logContent) {
                 // On tab change
@@ -5336,7 +5234,6 @@ window.addEventListener('load', function () {
 
                 // Make sure the log content is not overlayed over anything
                 logContent.style.position = 'relative';
-
 
                 // If we didn't already add the error tab, add it
                 const oldErrorTab = document.querySelector('[data-id="errors"]');
@@ -5602,20 +5499,24 @@ window.addEventListener('load', function () {
                         }
                     }
 
-                    
-                    const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
-                    let findLog = false;
-                    if(quickGoToLog && currentUrl.includes(quickGoToLog.ip)) {
-                        findLog = quickGoToLog.errorText;
-                        GM_SuperValue.set('quickGoToLog', false);
-                    }
-                        
-
                     function createErrorTab(title, errors) {
                         // Create a new element to display the errors
                         if (errors.length > 0) {
                             // Locate the menu element
-                            const menu = document.querySelector('.menu-t.menu');
+                            let isFoundry = false;
+                            let menu = document.querySelector('.menu-t.menu');
+                            if(!menu) {
+                                menu = document.querySelector('.m-uishell-left-panel');
+                                isFoundry = true;
+
+                                // Find and toggle off auto refresh if it is on (<label for="toggle" class="switch"></label>)
+                                const autoRefresh = document.querySelector('.switch[for="toggle"]');
+                                if(autoRefresh && !clickedAutoRefresh) {
+                                    autoRefresh.click();
+                                    clickedAutoRefresh = true;
+                                }
+                            }
+
                             if (menu) {
                                 // Set the menu's scroll bar to be a nice skinny dark one
                                 menu.style.overflowY = 'auto';
@@ -5634,6 +5535,22 @@ window.addEventListener('load', function () {
                                         background-color: #444;
                                         border-radius: 10px;
                                         border: 2px solid #222;
+                                    }
+                                    li .item {
+                                        display: flex;
+                                        align-items: center;
+                                    }
+
+                                    .item .icon,
+                                    .item .itm-name,
+                                    .item div {
+                                        display: inline-block;
+                                        vertical-align: middle;
+                                        margin: 0;
+                                    }
+                                    .item div {
+                                        margin-left: auto; /* Pushes the "i" icon to the right */
+                                        line-height: normal; /* Adjust to align the circle vertically */
                                     }
                                 `;
                                 document.head.appendChild(style);
@@ -5659,26 +5576,66 @@ window.addEventListener('load', function () {
                                     setTimeout(adjustLayout, 0);
                                 });
 
+                                if(isFoundry) {
+                                    // Add a nice font to the error tab and sub-menu
+                                    const fontStyle = document.createElement('style');
+                                    fontStyle.textContent = `
+                                        .menu-t.menu, .sub-menu.menu, .itm-name  {
+                                            font-family: 'Arial', sans-serif;
+                                            font-size: 14px;
+                                        }
+                                    `;
+                                    document.head.appendChild(fontStyle);
+
+                                    // click error tab twice to fix it appearing opened
+                                    setTimeout(() => {
+                                        errorTab.click();
+                                        errorTab.click();
+                                    }, 0);
+                                }
+
+                                // Light blue text when hovering over the error tab
+                                errorTab.addEventListener('mouseover', () => {
+                                    errorTab.style.color = '#5FB2FF';
+
+                                    // change mouse cursor to pointer
+                                    errorTab.style.cursor = 'pointer';
+                                });
+
+                                errorTab.addEventListener('mouseout', () => {
+                                    errorTab.style.color = '#E2E2E2';
+
+                                    // change mouse cursor to default
+                                    errorTab.style.cursor = 'default';
+                                });
+
                                 // Create a sub-menu for the errors
                                 const errorSubMenu = document.createElement('ul');
                                 errorSubMenu.classList.add('sub-menu', 'menu');
                                 errorSubMenu.id = 'errorSubMenu';
+
+                                // set a slight padding to the sub-menu
+                                errorSubMenu.style.paddingLeft = '10px';
                                 
                                 // Find and replace the drop icon so it doesn't flip when the other sub-menu is opened
                                 const dropIcon = errorTab.querySelector('.drop-icon');
                                 if (dropIcon) {
                                     dropIcon.remove();
-
-                                    const errorIcon = document.createElement('i');
-                                    errorIcon.classList.add('icon');
-                                    errorIcon.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=2760&format=png&color=FFFFFF)';
-                                    errorIcon.style.width = '16px';
-                                    errorIcon.style.height = '16px';
-                                    errorIcon.style.display = 'inline-block';
-                                    errorIcon.style.backgroundSize = 'contain';
-                                    errorIcon.style.marginRight = '5px';
-                                    errorTab.appendChild(errorIcon);
                                 }
+
+                                const dropIcon2 = document.createElement('i');
+                                dropIcon2.classList.add('icon2');
+                                dropIcon2.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=2760&format=png&color=FFFFFF)';
+                                dropIcon2.style.width = '16px';
+                                dropIcon2.style.height = '16px';
+                                dropIcon2.style.display = 'inline-block';
+                                dropIcon2.style.backgroundSize = 'contain';
+                                if(isFoundry) {
+                                    dropIcon2.style.position = 'relative';
+                                    dropIcon2.style.float = 'right';
+                                    dropIcon2.style.marginRight = '10px';
+                                }
+                                errorTab.appendChild(dropIcon2);
 
                                 // Swap the left empty icon source with the error icon
                                 const errorIcon = errorTab.querySelector('.error-ico');
@@ -5696,7 +5653,16 @@ window.addEventListener('load', function () {
                                     errorItem.classList.add('item');
                                     errorItem.setAttribute('data-id', `error-${index}`);
                                     errorItem.innerHTML = `<i class="error-detail-ico icon"></i> <span class="itm-name">${error.name}</span>`;
+                                    if(isFoundry) {
+                                        errorItem.style.cursor = 'pointer';
+                                        // add padding to the error item
+                                        errorItem.style.padding = '5px 8px 5px 0px';
+                                        errorItem.style.verticalAlign = 'middle';
+                                    }
                                     errorItem.addEventListener('click', () => {
+                                        changingLog = true;
+                                        lastLogChangeTime = Date.now();
+
                                         // Check if the error element already exists
                                         const existingErrorElement = document.getElementById(`errorLogElement`);
                                         if (existingErrorElement) {
@@ -5801,8 +5767,23 @@ window.addEventListener('load', function () {
 
                                         // Scroll to the highlighted error
                                         errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                                        setTimeout(() => {
+                                            changingLog = false;
+                                        }, 0);
                                     });
                                     errorSubMenu.appendChild(errorItem);
+
+                                    // highlight text when hovering over the error
+                                    errorItem.addEventListener('mouseover', () => {
+                                        errorItem.style.backgroundColor = '#444';
+                                        errorItem.style.color = '#fff';
+                                    });
+
+                                    errorItem.addEventListener('mouseout', () => {
+                                        errorItem.style.backgroundColor = 'transparent';
+                                        errorItem.style.color = '#E2E2E2';
+                                    });
 
                                     if(findLog && error.text.includes(findLog)) {
                                         // Open the error list
@@ -5822,7 +5803,10 @@ window.addEventListener('load', function () {
                                         errorDetailIcon.style.display = 'inline-block';
                                         errorDetailIcon.style.backgroundSize = 'contain';
                                         errorDetailIcon.style.marginRight = '5px';
+                                        errorDetailIcon.style.width = '22px';
+                                        errorDetailIcon.style.height = '22px';
                                     }
+                                    
                                     // Create an info icon to the right that will show the error text
                                     const infoIcon = document.createElement('div');
                                     infoIcon.style.width = '14px';
@@ -5831,6 +5815,7 @@ window.addEventListener('load', function () {
                                     infoIcon.style.backgroundColor = '#0078d4';
                                     infoIcon.style.color = 'white';
                                     infoIcon.style.textAlign = 'center';
+                                    infoIcon.style.verticalAlign = 'middle';
                                     infoIcon.style.lineHeight = '14px';
                                     infoIcon.style.fontSize = '8px';
                                     infoIcon.style.border = '1px solid black';
@@ -5839,6 +5824,7 @@ window.addEventListener('load', function () {
                                     infoIcon.style.cursor = 'pointer';
                                     infoIcon.style.position = 'relative';
                                     infoIcon.style.float = 'right';
+                                    infoIcon.style.display = 'inline-block';
                                     infoIcon.textContent = 'i';
                                                                 
                                     // Create the tooltip
@@ -5921,6 +5907,126 @@ window.addEventListener('load', function () {
                 //setTimeout(adjustLayout, 500);
             } else {
                 removeOldErrorTab();
+            }
+        }
+
+        // Scan Error Logs Logic
+        let isScanning = false;
+        let homePage = document.getElementById('homePage');
+        let currentlyScanning = GM_SuperValue.get('currentlyScanning', {});
+        let foundMiner = null;
+        if (currentlyScanning && Object.keys(currentlyScanning).length > 0) {
+            // Loop through currentlyScanning via object keys and find if the ipAdress matches any of the miners
+            Object.keys(currentlyScanning).forEach(miner => {
+                let currentMiner = currentlyScanning[miner];
+                if(currentUrl.includes(currentMiner.ipAddress)) {
+                    foundMiner = currentMiner;
+                    return;
+                }
+            });
+
+            if (foundMiner) {
+                if (homePage) {
+                    isScanning = true;
+                }
+            }
+        }
+
+        const foundryMinerImage = document.querySelector('img[alt="Foundry Miner"]');
+        if (foundryMinerImage) {
+            GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
+            return;
+        }
+
+        function adjustLayout() {
+            homePage = document.getElementById('homePage');
+            if (homePage) {
+                // At certain zoom levels the homePage seemingly disappears, going down beneath the whole page
+                // This is a workaround to fix that
+                homePage.style.display = 'block';
+                homePage.style.position = 'absolute';
+                homePage.style.top = '0';
+                homePage.style.right = '0';
+
+                // Get the width left for the homePage based on how much layout-l fl takes up
+                const layoutL = document.querySelector('.layout-l');
+                if (layoutL) {
+                    const logContent = document.querySelector('.log-content');
+                    const footer = document.querySelector('.footer.clearfix');
+                    const mainContent = document.querySelector('.main-content');
+                    if (logContent) {
+                        mainContent.style.paddingBottom = '0';
+                        footer.style.display = 'none';
+                    } else {
+                        const footerHeight = footer.offsetHeight;
+                        mainContent.style.paddingBottom = `${footerHeight}px`;
+                        footer.style.display = 'block';
+                    }
+
+                    const layoutLWidth = layoutL.offsetWidth;
+                    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+                    homePage.style.width = `calc(100% - ${layoutLWidth+scrollBarWidth}px)`;
+                    
+                    // find head clearfix and set the width to the same as homePage
+                    const headClearfix = document.querySelector('.head.clearfix');
+                    if (headClearfix) {
+                        headClearfix.style.width = homePage.style.width;
+                    } else {
+                        console.error('Head clearfix not found');
+                    }
+
+                    // Find the footer and set the width to the same as homePage
+                    if (footer) {
+                        footer.style.width = homePage.style.width;
+                    } else {
+                        console.error('Footer not found');
+                    }
+                }
+            }
+        }  
+
+        // Function to check the current URL
+        var lastRunTime = 0; // Note this run time is refering to last time the function was run, not the miner run/uptime time
+        var lastRealUpTime = 0;
+        var lastUpTimeInterval = null;
+        function runAntMinerGUIAdjustments() {
+            // Check if the last run was less than 10ms ago, stops it from running too often
+            if (Date.now() - lastRunTime < 10) {
+                return;
+            }
+            lastRunTime = Date.now();
+
+            // Add link to firmware downloads if on firmware upgrade page
+            const formsContent = document.querySelector('.forms-content');
+            const formsTitle = document.querySelector('.forms-title[data-locale="update"]');
+            
+            if (formsContent && formsTitle) {
+                const linkAlreadyExists = formsContent.querySelector('a[href="https://shop.bitmain.com/support/download"]');
+                if (linkAlreadyExists) { return; }
+                const link = document.createElement('a');
+                link.href = 'https://shop.bitmain.com/support/download';
+                link.target = '_blank'; // Open in a new tab
+                link.textContent = 'Bitmain Firmware Downloads Page';
+                link.style.display = 'block';
+                link.style.marginBottom = '10px';
+                formsContent.insertBefore(link, formsContent.firstChild);
+
+                // on press, save the current miner type and algorithm
+                link.addEventListener('click', () => {
+                    const minerType = document.querySelector('.miner-type').textContent;
+                    const algorithm = document.querySelector('.algorithm').textContent;
+                    GM_SuperValue.set('minerType', minerType);
+                    GM_SuperValue.set('algorithm', algorithm);
+                });
+
+                // Foundry Site Ops Firmware Downloads
+                const foundryLink = document.createElement('a');
+                foundryLink.href = 'https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/Ejr69n4RQN5Nk9JjF4fW00YBnxf38XEYL7Ubf9xIwgh9bA?e=HwAMls';
+                foundryLink.target = '_blank'; // Open in a new tab
+                foundryLink.textContent = 'Foundry Site Ops Firmware Downloads';
+                foundryLink.style.display = 'block';
+                foundryLink.style.marginBottom = '10px';
+                formsContent.insertBefore(foundryLink, link.nextSibling);
             }
         }
 
@@ -6007,11 +6113,20 @@ window.addEventListener('load', function () {
         // Run the check on mutation
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
-                if (mutation.addedNodes.length > 0) {
-                    setTimeout(runAntMinerGUIAdjustments, 500);
+                let lastChangeLessThan1SecondsAgo = Date.now() - lastLogChangeTime < 1000 && lastLogChangeTime !== 0;
+                if(lastChangeLessThan1SecondsAgo) {
+                    return;
                 }
                 adjustLayout();
                 updateEstimatedTime();
+                runAntMinerGUIAdjustments();
+                // if react-tabs__tab-list is what changed, then set refreshErorrLog to true
+                let refreshErrorLog = false;
+                console.log(changingLog);
+                if (mutation.target.classList.contains('react-tabs__tab-panel') || (mutation.target.classList.contains('logBox-pre') && !changingLog)) {
+                    refreshErrorLog = true;
+                }
+                setUpErrorLog(refreshErrorLog);
             });
         });
 
