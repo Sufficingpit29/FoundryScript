@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      2.9.6
+// @version      3.1.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -2358,7 +2358,7 @@ window.addEventListener('load', function () {
                                                         let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
                                                         row.innerHTML = `
                                                             <td style="text-align: left; position: relative;">
-                                                                <a href="http://root:root@${currentMiner.ipAddress}/" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
+                                                                <a href="http://${currentMiner.username}:${currentMiner.passwd}t@${currentMiner.ipAddress}/" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
                                                             </td>
                                                             <td style="text-align: left; position: relative;">
                                                                 <a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a>
@@ -3437,7 +3437,7 @@ window.addEventListener('load', function () {
                                                 const minerSlotID = currentMiner.locationName;
                                                 const minerSerialNumber = currentMiner.serialNumber;
                                                 row.innerHTML = `
-                                                    <td style="text-align: left;"><a href="http://root:root@${minerIP}/" target="_blank" style="color: white;">${minerIP}</a></td>
+                                                    <td style="text-align: left;"><a href="http://${currentMiner.username}:${currentMiner.passwd}@${minerIP}/" target="_blank" style="color: white;">${minerIP}</a></td>
                                                     <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a></td>
                                                     <td style="text-align: left;">${rebootCount}</td>
                                                     <td style="text-align: left;">${overallHashRate}%</td>
@@ -3714,7 +3714,10 @@ window.addEventListener('load', function () {
                                 }
 
                                 const minerIP = currentMiner.ipAddress;
-                                const guiLink = `http://root:root@${minerIP}/#blog`;
+                                let guiLink = `http://${currentMiner.username}:${currentMiner.passwd}@${minerIP}/#blog`;
+                                if(currentMiner.firmwareVersion.includes('BCFMiner')) {
+                                    guiLink = `http://${currentMiner.username}:${currentMiner.passwd}@${minerIP}/#/logs`;
+                                }
 
                                 console.log("Opening miner GUI for:", currentMiner);
                                 console.log("GUI Link:", guiLink);
@@ -3749,10 +3752,11 @@ window.addEventListener('load', function () {
                                 let loaded = false;
                                 currentCheckLoadedInterval = setInterval(() => {
                                     const guiLoaded = GM_SuperValue.get('minerGUILoaded_' + currentMiner.id, false);
-                                    if(guiLoaded) {
+                                    const errorsFound = GM_SuperValue.get('errorsFound', false);
+                                    if(guiLoaded && errorsFound && errorsFound[currentMiner.id]) {
                                         loaded = true;
-                                        const errorsFound = GM_SuperValue.get('errorsFound', {});
                                         const minerErrors = errorsFound[currentMiner.id] || [];
+                                        console.log("Miner Errors:", minerErrors);
                                         let errorNames = "";
                                         minerErrors.forEach(error => {
                                             errorNames += `• ${error.name}\n`;
@@ -3777,9 +3781,20 @@ window.addEventListener('load', function () {
                                 // Check if the miner gui loaded in a certain amount of time
                                 setTimeout(() => {
                                     if (!loaded && currentCheckLoadedInterval) {
-                                        setPreviousLogDone(currentMiner.id, "✖", "Failed to load miner GUI.");
+                                        let failText = "Failed to load miner GUI.";
+                                        if(currentMiner.firmwareVersion.includes('BCFMiner')) {
+                                            failText = "Failed to load miner GUI or got stuck on Username/Password prompt.";
+                                        }
+                                        setPreviousLogDone(currentMiner.id, "✖", failText);
                                         failLoadCount++;
                                         clearInterval(currentCheckLoadedInterval);
+
+                                        const errorsFound = GM_SuperValue.get('errorsFound', {});
+                                        errorsFound[currentMiner.id] = [{
+                                            name: failText,
+                                            icon: "https://img.icons8.com/?size=100&id=111057&format=png&color=FFFFFF"
+                                        }];
+                                        GM_SuperValue.set('errorsFound', errorsFound);
 
                                         // Move to the next miner
                                         delete currentlyScanning[minerIP];
@@ -3790,7 +3805,7 @@ window.addEventListener('load', function () {
                                         errorScanMiners.shift();
                                         openMinerGUILog();
                                     }
-                                }, 3000*maxScan);
+                                }, 6000);
                             }
                             
                             for (let i = 0; i < maxScan; i++) {
@@ -3839,73 +3854,89 @@ window.addEventListener('load', function () {
                                                     </div>
                                                 </td>
                                             `;
-
-                                            var questionColor = 'red';
-                                            if(questionColor) {
-                                                row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;   
-                                            }
-
+                                            
                                             row.minerID = minerID;
                                             row.minerDataCopy = structuredClone(currentMiner);
-                                            
-                                            // Add hover event listeners to show/hide the full details
-                                            const questionMark = row.querySelector('td:last-child div[style*="position: relative;"]');
-                                            const tooltip = questionMark.querySelector('div[style*="display: none;"]');
-                                            document.body.appendChild(tooltip);
-                                            questionMark.addEventListener('mouseenter', () => {
-                                                tooltip.style.display = 'block';
 
-                                                // Position the tooltip to the left of the question mark with the added width
-                                                const questionMarkRect = questionMark.getBoundingClientRect();
-                                                const tooltipRect = tooltip.getBoundingClientRect();
-                                                tooltip.style.left = `${questionMarkRect.left - tooltipRect.width}px`;
-                                                tooltip.style.right = 'auto';
+                                            console.log("Row:", row);
+                                            console.log("Error:", error);
+                                            if(!error.text) {
+                                                alert("Error text is missing for miner: " + minerID);
+                                                row.innerHTML = `
+                                                    <td style="text-align: left; position: relative;">
+                                                        ${error.name}
+                                                    </td>
+                                                `;
+                                            } else {
 
-                                                // Set top position to be the same as the question mark
-                                                tooltip.style.top = `${questionMarkRect.top}px`;
-                                            });
+                                                var questionColor = 'red';
+                                                if(questionColor) {
+                                                    row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;   
+                                                }
+                                                
+                                                // Add hover event listeners to show/hide the full details
+                                                const questionMark = row.querySelector('td:last-child div[style*="position: relative;"]');
+                                                const tooltip = questionMark.querySelector('div[style*="display: none;"]');
+                                                document.body.appendChild(tooltip);
+                                                questionMark.addEventListener('mouseenter', () => {
+                                                    tooltip.style.display = 'block';
 
-                                            // when clicked, open the error log
-                                            questionMark.addEventListener('click', () => {
-                                                const ip = currentMiner.ipAddress;
-                                                const minerGUI = `http://root:root@${ip}/#blog`;
-                                                GM_SuperValue.set('quickGoToLog', {ip: ip, errorText: error.text});
-                                                window.open(minerGUI, '_blank');
-                                            });
+                                                    // Position the tooltip to the left of the question mark with the added width
+                                                    const questionMarkRect = questionMark.getBoundingClientRect();
+                                                    const tooltipRect = tooltip.getBoundingClientRect();
+                                                    tooltip.style.left = `${questionMarkRect.left - tooltipRect.width}px`;
+                                                    tooltip.style.right = 'auto';
 
-                                            
-                                            // Start a timer to hide the tooltip after a delay if not hovered over
-                                            let hideTooltipTimer;
-                                            const hideTooltipWithDelay = () => {
-                                                hideTooltipTimer = setTimeout(() => {
-                                                    tooltip.style.display = 'none';
-                                                }, 100);
-                                            };
+                                                    // Set top position to be the same as the question mark
+                                                    tooltip.style.top = `${questionMarkRect.top}px`;
+                                                });
 
-                                            tooltip.style.display = 'none';
+                                                // when clicked, open the error log
+                                                questionMark.addEventListener('click', () => {
+                                                    const ip = currentMiner.ipAddress;
+                                                    let GUILink = `http://${currentMiner.username}:${currentMiner.passwd}@${ip}/#blog`;
+                                                    if(currentMiner.firmwareVersion.includes('BCFMiner')) {
+                                                        GUILink = `http://${currentMiner.username}:${currentMiner.passwd}@${ip}/#/logs`;
+                                                    }
+                                                    GM_SuperValue.set('quickGoToLog', {ip: ip, errorText: error.text, category: error.category});
+                                                    window.open(GUILink, '_blank');
+                                                });
 
-                                            // Clear the timer if the tooltip or question mark is hovered over again
-                                            questionMark.addEventListener('mouseenter', () => {
-                                                clearTimeout(hideTooltipTimer);
-                                            });
+                                                
+                                                // Start a timer to hide the tooltip after a delay if not hovered over
+                                                let hideTooltipTimer;
+                                                const hideTooltipWithDelay = () => {
+                                                    hideTooltipTimer = setTimeout(() => {
+                                                        tooltip.style.display = 'none';
+                                                    }, 100);
+                                                };
 
-                                            tooltip.addEventListener('mouseenter', () => {
-                                                clearTimeout(hideTooltipTimer);
-                                            });
+                                                tooltip.style.display = 'none';
 
-                                            // Start the timer when the mouse leaves the tooltip or question mark
-                                            questionMark.addEventListener('mouseleave', hideTooltipWithDelay);
-                                            tooltip.addEventListener('mouseleave', hideTooltipWithDelay);
+                                                // Clear the timer if the tooltip or question mark is hovered over again
+                                                questionMark.addEventListener('mouseenter', () => {
+                                                    clearTimeout(hideTooltipTimer);
+                                                });
 
-                                            // Observe for changes to the table and delete the tooltip if so
-                                            const observer = new MutationObserver(() => {
-                                                tooltip.remove();
-                                                observer.disconnect();
-                                            });
+                                                tooltip.addEventListener('mouseenter', () => {
+                                                    clearTimeout(hideTooltipTimer);
+                                                });
 
-                                            observer.observe(row, { childList: true });
+                                                // Start the timer when the mouse leaves the tooltip or question mark
+                                                questionMark.addEventListener('mouseleave', hideTooltipWithDelay);
+                                                tooltip.addEventListener('mouseleave', hideTooltipWithDelay);
+
+                                                // Observe for changes to the table and delete the tooltip if so
+                                                const observer = new MutationObserver(() => {
+                                                    tooltip.remove();
+                                                    observer.disconnect();
+                                                });
+
+                                                observer.observe(row, { childList: true });
+                                            }
                                         }
 
+                                        /*
                                         // Add text saying the current soft rebooting miners from getTotalRebootCount() that updates
                                         const tipText = document.createElement('div');
                                         tipText.style.cssText = `
@@ -3913,11 +3944,12 @@ window.addEventListener('load', function () {
                                             background-color: #444947;
                                             border-radius: 5px;
                                             margin-top: 10px;
-                                            align-self: flex-start; /* Align to the left side */
+                                            align-self: flex-start;
                                             font-size: 0.8em;
                                         `;
                                         firstDiv.appendChild(tipText);
                                         tipText.textContent = `Note: This does not include BCFMiner firmware (Foundry GUI) Miners or Miners that are not online.`;
+                                        */
 
                                         // Add the count of failLoadCount noErrorCount
                                         const containerDiv = document.createElement('div');
@@ -4040,10 +4072,21 @@ window.addEventListener('load', function () {
                                             let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
                                             //http://root:root@${currentMiner.ipAddress}/
 
+                                            console.log(currentMiner);
+
                                             // If the previous row is null or a different miner, then we need to create a new row
                                             if (!previousRow || currentRow.minerID !== previousRow.minerID) {
+                                                let GUILink = `http://${currentMiner.username}:${currentMiner.passwd}@${currentMiner.ipAddress}/#blog`;
+                                                if(currentMiner.firmwareVersion.includes('BCFMiner')) {
+                                                    GUILink = `http://${currentMiner.username}:${currentMiner.passwd}@${currentMiner.ipAddress}/#/logs`;
+                                                }
 
                                                 const errorData = errorsFoundSave[minerID] || [];
+                                                let errorCount = errorData.length;
+                                                if(errorCount === 1 && !errorData[0].text) {
+                                                    errorCount = '?';
+                                                }
+
                                                 let iconLinks = [];
                                                 if(errorData) {
                                                     errorData.forEach(error => {
@@ -4067,6 +4110,7 @@ window.addEventListener('load', function () {
                                                     border-radius: 5px;
                                                     outline: 1px solid #000;
                                                 `;
+                                                
                                                 iconLinks.forEach(icon => {
                                                     const iconDiv = document.createElement('div');
                                                     iconDiv.style.cssText = `
@@ -4079,6 +4123,28 @@ window.addEventListener('load', function () {
                                                         <img src="${icon.icon}" style="width: 18px; height: 18px; margin-right: 5px; margin-left: 0px;"/>
                                                     `;
                                                     iconSpan.appendChild(iconDiv);
+
+                                                    // Remove the count if is less than 2
+                                                    if(icon.count < 2) {
+                                                        iconDiv.querySelector('span').remove();
+
+                                                        let imgElement = iconDiv.querySelector('img');
+
+                                                        // Adjust the icon padding/margins to account for the missing count
+                                                        iconDiv.style.paddingLeft = '2px';
+                                                        iconDiv.style.paddingRight = '2px';
+                                                        iconDiv.style.marginLeft = '0px';
+                                                        iconDiv.style.marginRight = '0px';
+                                                        imgElement.style.marginLeft = '0px';
+                                                        imgElement.style.marginRight = '0px';
+                                                        imgElement.style.paddingLeft = '0px';
+                                                        imgElement.style.paddingRight = '0px';
+
+                                                        // Fixes the margin of the first icon
+                                                        if(iconLinks.length > 1 && icon === iconLinks[0]) {
+                                                            iconDiv.style.marginLeft = '1px';
+                                                        }
+                                                    }
 
                                                     // Add a tooltip to show the name of the error
                                                     const iconDivTooltip = iconDiv.querySelector('span');
@@ -4115,7 +4181,7 @@ window.addEventListener('load', function () {
                                                         tooltip.style.display = 'none';
                                                     });
                                                 });
-
+                                                    
                                                 // Create a new row to contain the miner's information
                                                 const newRow = document.createElement('tr');
                                                 newRow.style.backgroundColor = '#444947';
@@ -4126,7 +4192,7 @@ window.addEventListener('load', function () {
                                                 newRow.innerHTML = `
                                                     <td colspan="7" style="text-align: right; padding-right: 6px; padding-left: 6px;">
                                                         <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
-                                                            <a href="http://root:root@${currentMiner.ipAddress}/#blog" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
+                                                            <a href="${GUILink}" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
                                                         </span>
                                                         <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
                                                             <a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a>
@@ -4138,7 +4204,7 @@ window.addEventListener('load', function () {
                                                             ${paddedSlotIDBreaker}
                                                         </span>
                                                         <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: right;">
-                                                            Error Count: ${errorsFoundSave[minerID].length}
+                                                            Error Count: ${errorCount}
                                                         </span>
                                                     </td>
                                                 `;
@@ -4233,8 +4299,6 @@ window.addEventListener('load', function () {
                                                 });
                                             }
                                         }
-                                            
-
                                     });
                                 }
                             }, 100);
@@ -5182,20 +5246,93 @@ window.addEventListener('load', function () {
 
     // Return if the URL doesn't match the IP regex
     if (ipURLMatch) {
-
         const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
         let findLog = false;
+        let selectCategory = "Current Logs";
         if(quickGoToLog && currentUrl.includes(quickGoToLog.ip)) {
             findLog = quickGoToLog.errorText;
+            selectCategory = quickGoToLog.category;
             GM_SuperValue.set('quickGoToLog', false);
         }
 
+         // Scan Error Logs Logic
+         let isScanning = false;
+         let homePage = document.getElementById('homePage');
+         let currentlyScanning = GM_SuperValue.get('currentlyScanning', {});
+         let foundMiner = null;
+         let isFoundry = currentUrl.includes("#/");
+         if (currentlyScanning && Object.keys(currentlyScanning).length > 0) {
+             // Loop through currentlyScanning via object keys and find if the ipAdress matches any of the miners
+             Object.keys(currentlyScanning).forEach(miner => {
+                 let currentMiner = currentlyScanning[miner];
+                 if(currentUrl.includes(currentMiner.ipAddress)) {
+                     foundMiner = currentMiner;
+                     return;
+                 }
+             });
+ 
+             if (foundMiner) {
+                isScanning = true;
+             }
+         }
+ 
+        let loadedFoundryGUI = false;
+        if (isFoundry) {
+            function clickCategory() {
+                console.log('Clicking category');
+                let tabs = document.querySelectorAll('.react-tabs__tab-list');
+
+                if(!tabs || tabs.length === 0 || !tabs[0].childNodes || tabs[0].childNodes.length === 0) {
+                    setTimeout(() => {
+                        clickCategory();
+                    }, 0);
+                    return;
+                }
+
+                // loop through all the tabs
+                tabs.forEach(tab => {
+                    // loop through all the tab elements
+                    tab.childNodes.forEach(tabElement => {
+                        // If the tab element contains the category text, then click it
+                        if(tabElement.textContent.includes(selectCategory)) {
+                            tabElement.click();
+                            // then click document body to fix the weird selection visual
+                            setTimeout(() => {
+                                if(!isScanning) {
+                                    let refreshButton = document.querySelector('.m-button.is-ghost');
+                                    console.log(refreshButton);
+                                    refreshButton.click();
+                                }
+                            }, 1);
+                        }
+
+                        if(isScanning && tabElement.textContent.includes('Reboot Logs')) {
+                            setTimeout(() => {
+                                tabElement.click();
+                            }, 1000);
+
+                            // repeativly check if loadedFoundryGUI is the true then click and end the loop
+                            let interval = setInterval(() => {
+                                if(loadedFoundryGUI) {
+                                    tabElement.click();
+                                    clearInterval(interval);
+                                }
+                            }, 500);
+                        }
+                    });
+                });
+            }
+            clickCategory();
+         }
+
         let clickedAutoRefresh = false;
         let changingLog = false;
-        let lastLogChangeTime = 0;
-        function setUpErrorLog(refresh) {
+        let lastTextLog = "";
+        function setUpErrorLog() {
             // Locate the log content element
             const logContent = document.querySelector('.log-content') || document.querySelector('.logBox-pre');
+
+            console.log('Setting up error log1');
 
             function removeOldErrorTab() {
                 // If it found the error tab, remove it
@@ -5217,9 +5354,33 @@ window.addEventListener('load', function () {
                 }
             }
 
-            if (refresh) {
+            if(!logContent) {
                 removeOldErrorTab();
+                if(!window.location.href.includes('log')) {
+                    clickedAutoRefresh = false;
+                }
+                return;
             }
+
+            const existingErrorElement = document.getElementById(`errorLogElement`);
+            if (existingErrorElement) {
+                return;
+            } else {
+                if(lastTextLog !== logContent.textContent) {
+                    lastTextLog = logContent.textContent;
+                } else {
+                    return;
+                }
+            }
+
+            // Return if the log content is empty
+            if (!logContent.textContent || logContent.textContent.length === 0) {
+                return;
+            }
+
+            removeOldErrorTab();
+
+            console.log('Setting up error log2');
 
             // If the log content exists, run the error tab setup
             if (logContent) {
@@ -5238,11 +5399,16 @@ window.addEventListener('load', function () {
                 // If we didn't already add the error tab, add it
                 const oldErrorTab = document.querySelector('[data-id="errors"]');
                 if (!oldErrorTab) {
-
                     const errorsToSearch = {
+                        /*
+                        'Test Error': {
+                            icon: "https://icons8.com/icon/35881/test-passed",
+                            start: "Booting Linux on physical",
+                        },
+                        */
                         'Bad Hashboard Chain': {
                             icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
-                            start: ["get pll config err", /Chain\[0\]: find .* asic, times 0/],
+                            start: ["get pll config err", /Chain\[0\]: find .* asic, times/], // 0
                             end: ["stop_mining: soc init failed"],
                             conditions: (text) => {
                                 return text.includes('only find');
@@ -5250,8 +5416,8 @@ window.addEventListener('load', function () {
                         },
                         'Fan Speed Error': {
                             icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
-                            start: "Error, fan lost,",
-                            end: "stop_mining: fan lost",
+                            start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /\[WARN\] FAN \d+ Fail/],
+                            end: ["stop_mining: fan lost", " has failed to run at expected RPM"],
                         },
                         'SOC INIT Fail': {
                             icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
@@ -5260,8 +5426,19 @@ window.addEventListener('load', function () {
                             onlySeparate: true
                         },
                         'EEPROM Error': {
+                            icon: "https://img.icons8.com/?size=100&id=9040&format=png&color=FFFFFF",
                             start: "eeprom error crc 3rd region",
                             end: "eeprom error crc 3rd region",
+                            onlySeparate: true
+                        },
+                        'Hashboard Init Fail': {
+                            icon: "https://img.icons8.com/?size=100&id=35849&format=png&color=FFFFFF",
+                            start: "Exit due to HASHBOARD INITIALIZATION FAILED",
+                            onlySeparate: true
+                        },
+                        'Target Hashrate Fail': {
+                            icon: "https://img.icons8.com/?size=100&id=20767&format=png&color=FFFFFF",
+                            start: "Exit due to Unable to Generate Given Target Hashrate",
                             onlySeparate: true
                         },
                         'Voltage Abnormity': {
@@ -5503,11 +5680,9 @@ window.addEventListener('load', function () {
                         // Create a new element to display the errors
                         if (errors.length > 0) {
                             // Locate the menu element
-                            let isFoundry = false;
                             let menu = document.querySelector('.menu-t.menu');
                             if(!menu) {
                                 menu = document.querySelector('.m-uishell-left-panel');
-                                isFoundry = true;
 
                                 // Find and toggle off auto refresh if it is on (<label for="toggle" class="switch"></label>)
                                 const autoRefresh = document.querySelector('.switch[for="toggle"]');
@@ -5587,6 +5762,9 @@ window.addEventListener('load', function () {
                                     `;
                                     document.head.appendChild(fontStyle);
 
+                                    
+                                    errorTab.style.marginBottom = '10px';
+
                                     // click error tab twice to fix it appearing opened
                                     setTimeout(() => {
                                         errorTab.click();
@@ -5659,23 +5837,20 @@ window.addEventListener('load', function () {
                                         errorItem.style.padding = '5px 8px 5px 0px';
                                         errorItem.style.verticalAlign = 'middle';
                                     }
+
+                                    function resetLogText() {
+                                        // Remove any children of the log content
+                                        while (logContent.firstChild) {
+                                            logContent.removeChild(logContent.firstChild);
+                                        }
+
+                                        // Re-add the original log content
+                                        logContent.textContent = logText;
+                                    }
                                     errorItem.addEventListener('click', () => {
                                         changingLog = true;
-                                        lastLogChangeTime = Date.now();
 
-                                        // Check if the error element already exists
-                                        const existingErrorElement = document.getElementById(`errorLogElement`);
-                                        if (existingErrorElement) {
-                                            existingErrorElement.remove();
-                                            
-                                            // Remove any children of the log content
-                                            while (logContent.firstChild) {
-                                                logContent.removeChild(logContent.firstChild);
-                                            }
-
-                                            // Re-add the original log content
-                                            logContent.textContent = logText;
-                                        }
+                                        resetLogText();
 
                                         // Create a new element to highlight the error
                                         const errorElement = document.createElement('span');
@@ -5789,6 +5964,16 @@ window.addEventListener('load', function () {
                                         // Open the error list
                                         setTimeout(() => {
                                             errorTab.click();
+
+                                            // Scroll to the error item
+                                            errorItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                                            // highlight that fades out
+                                            errorItem.style.transition = 'background-color 1s';
+                                            errorItem.style.backgroundColor = '#444';
+                                            setTimeout(() => {
+                                                errorItem.style.backgroundColor = 'transparent';
+                                            }, 1000);
                                         }, 0);
 
                                         // Go to the error
@@ -5894,6 +6079,62 @@ window.addEventListener('load', function () {
                         let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
                         errorsFoundSave[minerID] = errorsFound.filter(error => !error.unimportant) || [];
 
+                        if(isFoundry) {
+                            let category = "";
+                            let selectedCurrent = document.querySelector('.react-tabs__tab.react-tabs__tab--selected');
+                            if(selectedCurrent) {
+                                category = selectedCurrent.textContent;
+                            }
+
+                            // If we're on the Reboot Logs, get the error with highest start index
+                            if(category === "Reboot Logs") {
+                                let lastError = errorsFoundSave[minerID].sort((a, b) => b.start - a.start)[0];
+                                if(lastError && lastError.text) {
+
+                                    // Remove all errors that are before the last error
+                                    errorsFoundSave[minerID] = [lastError];
+
+                                    // split the error text and get the date "11/02/24 00:27:35 Exit due to FANS NOT DETECTED | FAN FAILED"
+                                    errorsFoundSave[minerID].forEach(error => {
+                                        const errorText = error.text.split(' ');
+                                        const date = errorText[0];
+                                        const time = errorText[1];
+
+                                        // check if the date is today
+                                        const today = new Date();
+                                        const todayString = `${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getDate().toString().padStart(2, '0')}/${today.getFullYear().toString().slice(-2)}`;
+                                        
+                                        if(date !== todayString) {
+                                            errorsFoundSave[minerID] = [];
+                                            //alert('No errors found today\n\n' + error.text + '\n\n Date: ' + date + '\n\n todayString: ' + todayString);
+                                        }
+                                    });
+                                }
+                            }
+
+                            // loop through errorsFoundSave[minerID] and add the category to each error
+                            errorsFoundSave[minerID].forEach(error => {
+                                if(!error) {
+                                    return;
+                                }
+                                error.category = category;
+                            });
+
+                            /* goofy
+                            if(category === "Reboot Logs") {
+                                GM_SuperValue.set('errorsFound', errorsFoundSave);
+                                GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
+                                return;
+                            }
+                                */
+
+                            // if the category isn't Reboot Logs, and the errors are empty, return
+                            if(category !== "Reboot Logs" && errorsFoundSave[minerID].length === 0) {
+                                loadedFoundryGUI = true;
+                                return;
+                            }
+                        }
+
                         // Save the errors found
                         GM_SuperValue.set('errorsFound', errorsFoundSave);
                         GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
@@ -5908,34 +6149,6 @@ window.addEventListener('load', function () {
             } else {
                 removeOldErrorTab();
             }
-        }
-
-        // Scan Error Logs Logic
-        let isScanning = false;
-        let homePage = document.getElementById('homePage');
-        let currentlyScanning = GM_SuperValue.get('currentlyScanning', {});
-        let foundMiner = null;
-        if (currentlyScanning && Object.keys(currentlyScanning).length > 0) {
-            // Loop through currentlyScanning via object keys and find if the ipAdress matches any of the miners
-            Object.keys(currentlyScanning).forEach(miner => {
-                let currentMiner = currentlyScanning[miner];
-                if(currentUrl.includes(currentMiner.ipAddress)) {
-                    foundMiner = currentMiner;
-                    return;
-                }
-            });
-
-            if (foundMiner) {
-                if (homePage) {
-                    isScanning = true;
-                }
-            }
-        }
-
-        const foundryMinerImage = document.querySelector('img[alt="Foundry Miner"]');
-        if (foundryMinerImage) {
-            GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
-            return;
         }
 
         function adjustLayout() {
@@ -6112,22 +6325,14 @@ window.addEventListener('load', function () {
 
         // Run the check on mutation
         const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                let lastChangeLessThan1SecondsAgo = Date.now() - lastLogChangeTime < 1000 && lastLogChangeTime !== 0;
-                if(lastChangeLessThan1SecondsAgo) {
-                    return;
-                }
+            const logContent = document.querySelector('.logBox-pre');
+            if (!logContent) {
                 adjustLayout();
                 updateEstimatedTime();
                 runAntMinerGUIAdjustments();
-                // if react-tabs__tab-list is what changed, then set refreshErorrLog to true
-                let refreshErrorLog = false;
-                console.log(changingLog);
-                if (mutation.target.classList.contains('react-tabs__tab-panel') || (mutation.target.classList.contains('logBox-pre') && !changingLog)) {
-                    refreshErrorLog = true;
-                }
-                setUpErrorLog(refreshErrorLog);
-            });
+            }
+            
+            setUpErrorLog();
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
