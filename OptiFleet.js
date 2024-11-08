@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.2.6
+// @version      3.3.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -2361,7 +2361,7 @@ window.addEventListener('load', function () {
                                                                 <a href="http://${currentMiner.username}:${currentMiner.passwd}t@${currentMiner.ipAddress}/" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
                                                             </td>
                                                             <td style="text-align: left; position: relative;">
-                                                                <a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a>
+                                                                <a href="${minerLink}" target="_blank" style="color: white;">${model}</a>
                                                             </td>
                                                             <td style="text-align: left;">${paddedSlotIDBreaker}</td>
                                                             <td style="text-align: left;">${minerSerialNumber}</td>
@@ -3438,7 +3438,7 @@ window.addEventListener('load', function () {
                                                 const minerSerialNumber = currentMiner.serialNumber;
                                                 row.innerHTML = `
                                                     <td style="text-align: left;"><a href="http://${currentMiner.username}:${currentMiner.passwd}@${minerIP}/" target="_blank" style="color: white;">${minerIP}</a></td>
-                                                    <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a></td>
+                                                    <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">${model}</a></td>
                                                     <td style="text-align: left;">${rebootCount}</td>
                                                     <td style="text-align: left;">${overallHashRate}%</td>
                                                     <td style="text-align: left;">${onlineHashRate}%</td>
@@ -3688,6 +3688,7 @@ window.addEventListener('load', function () {
                             }
 
                             let failLoadCount = 0;
+                            let offlineCount = offlineMiners.length;
                             let noErrorCount = 0;
                             let handledOffline = false;
 
@@ -3697,7 +3698,7 @@ window.addEventListener('load', function () {
                                     if(offlineMiners.length > 0) {
                                         offlineMiners.forEach(miner => {
                                             addToProgressLog(miner);
-                                            setPreviousLogDone(miner.id, "✔", "Miner Offline");
+                                            setPreviousLogDone(miner.id, "✖", "Miner Offline, according to OptiFleet.");
 
                                             // Remove the miner from the errorScanMiners array
                                             errorScanMiners = errorScanMiners.filter(errorMiner => errorMiner.id !== miner.id);
@@ -3705,7 +3706,8 @@ window.addEventListener('load', function () {
                                             // Add the miner being offline to the errorsFound object
                                             const errorsFound = GM_SuperValue.get('errorsFound', {});
                                             errorsFound[miner.id] = [{
-                                                name: "Miner Offline",
+                                                name: "Miner Offline, according to OptiFleet.",
+                                                short: "Miner Offline",
                                                 icon: "https://img.icons8.com/?size=100&id=111057&format=png&color=FFFFFF"
                                             }];
                                             GM_SuperValue.set('errorsFound', errorsFound);
@@ -3816,6 +3818,7 @@ window.addEventListener('load', function () {
                                         const errorsFound = GM_SuperValue.get('errorsFound', {});
                                         errorsFound[currentMiner.id] = [{
                                             name: failText,
+                                            short: "GUI Load Fail",
                                             icon: "https://img.icons8.com/?size=100&id=111057&format=png&color=FFFFFF"
                                         }];
                                         GM_SuperValue.set('errorsFound', errorsFound);
@@ -3995,6 +3998,15 @@ window.addEventListener('load', function () {
                                         `;
                                         failLoadCountText.textContent = `GUI Load Fails: ${failLoadCount}`;
 
+                                        const offlineCountText = document.createElement('div');
+                                        offlineCountText.style.cssText = `
+                                            padding: 5px;
+                                            background-color: #444947;
+                                            border-radius: 5px;
+                                            font-size: 0.8em;
+                                        `;
+                                        offlineCountText.textContent = `Offline Miners: ${offlineCount}`;
+
                                         const noErrorCountText = document.createElement('div');
                                         noErrorCountText.style.cssText = `
                                             padding: 5px;
@@ -4005,6 +4017,7 @@ window.addEventListener('load', function () {
                                         noErrorCountText.textContent = `No Errors Found Miners: ${noErrorCount}`;
 
                                         containerDiv.appendChild(failLoadCountText);
+                                        containerDiv.appendChild(offlineCountText);
                                         containerDiv.appendChild(noErrorCountText);
                                         firstDiv.appendChild(containerDiv);
 
@@ -4204,6 +4217,11 @@ window.addEventListener('load', function () {
                                                         tooltip.style.display = 'none';
                                                     });
                                                 });
+
+                                                let errorCountText = "Error Count: " + errorCount;
+                                                if(errorCount === '?') {
+                                                    errorCountText = errorData[0].short || errorData[0].name || "Error Count: ?";
+                                                }
                                                     
                                                 // Create a new row to contain the miner's information
                                                 const newRow = document.createElement('tr');
@@ -4214,20 +4232,20 @@ window.addEventListener('load', function () {
                                                 newRow.style.margin = '0px';
                                                 newRow.innerHTML = `
                                                     <td colspan="7" style="text-align: right; padding-right: 6px; padding-left: 6px;">
-                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
+                                                        <span class="error-guilink-text" style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
                                                             <a href="${GUILink}" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
                                                         </span>
-                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
-                                                            <a href="${minerLink}" target="_blank" style="color: white;">Miner: ${minerID} [${model}]</a>
+                                                        <span class="error-link-text" style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
+                                                            <a href="${minerLink}" target="_blank" style="color: white;">${model}</a>
                                                         </span>
-                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
+                                                        <span class="error-serialnumber-text" style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
                                                             ${minerSerialNumber}
                                                         </span>
                                                         <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: right;">
                                                             ${paddedSlotIDBreaker}
                                                         </span>
-                                                        <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: right;">
-                                                            Error Count: ${errorCount}
+                                                        <span class="error-count-text" style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: right;">
+                                                            ${errorCountText}
                                                         </span>
                                                     </td>
                                                 `;
@@ -4322,6 +4340,21 @@ window.addEventListener('load', function () {
                                                 });
                                             }
                                         }
+
+                                        // Get all error-count-text elements, find the max width, and set all to that width
+                                        const setMaxWidth = (selector) => {
+                                            const elements = Array.from(popupTableBody.querySelectorAll(selector));
+                                            const maxWidth = Math.max(...elements.map(text => text.offsetWidth));
+                                            elements.forEach(text => {
+                                                text.style.width = `${maxWidth + 2}px`;
+                                                text.style.textAlign = 'center';
+                                            });
+                                        };
+
+                                        setMaxWidth('.error-count-text');
+                                        setMaxWidth('.error-guilink-text');
+                                        setMaxWidth('.error-link-text');
+                                        setMaxWidth('.error-serialnumber-text');
                                     });
                                 }
                             }, 100);
