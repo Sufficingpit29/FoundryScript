@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.1.2
+// @version      3.2.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1955,7 +1955,7 @@ window.addEventListener('load', function () {
                                             hashRateEfficiency = false;
                                         }
 
-                                        const isOnline = currentMiner.connectivity === 'Online';
+                                        const isOnline = currentMiner.statusName === 'Online';
                                         let moreThanOneHour = upTime > minSoftRebootUpTime;
                                         const belowMaxTemp = containerTemp <= maxTemp;
 
@@ -3654,7 +3654,9 @@ window.addEventListener('load', function () {
                             });
 
                             // Only get the actual non hashing miners
-                            issueMiners = issueMiners.filter(miner => miner.connectivity === 'Online' && !miner.firmwareVersion.includes('BCFMiner'));
+                            console.log("Issue Miners:", issueMiners);
+                            offlineMiners = issueMiners.filter(miner => miner.statusName === 'Offline');
+                            //issueMiners = issueMiners.filter(miner => miner.statusName === 'Online'); // && !miner.firmwareVersion.includes('BCFMiner'));
                             if(!allScan) {
                                 issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
                             }
@@ -3663,7 +3665,7 @@ window.addEventListener('load', function () {
                             let scanComplete = false;
                             GM_SuperValue.set('errorsFound', {});
 
-                            if (issueMiners.length === 0) {
+                            if (issueMiners.length === 0 && offlineMiners.length === 0) {
                                 clearInterval(scanningInterval);
                                 scanningText.textContent = '[No miners to scan]';
                                 return;
@@ -3687,8 +3689,30 @@ window.addEventListener('load', function () {
 
                             let failLoadCount = 0;
                             let noErrorCount = 0;
+                            let handledOffline = false;
 
                             function openMinerGUILog() {
+                                if(!handledOffline) {
+                                    handledOffline = true;
+                                    if(offlineMiners.length > 0) {
+                                        offlineMiners.forEach(miner => {
+                                            addToProgressLog(miner);
+                                            setPreviousLogDone(miner.id, "✔", "Miner Offline");
+
+                                            // Remove the miner from the errorScanMiners array
+                                            errorScanMiners = errorScanMiners.filter(errorMiner => errorMiner.id !== miner.id);
+
+                                            // Add the miner being offline to the errorsFound object
+                                            const errorsFound = GM_SuperValue.get('errorsFound', {});
+                                            errorsFound[miner.id] = [{
+                                                name: "Miner Offline",
+                                                icon: "https://img.icons8.com/?size=100&id=111057&format=png&color=FFFFFF"
+                                            }];
+                                            GM_SuperValue.set('errorsFound', errorsFound);
+                                        });
+                                    }
+                                }
+
                                 // Update the percentage text
                                 percentageText.textContent = `${Math.round(((issueMiners.length - errorScanMiners.length) / issueMiners.length) * 100)}% (${issueMiners.length - errorScanMiners.length}/${issueMiners.length})`;
 
@@ -3861,7 +3885,6 @@ window.addEventListener('load', function () {
                                             console.log("Row:", row);
                                             console.log("Error:", error);
                                             if(!error.text) {
-                                                alert("Error text is missing for miner: " + minerID);
                                                 row.innerHTML = `
                                                     <td style="text-align: left; position: relative;">
                                                         ${error.name}
@@ -5445,6 +5468,10 @@ window.addEventListener('load', function () {
                             icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
                             start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
                             end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!"],
+                        },
+                        'Temperature Sensor Error': {
+                            icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
+                            start: "Exit due to TEMPERATURE SENSORS FAILED",
                         },
                         'Temperature Overheat': {
                             icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
