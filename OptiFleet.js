@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.3.5
+// @version      3.3.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -2362,7 +2362,7 @@ window.addEventListener('load', function () {
                                                         let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
                                                         row.innerHTML = `
                                                             <td style="text-align: left; position: relative;">
-                                                                <a href="http://${currentMiner.username}:${currentMiner.passwd}t@${currentMiner.ipAddress}/" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
+                                                                <a href="http://${currentMiner.username}:${currentMiner.passwd}@${currentMiner.ipAddress}/" target="_blank" style="color: white;">${currentMiner.ipAddress}</a>
                                                             </td>
                                                             <td style="text-align: left; position: relative;">
                                                                 <a href="${minerLink}" target="_blank" style="color: white;">${model}</a>
