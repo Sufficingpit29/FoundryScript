@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.3.4
+// @version      3.3.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -278,7 +278,7 @@ window.addEventListener('load', function () {
         
         
         // Add a small 'edit notification amount' button to bottom right
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
+        if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues") && siteName.includes("Minden")) {
             const editAmountButton = document.createElement('button');
             editAmountButton.innerText = 'Edit Alert';
             editAmountButton.style.position = 'fixed';
@@ -446,10 +446,14 @@ window.addEventListener('load', function () {
                 }
             });
         }
-        setInterval(function() {
-            minerIssueNotification()
-        }, 60000);
-        minerIssueNotification();
+
+        // Check if minden
+        if( siteName.includes("Minden") ) {
+            setInterval(function() {
+                minerIssueNotification()
+            }, 60000);
+            minerIssueNotification();
+        }
 
         function retrieveMinerData(type, minerID, timeFrame, callback) {
             var params = {
