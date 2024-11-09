@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.3.6
+// @version      3.3.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -101,7 +101,7 @@ window.addEventListener('load', function () {
             const majoralertThreshold = GM_SuperValue.get("majoralertThreshold", 500);
             const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", "true") === "true";
             const alertEnabled = GM_SuperValue.get("alertEnabled", "true") === "true";
-            const majorAlertEnabled = GM_SuperValue.get("majorAlertEnabled", "true") === "true";
+            const majorAlertEnable = GM_SuperValue.get("majorAlertEnable", "false") === "true";
 
             const popup = document.createElement('div');
             popup.style.position = 'fixed';
@@ -182,25 +182,25 @@ window.addEventListener('load', function () {
             alertEnabledContainer.appendChild(alertEnabledInput);
             alertEnabledContainer.appendChild(alertEnabledLabelText);
             
-            const majorAlertEnabledContainer = document.createElement('div');
-            majorAlertEnabledContainer.style.display = 'flex';
-            majorAlertEnabledContainer.style.alignItems = 'center';
+            const majorAlertEnableContainer = document.createElement('div');
+            majorAlertEnableContainer.style.display = 'flex';
+            majorAlertEnableContainer.style.alignItems = 'center';
 
-            const majorAlertEnabledInput = document.createElement('input');
-            majorAlertEnabledInput.type = 'checkbox';
-            majorAlertEnabledInput.checked = majorAlertEnabled;
-            majorAlertEnabledInput.style.marginBottom = '10px';
-            majorAlertEnabledInput.style.width = '20px'; // Set the width smaller
-            majorAlertEnabledInput.style.height = '20px'; // Set the height smaller
-            majorAlertEnabledInput.style.marginRight = '10px'; // Add some space to the right
+            const majorAlertEnableInput = document.createElement('input');
+            majorAlertEnableInput.type = 'checkbox';
+            majorAlertEnableInput.checked = majorAlertEnable;
+            majorAlertEnableInput.style.marginBottom = '10px';
+            majorAlertEnableInput.style.width = '20px'; // Set the width smaller
+            majorAlertEnableInput.style.height = '20px'; // Set the height smaller
+            majorAlertEnableInput.style.marginRight = '10px'; // Add some space to the right
 
-            const majorAlertEnabledLabelText = document.createElement('span');
-            majorAlertEnabledLabelText.innerText = 'Enable/Disable major notifications.';
-            majorAlertEnabledLabelText.style.color = '#fff'; // Set text color to white for better contrast
-            majorAlertEnabledLabelText.style.marginBottom = '10px';
+            const majorAlertEnableLabelText = document.createElement('span');
+            majorAlertEnableLabelText.innerText = 'Enable/Disable major notifications.';
+            majorAlertEnableLabelText.style.color = '#fff'; // Set text color to white for better contrast
+            majorAlertEnableLabelText.style.marginBottom = '10px';
 
-            majorAlertEnabledContainer.appendChild(majorAlertEnabledInput);
-            majorAlertEnabledContainer.appendChild(majorAlertEnabledLabelText);
+            majorAlertEnableContainer.appendChild(majorAlertEnableInput);
+            majorAlertEnableContainer.appendChild(majorAlertEnableLabelText);
 
             const saveButton = document.createElement('button');
             saveButton.innerText = 'Save';
@@ -232,7 +232,7 @@ window.addEventListener('load', function () {
 
                 GM_SuperValue.set("onlyNonHashing", onlyNonHashingInput.checked.toString());
                 GM_SuperValue.set("alertEnabled", alertEnabledInput.checked.toString());
-                GM_SuperValue.set("majorAlertEnabled", majorAlertEnabledInput.checked.toString());
+                GM_SuperValue.set("majorAlertEnable", majorAlertEnableInput.checked.toString());
                 
                 popup.remove();
 
@@ -269,7 +269,7 @@ window.addEventListener('load', function () {
             popup.appendChild(majorAlertInput);
             popup.appendChild(onlyNonHashingContainer);
             popup.appendChild(alertEnabledContainer);
-            popup.appendChild(majorAlertEnabledContainer);
+            popup.appendChild(majorAlertEnableContainer);
             popup.appendChild(saveButton);
             popup.appendChild(cancelButton);
 
@@ -317,7 +317,7 @@ window.addEventListener('load', function () {
                 const majoralertThreshold = GM_SuperValue.get("majoralertThreshold", 500);
                 const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", "true") === "true";
                 const alertEnabled = GM_SuperValue.get("alertEnabled", "true") === "true";
-                const majorAlertEnabled = GM_SuperValue.get("majorAlertEnabled", "true") === "true";
+                const majorAlertEnable = GM_SuperValue.get("majorAlertEnable", "false") === "true";
 
                 if (!alertEnabled) { return; }
 
@@ -391,7 +391,7 @@ window.addEventListener('load', function () {
                     document.body.appendChild(notification);
 
                     // If at major alert amount, make the notification red & play a sound
-                    if(minerCount >= majoralertThreshold && majorAlertEnabled) {
+                    if(minerCount >= majoralertThreshold && majorAlertEnable) {
                         notification.style.backgroundColor = 'red';
                         notification.style.color = 'white';
                         notification.style.fontWeight = 'bold';
