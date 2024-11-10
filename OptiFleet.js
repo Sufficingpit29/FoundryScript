@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.3.7
+// @version      3.4.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -2472,7 +2472,6 @@ window.addEventListener('load', function () {
                                                             }
                                                         }
 
-
                                                         // Add a button before the question mark that says Mark Fixed
                                                         if(minerRebootData.details.main === "Hard Reboot Recommended" || minerRebootData.details.main === "Pull Recommended") {
                                                             const pullButton = document.createElement('button');
@@ -2510,6 +2509,60 @@ window.addEventListener('load', function () {
 
                                                                 setUpRowData(row, currentMiner);
                                                                 rebootData[minerID] = {};
+                                                            }
+                                                        }
+
+                                                        // Add a button before the question mark that says Send Manual Soft Reboot if details.main === "Soft Reboot Skipped"
+                                                        if(minerRebootData.details.main === "Soft Reboot Skipped") {
+                                                            const softRebootButton = document.createElement('button');
+                                                            softRebootButton.textContent = 'Send Soft Reboot Anyway';
+                                                            softRebootButton.style.cssText = `
+                                                                background-color: #0078d4;
+                                                                color: white;
+                                                                border: none;
+                                                                cursor: pointer;
+                                                                border-radius: 5px;
+                                                                transition: background-color 0.3s;
+                                                                margin-left: 5px;
+                                                            `;
+                                                            row.querySelector('td:last-child').appendChild(softRebootButton);
+
+                                                            // Add button hover effect
+                                                            softRebootButton.addEventListener('mouseenter', function() {
+                                                                this.style.backgroundColor = '#005a9e';
+                                                            });
+
+                                                            softRebootButton.addEventListener('mouseleave', function() {
+                                                                this.style.backgroundColor = '#0078d4';
+                                                            });
+
+                                                            // Add click event to the button
+                                                            softRebootButton.onclick = function() {
+                                                                const minerIdList = [minerID];
+                                                                const min15 = 15*60;
+
+                                                                rebootData[minerID].details.main = "Sent Manual Soft Reboot";
+                                                                rebootData[minerID].details.sub.push("Manually sent soft reboot.");
+
+                                                                // Update the lastRebootTimes
+                                                                lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
+                                                                lastRebootTimes[minerID].upTimeAtReboot = currentMiner.uptimeValue;
+                                                                lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
+                                                                lastRebootTimes[minerID].softRebootsTimes.push(new Date().toISOString());
+
+                                                                // Save lastRebootTimes
+                                                                GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
+
+                                                                // Actually send the reboot request
+                                                                pageInstance.post(`/RebootMiners`, { miners: [minerID], bypassed: false })
+                                                                    .then(() => {
+                                                                        console.log("Rebooted Miner: " + minerID);
+                                                                    })
+                                                                    .catch((error) => {
+                                                                        console.error("Failed to reboot Miner: " + minerID, error);
+                                                                    });
+
+                                                                setUpRowData(row, currentMiner);
                                                             }
                                                         }
                                                         
