@@ -1,7 +1,9 @@
+//integrate some of the error checking into auto reboot?
+
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.4.0
+// @version      3.4.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -751,10 +753,11 @@ window.addEventListener('load', function () {
                         </m-stack>
                     </m-box>
                 `;
+                
 
                 // Add a bit of margin to the top
-                hashRateCard.style.marginTop = '10px';
-                hashRateCard.style.marginBottom = '10px';
+                hashRateCard.style.marginTop = '0px';
+                hashRateCard.style.marginBottom = '0px';
 
                 // Find all 'bar-chart-card m-box' elements and add after the last one
                 const lastCard = document.querySelectorAll('.bar-chart-card')[document.querySelectorAll('.bar-chart-card').length - 1];
@@ -811,7 +814,7 @@ window.addEventListener('load', function () {
                 for (const [index, minerData] of Object.entries(allMinersData)) {
                     // Check if the miner is in the hash rate types
                     for (const [hashRateType, minerModels] of Object.entries(unsupportedModels)) {
-                        if (minerModels.includes(minerData.model)) {
+                        if (minerModels.includes(minerData.modelName)) {
                             // Check if the miner is in the hash rate types
                             if (!totalHashRates[hashRateType]) {
                                 totalHashRates[hashRateType] = {
@@ -822,7 +825,7 @@ window.addEventListener('load', function () {
                             }
 
                             // Add the hash rate to the total hash rate
-                            totalHashRates[hashRateType].totalHashRate += minerData.currentHashRate;
+                            totalHashRates[hashRateType].totalHashRate += minerData.hashrate;
                             totalHashRates[hashRateType].totalHashRatePotential += minerData.expectedHashRate;
                             totalHashRates[hashRateType].totalMiners++;
                         }
@@ -4858,8 +4861,8 @@ window.addEventListener('load', function () {
             }, 1000);
         }
 
-        // Add temps for all containers if in overview page
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
+        // Add temps for all containers if in overview page and are in minden
+        if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview") && siteName.includes("Minden")) {
             let lastRan = 0;
             function addTemperatureData() {
                 const containers = document.querySelectorAll('.m-box.stat-panel.good');
@@ -4868,8 +4871,6 @@ window.addEventListener('load', function () {
                     return;
                 }
 
-                console.log('Adding temperature data to containers:', containers.length);
-                
                 containers.forEach(container => {
                     // Add the temperature title if it doesn't exist
                     if (!container.querySelector('.temp-text-title')) {
