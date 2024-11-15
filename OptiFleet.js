@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.4.2
+// @version      3.6.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -62,6 +62,9 @@ window.addEventListener('load', function () {
     function OptiFleetSpecificLogic() {
         var allMinersData = {};
         var allMinersLookup = {};
+        var allMinersLookupStable = {};
+        let frozenMiners = [];
+        let gotFrozenData = false;
 
         var serviceInstance = new OptiFleetService();
         var pageInstance = new OptiFleetPage();
@@ -74,6 +77,8 @@ window.addEventListener('load', function () {
         var lastMinerDataUpdate = 0;
         var reloadCards = false;
         var hasRefreshed = false;
+
+        let lastUpTime = GM_SuperValue.get("lastUpTime_"+siteName, {});
 
         function retrieveIssueMiners(callback) {
             // In case we swap company/site (Not actually sure if it matters for site, but might as well)
@@ -335,7 +340,7 @@ window.addEventListener('load', function () {
                 }
 
                 // Only get the actual non hashing miners
-                issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                issueMiners = issueMiners.filter(miner => miner.hashrate === 0 || miner.issueType === 'Non Hashing');
 
                 const allMiners = minerCount;
                 const nonHashingMinerCount = issueMiners.length;
@@ -478,7 +483,8 @@ window.addEventListener('load', function () {
         function updateAllMinersData(keepTrying = false, callback) {
             console.log("Updating all miners data");
             // Reset allMinersLookup
-            const lastMinersLookup = allMinersLookup;
+            const lastMinersLookup = { ...allMinersLookup };
+            allMinersLookupStable = lastMinersLookup;
             allMinersLookup = {};
 
             // Get the current site and company ID
@@ -525,15 +531,43 @@ window.addEventListener('load', function () {
                             updateAllMinersData(true);
                         }, 500);
                     }
-    
+                    
                     // Sets up a lookup table
+                    const frozenMinersCopy = [...frozenMiners];
+                    frozenMiners = [];
                     miners.forEach(miner => {
                         allMinersLookup[miner.id] = miner;
+                        
+                        // If the miner is frozen, add it to the frozen miners list
+                        const minerID = miner.id;
+                        const uptimeValue = miner.uptimeValue;
+                        const lastUptimeData = lastUpTime[minerID] || { value: -1, time: -1, addedToList: false };
+                        const lastUptimeValue = lastUptimeData.value;
+                        const lastUptimeTime = lastUptimeData.time;
+                        const isHashing = miner.hashrate > 0;
+                        const minerOnline = miner.statusName === 'Online';
+                        const notSameStatusUpdate = miner.lastStatsUpdate !== lastUptimeTime;
+                        const sameBetweenChecks = uptimeValue === lastUptimeValue && notSameStatusUpdate;
+                        const wasInListBefore = uptimeValue === lastUptimeValue && lastUptimeData.addedToList;
+
+                        if(!gotFrozenData && lastUptimeTime !== -1 && notSameStatusUpdate) {
+                            gotFrozenData = true;
+                        }
+                        
+                        
+                        lastUpTime[minerID] = { value: uptimeValue, time: miner.lastStatsUpdate };
+                        if (isHashing && minerOnline && (sameBetweenChecks || wasInListBefore)) {
+                            frozenMiners.push(minerID);
+                            lastUpTime[minerID].addedToList = true;
+                        }
                     });
+                    GM_SuperValue.set("lastUpTime_"+siteName, lastUpTime);
+
+                    allMinersLookupStable = allMinersLookup;
     
                     // Get the miners data
                     allMinersData = miners;
-    
+
                     // Call the callback function if it exists
                     if (callback) {
                         callback(miners);
@@ -561,6 +595,24 @@ window.addEventListener('load', function () {
             */
         }
         updateAllMinersData();
+
+        // Looks for refreshing and then updates the hash rate elements
+        var startedRefresh = false;
+        const chipObserverInterval = setInterval(() => {
+            const autoRefreshChip = document.querySelector('#refreshBtn');
+            if (autoRefreshChip) {
+                var curText = autoRefreshChip.shadowRoot.textContent.toLowerCase();
+                if (startedRefresh && !curText.includes("refreshing...")) {
+                    startedRefresh = false;
+                    hasRefreshed = true;
+                    updateAllMinersData();
+                }
+                if(curText.includes("refreshing...")) {
+                    console.log("Refreshing...");
+                    startedRefresh = true;
+                }
+            }
+        }, 100);
 
         function retrieveContainerTempData(callback) {
             pageInstance.get(`/sensors?siteId=${siteId}`)
@@ -848,32 +900,6 @@ window.addEventListener('load', function () {
 
             // Call the function to create the hash rate elements
             createHashRateElements();
-
-            // Looks for refreshing and then updates the hash rate elements
-            var startedRefresh = false;
-            var observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    var curText = mutation.target.innerText.toLowerCase();
-                    if(startedRefresh && curText !== "refreshing...") {
-                        startedRefresh = false;
-                        hasRefreshed = true;
-                        updateAllMinersData();
-                    }
-                    if(curText === "refreshing...") {
-                        startedRefresh = true;
-                    }
-                });
-            });
-
-            var config = { attributes: true, childList: true, characterData: true };
-
-            const observerInterval = setInterval(() => {
-                const autoRefreshChip = document.querySelector('m-chip[c-id="siteOverview_autoRefreshChip"]');
-                if (autoRefreshChip) {
-                    observer.observe(autoRefreshChip, config);
-                    clearInterval(observerInterval);
-                }
-            }, 100);
 
             setInterval(function() {
                 // Check if reloadCards is true and if so, run the createHashRateElements function
@@ -1578,21 +1604,37 @@ window.addEventListener('load', function () {
 
                     function createPopUpTable(title, cols, parent, callback) {
                         let popupResultElement = document.createElement('div');
+                        let position = 'fixed';
+                        let top = '50%';
+                        let left = '50%';
+                        let transform = 'translate(-50%, -50%)';
+                        let width = '80%';
+                        let height = '80%';
+                        let display = 'flex';
+                        if (parent) {
+                            position = 'relative';
+                            top = '0';
+                            left = '0';
+                            transform = '';
+                            width = '100%';
+                            height = '100%';
+                            display = 'block';
+                        }
                         popupResultElement.innerHTML = `
                             <div style="
-                                position: fixed;
-                                top: 50%;
-                                left: 50%;
-                                transform: translate(-50%, -50%);
+                                position: ${position};
+                                top: ${top};
+                                left: ${left};
+                                transform: ${transform};
                                 background-color: #333;
                                 color: white;
                                 padding: 20px;
                                 font-family: Arial, sans-serif;
                                 border-radius: 5px;
                                 box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-                                width: 80%;
-                                height: 80%;
-                                display: flex;
+                                width: ${width};
+                                height: ${height};
+                                display: ${display};
                                 flex-direction: column;
                                 justify-content: center;
                                 align-items: center;
@@ -1616,12 +1658,8 @@ window.addEventListener('load', function () {
                         // Ensure this popup is on top of everything
                         popupResultElement.style.zIndex = '9999';
 
-                        // Append popup to the body first, then assign the event listeners
-                        if (parent) {
-                            parent.appendChild(popupResultElement);
-                        } else {
-                            document.body.appendChild(popupResultElement);
-                        }
+                        // Set an ID on popupResultElement
+                        popupResultElement.id = 'popupResultElement';
 
                         // Add additional styling for the table using CSS
                         const tableStyle = document.createElement('style');
@@ -1661,6 +1699,25 @@ window.addEventListener('load', function () {
                             }
                         `;
                         document.head.appendChild(tableStyle);
+
+                        // Append popup to the body first, then assign the event listeners
+                        if (parent) {
+                            parent.appendChild(popupResultElement);
+
+                            
+                            // Resize and align into the parent
+                            popupResultElement.style.width = '100%';
+                            popupResultElement.style.height = '100%';
+                            popupResultElement.style.maxWidth = '100%';
+                            popupResultElement.style.maxHeight = '100%';
+                            popupResultElement.style.position = 'relative';
+
+                            // Make sure it cant expand beyond the parent
+                            popupResultElement.style.overflow = 'hidden';
+                            
+                        } else {
+                            document.body.appendChild(popupResultElement);
+                        }
 
                         if (callback) {
                             callback(popupResultElement);
@@ -3027,7 +3084,7 @@ window.addEventListener('load', function () {
                                                         } else {
                                                             retrieveIssueMiners((issueMiners) => {
                                                                 // Only get the actual non hashing miners
-                                                                issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                                                                issueMiners = issueMiners.filter(miner => miner.hashrate === 0 || miner.issueType === 'Non Hashing');
                                                                 refreshTableLogic(issueMiners);
                                                             });
                                                         }
@@ -3543,12 +3600,7 @@ window.addEventListener('load', function () {
                                                     ]
                                                 });
 
-                                                // Sort offline count to start with the highest
-                                                const offlineCountIndex = $('#minerTable th').filter(function() {
-                                                    return $(this).text().trim() === 'Offline Count';
-                                                }).index();
-
-                                                $('#minerTable').DataTable().order([offlineCountIndex, 'desc']).draw();
+                                                $('#minerTable').DataTable().draw();
                                             });
                                         });
                                     }
@@ -3587,7 +3639,7 @@ window.addEventListener('load', function () {
                                 retrieveIssueMiners((issueMiners) => {
                                     // If we are in auto reboot mode, remove any miner that isn't completely non-hashing
                                     if (autoreboot) {
-                                        issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                                        issueMiners = issueMiners.filter(miner => miner.hashrate === 0 || miner.issueType === 'Non Hashing');
                                     }
                                     rebootLogic(issueMiners)
                                 });
@@ -3718,7 +3770,7 @@ window.addEventListener('load', function () {
                             offlineMiners = issueMiners.filter(miner => miner.statusName === 'Offline');
                             //issueMiners = issueMiners.filter(miner => miner.statusName === 'Online'); // && !miner.firmwareVersion.includes('BCFMiner'));
                             if(!allScan) {
-                                issueMiners = issueMiners.filter(miner => miner.currentHashRate === 0 || miner.issueType === 'Non Hashing');
+                                issueMiners = issueMiners.filter(miner => miner.hashrate === 0 || miner.issueType === 'Non Hashing');
                             }
                             
                             let errorScanMiners = structuredClone(issueMiners);
@@ -4552,6 +4604,181 @@ window.addEventListener('load', function () {
                         // Add the full auto reboot button to the right of the dropdown
                         actionsDropdown.before(fullAutoRebootButton);
                     }
+                    
+                    let waitForFrozenData = setInterval(() => {
+                        updateAllMinersData(true, function() {
+                            if(gotFrozenData) {
+                                clearInterval(waitForFrozenData);
+                            }
+                        });
+                    }, 5000);
+
+                    setTimeout(function() {
+                        updateAllMinersData(true);
+                    }, 1500);
+
+                    // Overide tab toggle function to add in my custom fuctionality
+                    function toggleFrozenTab(tab) {
+                        
+                        // show the miner-filters
+                        const filterElement = document.querySelector(".filters-section.m-section");
+                        const selectedElement = document.querySelector(".miners-selected");
+                        if(filterElement) {
+                            filterElement.style.display = "block";
+                        }
+                        if(selectedElement) {
+                            selectedElement.style.display = "block";
+                        }
+
+                        // Remove popupResultElement if it exists
+                        const popupResultElement = document.getElementById('popupResultElement');
+                        if (popupResultElement) {
+                            popupResultElement.remove();
+                        }
+                        
+                        // Removes the normal table if it exists
+                        $(tab).addClass("selected");
+                        $(tab).siblings(".tab").removeClass("selected");
+                        $(".all-panel, .error-panel").removeClass("active");
+
+                        if(tab.id === "frozenMiners") {
+                            // Hide miner-filters
+                            if (filterElement) {
+                                filterElement.style.display = "none";
+                            }
+                            if (selectedElement) {
+                                selectedElement.style.display = "none";
+                            }
+
+                            // Create frozen miners table and add to #grid-wrapper
+                            const cols = ['IP', 'Miner', 'Reported Uptime', 'Slot ID & Breaker', 'Serial Number'];
+                            const gridWrapper = document.getElementById('grid-wrapper');
+                            createPopUpTable(`Possible Frozen Miners List`, cols, gridWrapper, (popupResultElement) => {
+                                const firstDiv = popupResultElement.querySelector('div');
+
+                                // Add the miner data to the table body
+                                const popupTableBody = popupResultElement.querySelector('tbody');
+                                // Loop through frozenMiners
+                                console.log(frozenMiners);
+                                frozenMiners.forEach(minerID => {
+                                    const currentMiner =  allMinersLookupStable[minerID];
+                                    const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                                    const minerIP = currentMiner.ipAddress;
+                                    const row = document.createElement('tr');
+                                    const model = currentMiner.modelName;
+                                    const uptime = currentMiner.uptime;
+                                    let slotID = currentMiner.locationName;
+
+                                    var splitSlotID = slotID.split('-');
+                                    var containerID = splitSlotID[0].split('_')[1];
+                                    var rackNum = Number(splitSlotID[1]);
+                                    var rowNum = Number(splitSlotID[2]);
+                                    var colNum = Number(splitSlotID[3]);
+                                    var rowWidth = 4;
+                                    var breakerNum = (rowNum-1)*rowWidth + colNum;
+
+                                    // Remakes the slot ID, but with added 0 padding
+                                    let reconstructedSlotID = `${containerID}-${rackNum.toString().padStart(2, '0')}-${rowNum.toString().padStart(2, '0')}-${colNum.toString().padStart(2, '0')}`;
+
+                                    // Adds together the slot ID and breaker number, where the breaker number is padded with spaces
+                                    let paddedSlotIDBreaker = `${reconstructedSlotID}  [${breakerNum.toString().padStart(2, '0')}]`;
+
+                                    const minerSerialNumber = currentMiner.serialNumber;
+                                    row.innerHTML = `
+                                        <td style="text-align: left;"><a href="http://${currentMiner.username}:${currentMiner.passwd}@${minerIP}/" target="_blank" style="color: white;">${minerIP}</a></td>
+                                        <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">${model}</a></td>
+                                        <td style="text-align: left;">${uptime}</td>
+                                        <td style="text-align: left;">${paddedSlotIDBreaker}</a></td>
+                                        <td style="text-align: left;">${minerSerialNumber}</td>
+                                    `;
+                                    popupTableBody.appendChild(row);
+                                });
+
+                                document.title = orginalTitle;
+
+                                // Ensure jQuery, DataTables, and ColResize are loaded before initializing the table
+                                $(document).ready(function() {
+                                    // Custom sorting function for slot IDs
+                                    $.fn.dataTable.ext.type.order['miner-id'] = function(d) {
+                                        // Split something "C05-10-3-4" into an array of just the numbers that aren't seperated by anything at all
+                                        let numbers = d.match(/\d+/g).map(Number);
+                                        //numbers.shift(); // Remove the first number since it is the miner ID
+                                        // Convert the array of numbers into a single comparable value
+                                        // For example, [10, 3, 4] becomes 100304
+                                        let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
+                                        return comparableValue;
+                                    };
+                                    
+
+                                    $('#minerTable').DataTable({
+                                        paging: false,       // Disable pagination
+                                        searching: false,    // Disable searching
+                                        info: false,         // Disable table info
+                                        columnReorder: true, // Enable column reordering
+                                        responsive: true,    // Enable responsive behavior
+                                        colResize: true,      // Enable column resizing
+
+                                        // Use custom sorting for the "Slot ID" column
+                                        columnDefs: [
+                                            {
+                                                targets: $('#minerTable th').filter(function() {
+                                                    return $(this).text().trim() === 'Slot ID';
+                                                }).index(),
+                                                type: 'miner-id'  // Apply the custom sorting function
+                                            }
+                                        ]
+                                    });
+
+                                    $('#minerTable').DataTable().draw();
+                                });
+                            });
+                        }
+                    }
+
+                    // Add new tab
+                    const tabsContainer = document.querySelector('.tabs');
+                    if (tabsContainer) {
+                        const newTab = document.createElement('div');
+                        newTab.id = 'frozenMiners';
+                        newTab.className = 'tab';
+                        newTab.onclick = function() {
+                        };
+                        newTab.innerHTML = `
+                            <span>Frozen Miners</span>
+                            <span class="m-chip new-tab-count">?</span>
+                        `;
+                        // Update the count of the new tab to the length of frozenMiners
+                        let lastCount = 0;
+                        setInterval(() => {
+                            const count = frozenMiners.length;
+                            if (!gotFrozenData && count === 0) {
+                                newTab.querySelector('.new-tab-count').textContent = "?";
+                                return;
+                            }
+                            newTab.querySelector('.new-tab-count').textContent = count;
+                            if (count !== lastCount && newTab.classList.contains('selected')) {
+                                lastCount = count;
+                                newTab.click();
+                            }
+                        }, 100);
+
+                        // Align to right
+                        newTab.style.cssText = `
+                            margin-left: auto;
+                        `;
+                        tabsContainer.appendChild(newTab);
+                    }
+
+                    // Loop through all the tabs and add an extra on click event 
+                    const tabs = document.querySelectorAll('.tab');
+                    tabs.forEach(tab => {
+                        tab.onclick = function() {
+                            toggleFrozenTab(this);
+                            if(this.id !== "frozenMiners") {
+                                issues.toggleTab(this);
+                            }
+                        };
+                    });
                 }
 
             }, 1000);
@@ -5538,6 +5765,10 @@ window.addEventListener('load', function () {
                             start: "ERROR_SOC_INIT",
                             end: ["ERROR_SOC_INIT", "stop_mining: soc init failed!"],
                             onlySeparate: true
+                        },
+                        'Buffer Error': {
+                            icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
+                            start: "nonce_read_out buffer is full!",
                         },
                         'EEPROM Error': {
                             icon: "https://img.icons8.com/?size=100&id=9040&format=png&color=FFFFFF",
