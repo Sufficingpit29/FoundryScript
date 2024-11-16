@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.7.4
+// @version      3.7.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -83,7 +83,9 @@ window.addEventListener('load', function () {
         var reloadCards = false;
         var hasRefreshed = false;
 
-        let lastUpTime = GM_SuperValue.get("lastUpTime_"+siteName, {});
+        let lastUpTime = {}; //GM_SuperValue.get("lastUpTime_"+siteName, {});
+
+
 
         function retrieveIssueMiners(callback) {
             // In case we swap company/site (Not actually sure if it matters for site, but might as well)
@@ -4656,7 +4658,7 @@ window.addEventListener('load', function () {
                             gotFrozenDataFor = {};
                         }
                         updateAllMinersData(true);
-                    }, 30000);
+                    }, 10000);
 
                     setTimeout(function() {
                         updateAllMinersData(true);
