@@ -4740,7 +4740,7 @@ window.addEventListener('load', function () {
                                     border-radius: 5px;
                                     font-size: 0.8em;
                                 `;
-                                additionalNote.textContent = `Note: This list may not 100% accurate. It can also take upwards of a few minutes to get the required data.`;
+                                additionalNote.textContent = `Note: This list may not be 100% accurate. It can also take upwards of a few minutes to get the required data.`;
 
                                 containerDiv.appendChild(checkedMinersText);
                                 containerDiv.appendChild(additionalNote);
@@ -4863,7 +4863,7 @@ window.addEventListener('load', function () {
                                     border-radius: 5px;
                                     font-size: 0.8em;
                                 `;
-                                additionalNote.textContent = `Note: This list may not 100% accurate.`;
+                                additionalNote.textContent = `Note: This list may not be 100% accurate.`;
 
                                 containerDiv.appendChild(checkedMinersText);
                                 containerDiv.appendChild(additionalNote);
