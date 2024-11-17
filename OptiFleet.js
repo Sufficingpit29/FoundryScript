@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.8.1
+// @version      3.8.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -488,6 +488,7 @@ window.addEventListener('load', function () {
             console.log("Updating all miners data");
             // Reset allMinersLookup
             const lastMinersLookup = { ...allMinersLookup };
+            delete allMinersLookup;
             allMinersLookup = {};
 
             // Get the current site and company ID
@@ -508,7 +509,10 @@ window.addEventListener('load', function () {
             __awaiter(this, void 0, void 0, function* () {
                 serviceInstance.get(`/MinerInfo?siteId=${siteId}&zoneId=${-1}&zoneName=All%20Zones`)
                     .then((resp) => {
+
+                    // Set the IP Address to "Lease Expired" if it's null
                     resp.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
+
                     let miners = resp.miners;
                     console.log("Miners Data:", miners);
 
