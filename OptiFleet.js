@@ -540,6 +540,7 @@ window.addEventListener('load', function () {
                     }
                     
                     // Sets up a lookup table
+                    delete frozenMiners;
                     frozenMiners = [];
                     miners.forEach(miner => {
                         allMinersLookup[miner.id] = miner;
