@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.7.6
+// @version      3.8.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -67,9 +67,6 @@ window.addEventListener('load', function () {
         let gotFrozenDataFor = {};
         let activeMiners = 0;
         let foundActiveMiners = false;
-        
-        let fanissueMiners = [];
-        let fanissuesFound = false;
 
         var serviceInstance = new OptiFleetService();
         var pageInstance = new OptiFleetPage();
@@ -540,7 +537,6 @@ window.addEventListener('load', function () {
                     
                     // Sets up a lookup table
                     frozenMiners = [];
-                    fanissueMiners = [];
                     miners.forEach(miner => {
                         allMinersLookup[miner.id] = miner;
                         
@@ -570,41 +566,10 @@ window.addEventListener('load', function () {
                             frozenMiners.push(miner);
                             lastUpTime[minerID].addedToList = true;
                         }
-
-                        // Get the fan data, loop through it, and see if any fans have abnormal speeds compared to the rest
-                        const fanData = miner.fanStats;
-                        if (fanData) {
-                            // Extract speeds
-                            const speeds = fanData.map(fan => fan.speed);
-
-                            // Calculate mean
-                            const mean = speeds.reduce((a, b) => a + b, 0) / speeds.length;
-
-                            // Calculate standard deviation
-                            const stdDev = Math.sqrt(
-                                speeds
-                                    .map(speed => Math.pow(speed - mean, 2))
-                                    .reduce((a, b) => a + b, 0) / speeds.length
-                            );
-
-                            // Define threshold (e.g., 2 standard deviations)
-                            const threshold = 2;
-
-                            // Identify abnormal fans
-                            const abnormalFans = fanData.filter(
-                                fan => Math.abs(fan.speed - mean) > threshold * stdDev
-                            );
-
-                            if (abnormalFans.length > 0) {
-                                miner.suspectedFans = abnormalFans.map(fan => fan.name);
-                                fanissueMiners.push(miner);
-                            }
-                        }
                     });
                     GM_SuperValue.set("lastUpTime_"+siteName, lastUpTime);
                     foundActiveMiners = true;
-                    fanissuesFound = true;
-    
+
                     // Get the miners data
                     allMinersData = miners;
 
@@ -4821,129 +4786,6 @@ window.addEventListener('load', function () {
                                     $('#minerTable').DataTable().draw();
                                 });
                             });
-                        } else if(tab.id === "fanIssues") {
-                            // Create frozen miners table and add to #grid-wrapper
-                            const cols = ['IP', 'Miner', 'Suspected Fan', 'Slot ID & Breaker', 'Serial Number'];
-                            const gridWrapper = document.getElementById('grid-wrapper');
-                            createPopUpTable(`Possible Fan Issue Miners List (Very WIP)`, cols, gridWrapper, (popupResultElement) => {
-                                const firstDiv = popupResultElement.querySelector('div');
-                                const containerDiv = document.createElement('div');
-                                containerDiv.style.cssText = `
-                                    display: flex;
-                                    gap: 10px;
-                                    padding: 0px;
-                                    background-color: #444947;
-                                    border-radius: 10px;
-                                    margin-top: 10px;
-                                    align-self: flex-start; /* Align to the left side */
-                                `;
-
-                                const checkedMinersText = document.createElement('div');
-                                checkedMinersText.style.cssText = `
-                                    padding: 5px;
-                                    background-color: #444947;
-                                    border-radius: 5px;
-                                    font-size: 0.8em;
-                                `;
-                                checkedMinersText.textContent = `Miners Checked: Detecting...`;
-
-                                // Update the checked miners text
-                                setInterval(() => {
-                                    if(fanissuesFound && activeMiners > 0) {
-                                        checkedMinersText.textContent = `Miners Checked: ${activeMiners}/${activeMiners}`;
-                                    } else if(checkedMinersText.textContent !== 'Miners Checked: Detecting...') {
-                                        checkedMinersText.textContent = `Miners Checked: Re-Detecting...`;
-                                    }
-                                }, 500);
-
-                                const additionalNote = document.createElement('div');
-                                additionalNote.style.cssText = `
-                                    padding: 5px;
-                                    background-color: #444947;
-                                    border-radius: 5px;
-                                    font-size: 0.8em;
-                                `;
-                                additionalNote.textContent = `Note: This list may not be 100% accurate.`;
-
-                                containerDiv.appendChild(checkedMinersText);
-                                containerDiv.appendChild(additionalNote);
-                                firstDiv.appendChild(containerDiv);
-
-                                // Add the miner data to the table body
-                                const popupTableBody = popupResultElement.querySelector('tbody');
-                                // Loop through frozenMiners
-                                fanissueMiners.forEach(currentMiner => {
-                                    const minerID = currentMiner.id;
-                                    const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                                    const minerIP = currentMiner.ipAddress;
-                                    const row = document.createElement('tr');
-                                    const model = currentMiner.modelName;
-                                    const suspectedFans = currentMiner.suspectedFans;
-                                    let slotID = currentMiner.locationName;
-
-                                    var splitSlotID = slotID.split('-');
-                                    var containerID = splitSlotID[0].split('_')[1];
-                                    var rackNum = Number(splitSlotID[1]);
-                                    var rowNum = Number(splitSlotID[2]);
-                                    var colNum = Number(splitSlotID[3]);
-                                    var rowWidth = 4;
-                                    var breakerNum = (rowNum-1)*rowWidth + colNum;
-
-                                    // Remakes the slot ID, but with added 0 padding
-                                    let reconstructedSlotID = `${containerID}-${rackNum.toString().padStart(2, '0')}-${rowNum.toString().padStart(2, '0')}-${colNum.toString().padStart(2, '0')}`;
-
-                                    // Adds together the slot ID and breaker number, where the breaker number is padded with spaces
-                                    let paddedSlotIDBreaker = `${reconstructedSlotID}  [${breakerNum.toString().padStart(2, '0')}]`;
-
-                                    const minerSerialNumber = currentMiner.serialNumber;
-                                    row.innerHTML = `
-                                        <td style="text-align: left;"><a href="http://${currentMiner.username}:${currentMiner.passwd}@${minerIP}/" target="_blank" style="color: white;">${minerIP}</a></td>
-                                        <td style="text-align: left;"><a href="${minerLink}" target="_blank" style="color: white;">${model}</a></td>
-                                        <td style="text-align: left;">${suspectedFans}</td>
-                                        <td style="text-align: left;">${paddedSlotIDBreaker}</a></td>
-                                        <td style="text-align: left;">${minerSerialNumber}</td>
-                                    `;
-                                    popupTableBody.appendChild(row);
-                                });
-
-                                document.title = orginalTitle;
-
-                                // Ensure jQuery, DataTables, and ColResize are loaded before initializing the table
-                                $(document).ready(function() {
-                                    // Custom sorting function for slot IDs
-                                    $.fn.dataTable.ext.type.order['miner-id'] = function(d) {
-                                        // Split something "C05-10-3-4" into an array of just the numbers that aren't seperated by anything at all
-                                        let numbers = d.match(/\d+/g).map(Number);
-                                        //numbers.shift(); // Remove the first number since it is the miner ID
-                                        // Convert the array of numbers into a single comparable value
-                                        // For example, [10, 3, 4] becomes 100304
-                                        let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
-                                        return comparableValue;
-                                    };
-                                    
-
-                                    $('#minerTable').DataTable({
-                                        paging: false,       // Disable pagination
-                                        searching: false,    // Disable searching
-                                        info: false,         // Disable table info
-                                        columnReorder: true, // Enable column reordering
-                                        responsive: true,    // Enable responsive behavior
-                                        colResize: true,      // Enable column resizing
-
-                                        // Use custom sorting for the "Slot ID" column
-                                        columnDefs: [
-                                            {
-                                                targets: $('#minerTable th').filter(function() {
-                                                    return $(this).text().trim() === 'Slot ID';
-                                                }).index(),
-                                                type: 'miner-id'  // Apply the custom sorting function
-                                            }
-                                        ]
-                                    });
-
-                                    $('#minerTable').DataTable().draw();
-                                });
-                            });
                         }
                     }
 
@@ -4987,38 +4829,6 @@ window.addEventListener('load', function () {
                             margin-right: 0px;
                         `;
                         tabsContainer.appendChild(frozenMinersTab);
-
-                        const fanIssueTab = document.createElement('div');
-                        fanIssueTab.id = 'fanIssues';
-                        fanIssueTab.custom = true;
-                        fanIssueTab.className = 'tab';
-                        fanIssueTab.onclick = function() {
-                        };
-                        fanIssueTab.innerHTML = `
-                            <span>Fan Issues</span>
-                            <span class="m-chip new-tab-count">?</span>
-                        `;
-                        // Update the count of the new tab to the length of frozenMiners
-                        let lastCount = 0;
-                        setInterval(() => {
-                            const count = fanissueMiners.length;
-                            if (!fanissuesFound && count === 0) {
-                                fanIssueTab.querySelector('.new-tab-count').textContent = "?";
-                                return;
-                            }
-                            fanIssueTab.querySelector('.new-tab-count').textContent = count;
-                            if (count !== lastCount && fanIssueTab.classList.contains('selected')) {
-                                lastCount = count;
-                                //fanIssueTab.click();
-                            }
-                        }, 100);
-
-                        // Align to right
-                        fanIssueTab.style.cssText = `
-                            position: relative;
-                            right: 2px;
-                        `;
-                        //tabsContainer.appendChild(fanIssueTab);
                     }
 
                     // Loop through all the tabs and add an extra on click event 
@@ -6040,7 +5850,7 @@ window.addEventListener('load', function () {
                         },
                         'Temperature Overheat': {
                             icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
-                            start: ["asic temp too high", "ERROR_TEMP_TOO_HIGH"],
+                            start: ["asic temp too high", "ERROR_TEMP_TOO_HIGH", "Exit due to SHUTDOWN TEMPERATURE LIMIT REACHED"],
                             end: ["stop_mining: asic temp too high", "stop_mining: over max temp"],
                         },
                         'Network Lost': {
