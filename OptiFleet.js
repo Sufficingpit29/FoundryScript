@@ -4670,7 +4670,7 @@ window.addEventListener('load', function () {
 
                         if(tab.id === "frozenMiners") {
                             // Create frozen miners table and add to #grid-wrapper
-                            const cols = ['IP', 'Miner', 'Reported Uptime', 'Slot ID & Breaker', 'Serial Number'];
+                            const cols = ['IP', 'Miner', 'Last Reported Uptime', 'Slot ID & Breaker', 'Serial Number'];
                             const gridWrapper = document.getElementById('grid-wrapper');
                             createPopUpTable(`Possible Frozen Miners List`, cols, gridWrapper, (popupResultElement) => {
                                 const firstDiv = popupResultElement.querySelector('div');
