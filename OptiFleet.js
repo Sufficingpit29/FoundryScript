@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.8.6
+// @version      3.8.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -548,7 +548,7 @@ window.addEventListener('load', function () {
                         // If the miner is frozen, add it to the frozen miners list
                         const minerID = miner.id;
                         const uptimeValue = miner.uptimeValue;
-                        const lastUptimeData = lastUpTime[minerID] || { value: -1, time: -1, addedToList: false };
+                        const lastUptimeData = lastUpTime[minerID] || { value: -1, time: -1, addedToList: false, lastHashRate: -1, sameHashRateCount: 0 };
                         const lastUptimeValue = lastUptimeData.value;
                         const lastUptimeTime = lastUptimeData.time;
                         const isHashing = miner.hashrate > 0;
@@ -556,6 +556,9 @@ window.addEventListener('load', function () {
                         const notSameStatusUpdate = lastUptimeTime !== -1 && miner.lastStatsUpdate !== lastUptimeTime;
                         const sameBetweenChecks = uptimeValue === lastUptimeValue && notSameStatusUpdate;
                         const wasInListBefore = uptimeValue === lastUptimeValue && lastUptimeData.addedToList;
+                        const sameHashRate = notSameStatusUpdate && lastUptimeData.lastHashRate === miner.hashrate;
+
+                        
 
                         if(!foundActiveMiners && (miner.statusName === 'Online' || miner.statusName === 'Offline')) {
                             activeMiners++;
@@ -567,10 +570,18 @@ window.addEventListener('load', function () {
                         }
                         
                         lastUpTime[minerID] = { value: uptimeValue, time: miner.lastStatsUpdate };
-                        if (isHashing && minerOnline && (sameBetweenChecks || wasInListBefore)) {
+                        if(sameHashRate) {
+                            lastUpTime[minerID].sameHashRateCount++;
+                        } else {
+                            lastUpTime[minerID].sameHashRateCount = 0;
+                        }
+
+                        if (isHashing && minerOnline && (sameBetweenChecks || wasInListBefore)) { // || lastUptimeData.sameHashRateCount > 2)) {
                             frozenMiners.push(miner);
                             lastUpTime[minerID].addedToList = true;
                         }
+
+                        lastUpTime[minerID].lastHashRate = miner.hashrate;
                     });
                     GM_SuperValue.set("lastUpTime_"+siteName, lastUpTime);
                     foundActiveMiners = true;
