@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.8.5
+// @version      3.8.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -4619,7 +4619,7 @@ window.addEventListener('load', function () {
                         actionsDropdown.before(fullAutoRebootButton);
                     }
 
-                    setInterval(() => {
+                    function DetectFrozenMiners() {
                         console.log("Checking for frozen miners...");
                         if(Object.keys(gotFrozenDataFor).length > 0) {
                             activeMiners = 0;
@@ -4627,11 +4627,15 @@ window.addEventListener('load', function () {
                             gotFrozenData = false;
                             gotFrozenDataFor = {};
                         }
-                        updateAllMinersData(true);
-                    }, 15000);
+                        updateAllMinersData(true, (data) => {
+                            setTimeout(() => {
+                                DetectFrozenMiners();
+                            }, 15000);
+                        });
+                    }
 
                     setTimeout(function() {
-                        updateAllMinersData(true);
+                        DetectFrozenMiners();
                     }, 2500);
 
                     // Overide tab toggle function to add in my custom fuctionality
