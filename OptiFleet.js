@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.8.2
+// @version      3.8.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -5096,6 +5096,7 @@ window.addEventListener('load', function () {
                 h3.classList.add('m-heading');
                 h3.classList.add('is-muted');
                 h3.textContent = title;
+                h3.style.color = '#70707b';
                 mStack.appendChild(h3);
 
                 // Add new p to m-stack
@@ -5119,46 +5120,69 @@ window.addEventListener('load', function () {
                 return mBox;
             }
 
-            addDataBox("Temperature", "Loading...", (mBox, h3, p) => {
-                if (mBox) {
-                    retrieveContainerTempData((containerTempData) => {
-                        var containerElement = document.querySelector('div.dropdown.clickable[onclick="$(`#zoneList`).data(\'kendoDropDownList\').toggle()"]');
-                        if(!containerElement) {
-                            containerElement = document.querySelector('div.dropdown.clickable[onclick*="ddlZones"]');
-                        }
-                        if (containerElement) {
-                            const containerText = containerElement.textContent.trim();
-                            // Make sure we in the minden site
-                            if(containerText !== "zones" && !containerText.includes('Minden')) {
-                                mBox.style.display = 'none';
-                                return;
-                            } else {
-                                mBox.style.display = 'block';
-                            }
-                            try {
-                                const containerNum = parseInt(containerText.split('_')[1].substring(1), 10); // Extract the number after 'C' and remove leading zeros
-                                if (isNaN(containerNum) || !containerTempData[containerNum]) {
-                                    throw new Error('Invalid container number or missing temperature data');
+            let lastContainer = "";
+            let currentTempBox = null;
+            function CreateTemperatureDataBox() {
+                currentTempBox = addDataBox("Temperature", "Loading...", (mBox, h3, p) => {
+                    if (mBox) {
+                        retrieveContainerTempData((containerTempData) => {
+                            var containerElement = document.querySelector('#zoneList');
+                            if (containerElement) {
+                                const shadowRoot = containerElement.shadowRoot;
+                                const selectedOption = shadowRoot.querySelector('option[selected]');
+                                const containerText = selectedOption.textContent.trim();
+                                // Make sure we in the minden site
+                                if(containerText !== "zones" && !containerText.includes('Minden')) {
+                                    mBox.style.display = 'none';
+                                    return;
+                                } else {
+                                    mBox.style.display = 'block';
                                 }
-                                const tempValue = containerTempData[containerNum].temp.toFixed(2);
-                                p.textContent = tempValue;
-                            } catch (error) {
-                                console.error('Error retrieving temperature data:', error);
+                                try {
+                                    const containerNum = parseInt(containerText.split('_')[1].substring(1), 10); // Extract the number after 'C' and remove leading zeros
+                                    if (isNaN(containerNum) || !containerTempData[containerNum]) {
+                                        throw new Error('Invalid container number or missing temperature data');
+                                    }
+                                    const tempValue = containerTempData[containerNum].temp.toFixed(2);
+                                    p.textContent = tempValue;
+                                } catch (error) {
+                                    console.error('Error retrieving temperature data:', error);
+                                    p.textContent = '';
+                                }
+                            } else {
                                 p.textContent = '';
                             }
-                        } else {
-                            p.textContent = '';
+                        } );
+                    }
+                }, 1000);
+            }
+
+            // Add observer to detect when the container changes via #zoneList
+            const observer = new MutationObserver((mutationsList, observer) => {
+                var containerElement = document.querySelector('#zoneList');
+                if (containerElement) {
+                    const shadowRoot = containerElement.shadowRoot;
+                    const selectedOption = shadowRoot.querySelector('option[selected]');
+                    const containerText = selectedOption.textContent.trim();
+                    if (containerText !== lastContainer) {
+                        lastContainer = containerText;
+                        if(currentTempBox) {
+                            currentTempBox.remove();
                         }
-                    } );
+                        CreateTemperatureDataBox();
+                    }
                 }
-            }, 1000);
+            });
+
+            // Start observing the container
+            observer.observe(document.body, { childList: true, subtree: true });
         }
 
         // Add temps for all containers if in overview page and are in minden
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview") && siteName.includes("Minden")) {
             let lastRan = 0;
             function addTemperatureData() {
-                const containers = document.querySelectorAll('.m-box.stat-panel.good');
+                const containers = document.querySelectorAll('.stat-panel.good');
                 if (containers.length === 0) {
                     setTimeout(addTemperatureData, 10);
                     return;
@@ -5170,6 +5194,8 @@ window.addEventListener('load', function () {
                         const tempElement = document.createElement('div');
                         tempElement.className = 'temp-text-title';
                         tempElement.innerText = 'Temperature:';
+                        // set the color to a light orange
+                        tempElement.style.color = '#ff7f50';
                         container.appendChild(tempElement);
                     }
                 });
