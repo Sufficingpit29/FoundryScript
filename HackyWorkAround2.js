@@ -36823,5 +36823,3 @@ class OptiFleetMaster extends OptiFleetService {
 }
 const pathNameSplit = window.location.pathname.split("/");
 window.ms = pathNameSplit[pathNameSplit.length - 1] === "" ? new CdMaster(true) : new OptiFleetMaster();
-
-export { OptiFleetMaster };
