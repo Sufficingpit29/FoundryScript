@@ -16889,7 +16889,9 @@ class OpRebootMinersModal extends OpModalBase {
         this.rebootRestrictionsConfirmationTB = $(`#${this.Id}-rr-confirmation`).kendoTextBox({
             placeholder: "REBOOT",
         }).data("kendoTextBox");
-        this.rebootRestrictionsConfirmationTB.wrapper.on("keyup", this.rebootConfirmationTextChanged.bind(this));
+        if(this.rebootRestrictionsConfirmationTB && this.rebootRestrictionsConfirmationTB.wrapper) {
+          this.rebootRestrictionsConfirmationTB.wrapper.on("keyup", this.rebootConfirmationTextChanged.bind(this));
+        }
     }
     loadMinerNames(minerIds) {
         return __awaiter(this, void 0, void 0, function* () {
