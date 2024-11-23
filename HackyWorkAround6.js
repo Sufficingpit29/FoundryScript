@@ -6707,14 +6707,17 @@ class PrometheusRange extends OptiFleetService {
 let confirmationModal;
 class OptiFleetPage extends OptiFleetService {
     set refreshFunction(val) {
+        if(!this.refreshButton) { return; }
         this.refreshButton = document.querySelector("op-refresh-button");
         this.refreshButton.onRefresh = val;
     }
     set refreshDisabled(val) {
+      if(!this.refreshButton) { return; }
         this.refreshButton = document.querySelector("op-refresh-button");
         this.refreshButton.disabled = val;
     }
     set refreshCountdownDisabled(val) {
+      if(!this.refreshButton) { return; }
         this.refreshButton = document.querySelector("op-refresh-button");
         this.refreshButton.countdownDisabled = val;
     }
