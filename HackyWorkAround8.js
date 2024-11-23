@@ -26154,7 +26154,11 @@ class Issues extends OptiFleetPage {
         this.initZoneDropDown();
         this.logFetchModal = new LogFetchModal(this, "LogFetchModal");
         this.rebootModal = new OpRebootMinersModal(this, "RebootMinersModal", this.handleRebootCommand.bind(this));
-        this.zoneId = document.getElementById("issuesZoneSelect").selected;
+        try {
+            this.zoneId = document.getElementById("issuesZoneSelect").selected;
+        } catch (error) {
+            console.log("Error setting zoneId:", error);
+        }
         if (this.view === "Low Hashing") {
             this.issueTypeFilter = "low hashing";
             $("#allTab").removeClass("selected");
