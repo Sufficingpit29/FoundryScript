@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.8.7
+// @version      3.9.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -37,13 +37,7 @@
 const currentUrl = window.location.href;
 
 window.addEventListener('load', function () {
-    var urlLookupExcel = {
-        /*
-        "Bitmain": "https://foundrydigitalllc.sharepoint.com/:x:/r/sites/SiteOps/_layouts/15/Doc.aspx?sourcedoc=%7B8D61FC1B-172C-44B2-9D05-72998A4F6275%7D&file=Bitmain%200002%20Minden%20GV.xlsx&action=default&mobileredirect=true",
-        "Fortitude": "https://foundrydigitalllc.sharepoint.com/:x:/r/sites/SiteOps/_layouts/15/Doc.aspx?sourcedoc=%7BD26A9087-8D1A-45B6-B005-45F4FB25E42D%7D&file=Fortitude%20Hashboard%20Repair.xlsx&action=default&mobileredirect=true",
-        "RAMM": "https://foundrydigitalllc.sharepoint.com/:x:/r/sites/SiteOps/_layouts/15/Doc.aspx?sourcedoc=%7BC5DD3CF5-19C8-4F8F-A192-52E1F9CA4A41%7D&file=RAMM%200001%20GV%20Minden.xlsx&action=default&mobileredirect=true"
-        */
-    };
+    var urlLookupExcel = {};
     const defaultExcelLink = "https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3";
 
     urlLookupExcel["Bitmain"] = GM_SuperValue.get("bitmainLink", defaultExcelLink);
@@ -59,6 +53,18 @@ window.addEventListener('load', function () {
 
     //-----------------
 
+    function getSelectedSiteId() {
+        return JSON.parse(localStorage.getItem("selectedSite"));
+    }
+
+    function getSelectedSiteName() {
+        return localStorage.getItem("selectedSiteName");
+    }
+
+    function getSelectedCompanyId() {
+        return JSON.parse(localStorage.getItem("selectedCompany"));
+    }
+
     function OptiFleetSpecificLogic() {
         var allMinersData = {};
         var allMinersLookup = {};
@@ -68,12 +74,14 @@ window.addEventListener('load', function () {
         let activeMiners = 0;
         let foundActiveMiners = false;
 
-        var serviceInstance = new OptiFleetService();
-        var pageInstance = new OptiFleetPage();
+        let OptiFleetService2 = Object.getPrototypeOf(unsafeWindow.ms);
+        console.log("OptiFleetService2", OptiFleetService2);
+        var serviceInstance = Object.getPrototypeOf(unsafeWindow.ms);
+        
         var viewServiceInstance = new MinerViewService();
-        var siteId = pageInstance.getSelectedSiteId();
-        var siteName = pageInstance.getSelectedSiteName();
-        var companyId = pageInstance.getSelectedCompanyId();
+        var siteId = getSelectedSiteId();
+        var siteName = getSelectedSiteName();
+        var companyId = getSelectedCompanyId();
         var lastSiteId = siteId;
         var lastCompanyId = companyId;
         var lastMinerDataUpdate = 0;
@@ -86,12 +94,9 @@ window.addEventListener('load', function () {
 
         function retrieveIssueMiners(callback) {
             // In case we swap company/site (Not actually sure if it matters for site, but might as well)
-            serviceInstance = new OptiFleetService();
-            pageInstance = new OptiFleetPage();
-
             __awaiter(serviceInstance, void 0, void 0, function* () {
-                siteId = pageInstance.getSelectedSiteId();
-                siteName = pageInstance.getSelectedSiteName();
+                siteId = getSelectedSiteId();
+                siteName = getSelectedSiteName();
                 serviceInstance.get(`/Issues?siteId=${siteId}&zoneId=-1`).then(res => {
                     res.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
                     if (callback) {
@@ -495,17 +500,12 @@ window.addEventListener('load', function () {
             lastSiteId = siteId;
             lastCompanyId = companyId;
 
-            serviceInstance = new OptiFleetService();
-            pageInstance = new OptiFleetPage();
             viewServiceInstance = new MinerViewService();
-            siteId = pageInstance.getSelectedSiteId();
-            siteName = pageInstance.getSelectedSiteName();
-            companyId = pageInstance.getSelectedCompanyId();
+            siteId = getSelectedSiteId();
+            siteName = getSelectedSiteName();
+            companyId = getSelectedCompanyId();
 
             // In case we swap company/site (Not actually sure if it matters for site, but might as well)
-            serviceInstance = new OptiFleetService();
-            pageInstance = new OptiFleetPage();
-
             __awaiter(this, void 0, void 0, function* () {
                 serviceInstance.get(`/MinerInfo?siteId=${siteId}&zoneId=${-1}&zoneName=All%20Zones`)
                     .then((resp) => {
@@ -636,7 +636,7 @@ window.addEventListener('load', function () {
         }, 100);
 
         function retrieveContainerTempData(callback) {
-            pageInstance.get(`/sensors?siteId=${siteId}`)
+            serviceInstance.get(`/sensors?siteId=${siteId}`)
                 .then((resp) => __awaiter(this, void 0, void 0, function* () {
                 const sensors = resp.sensors;
 
@@ -678,8 +678,7 @@ window.addEventListener('load', function () {
 
         setInterval(function() {
             // Constantly checks if there siteId or companyId changes
-            pageInstance = new OptiFleetPage();
-            if(pageInstance.getSelectedSiteId() !== siteId || pageInstance.getSelectedCompanyId() !== companyId) {
+            if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
                 //updateAllMinersData(true);
                 console.log("Site ID or Company ID has changed.");
 
@@ -929,7 +928,7 @@ window.addEventListener('load', function () {
                 }
 
                 // Constantly checks if there siteId or companyId changes and updates the hash rate elements
-                if(pageInstance.getSelectedSiteId() !== siteId || pageInstance.getSelectedCompanyId() !== companyId) {
+                if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
                     removeAllHashRateElements();
                 }
             }, 500);
@@ -2097,7 +2096,7 @@ window.addEventListener('load', function () {
                                                     lastRebootTimes[minerID].softRebootsTimes.push(new Date().toISOString());
 
                                                     // Actually send the reboot request
-                                                    pageInstance.post(`/RebootMiners`, { miners: minerIdList, bypassed: false })
+                                                    serviceInstance.post(`/RebootMiners`, { miners: minerIdList, bypassed: false })
                                                         .then(() => {
                                                             console.log("Rebooted Miner: " + minerID);
                                                         })
@@ -2645,7 +2644,7 @@ window.addEventListener('load', function () {
                                                                 GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
 
                                                                 // Actually send the reboot request
-                                                                pageInstance.post(`/RebootMiners`, { miners: [minerID], bypassed: false })
+                                                                serviceInstance.post(`/RebootMiners`, { miners: [minerID], bypassed: false })
                                                                     .then(() => {
                                                                         console.log("Rebooted Miner: " + minerID);
                                                                     })
