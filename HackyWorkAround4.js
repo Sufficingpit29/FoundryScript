@@ -7819,7 +7819,7 @@ class SiteFilterCache extends OptiFleetService {
         this.companiesUrl = "/Companies";
         this.sitesUrl = "/sites";
         this.sites = [];
-        if (id && this.dropdownEl.addEventListener) {
+        if (id && this.dropdownEl && this.dropdownEl.addEventListener) {
             this.dropdownEl = document.getElementById(id);
             this.dropdownEl.addEventListener("on-change", (e) => this.onSiteChanged(e.detail));
         }
