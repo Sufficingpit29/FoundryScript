@@ -22405,7 +22405,7 @@ class MinerAdmin extends OptiFleetPage {
     sortGridColumns(columnSort, grid) {
         const columnsToSort = this.removeOldColumns(columnSort);
         columnsToSort.forEach((column, index) => {
-            if (!column.field) {
+            if (!grid || !grid.columns || !column.field) {
                 return;
             }
             const gridColumn = grid.columns.filter((col) => {
@@ -26299,7 +26299,7 @@ class Issues extends OptiFleetPage {
     }
     sortGridColumns(columnSort, grid) {
         columnSort.forEach((column, index) => {
-            if (!column.field) {
+            if (!grid || !grid.columns || !column.field) {
                 return;
             }
             const gridColumn = grid.columns.filter((col) => {
