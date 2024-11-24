@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.9.5
+// @version      3.9.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1093,7 +1093,7 @@ window.addEventListener('load', function () {
                 copyTextToClipboard(textToCopy);
             }
 
-            function copyAllDetailsForSharepoint(issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber) {
+            function copyAllDetailsForSharepoint(issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber, skuID) {
                 var [cleanedText, minerDetails] = getMinerDetails();
                 const { model, serialNumber, facility, ipAddress, locationID, activePool, status } = minerDetails;
                 let modelLite = model.replace('Antminer ', '');
@@ -1120,6 +1120,7 @@ window.addEventListener('load', function () {
 
                 if(type === "Fortitude") {
                     textToCopy = `${serialNumber}\t${modelWithoutParens}\t${hbSerialNumber}\t${hbModel}\t${hbVersion}\t${chainIssue}\t${binNumber}`;
+                    GM_SuperValue.set("taskName", `${modelLite}_${hashRate}_${serialNumber}_${issue}_${skuID}`);
                 }
 
                 copyTextToClipboard(textToCopy);
@@ -1176,6 +1177,10 @@ window.addEventListener('load', function () {
                                 <label for="binNumber" style="display: block; font-weight: bold;">BIN#:</label>
                                 <input type="text" id="binNumber" name="binNumber" style="width: 100%; padding: 5px; color: white;">
                             </div>
+                            <div id="skuIDContainer" style="margin-bottom: 10px; display: none;">
+                                <label for="skuID" style="display: block; font-weight: bold;">SKU:</label>
+                                <input type="text" id="skuID" name="skuID" style="width: 100%; padding: 5px; color: white;">
+                            </div>
                             <div style="margin-bottom: 10px;">
                                 <label for="type" style="display: block; font-weight: bold;">Type:</label>
                                 <select id="type" name="type" required style="width: 100%; padding: 5px; color: white; background-color: #222;">
@@ -1203,6 +1208,7 @@ window.addEventListener('load', function () {
                     const hbVersionContainer = popupElement.querySelector('#hbVersionContainer');
                     const chainIssueContainer = popupElement.querySelector('#chainIssueContainer');
                     const binNumberContainer = popupElement.querySelector('#binNumberContainer');
+                    const skuIDContainer = popupElement.querySelector('#skuIDContainer');
 
                     const normalIssueContainer = popupElement.querySelector('#normalIssueContainer');
 
@@ -1212,12 +1218,14 @@ window.addEventListener('load', function () {
                         hbVersionContainer.style.display = 'none';
                         chainIssueContainer.style.display = 'none';
                         binNumberContainer.style.display = 'none';
+                        skuIDContainer.style.display = 'none';
                     } else {
                         hbSerialNumberContainer.style.display = 'block';
                         hbModelContainer.style.display = 'block';
                         hbVersionContainer.style.display = 'block';
                         chainIssueContainer.style.display = 'block';
                         binNumberContainer.style.display = 'block';
+                        skuIDContainer.style.display = 'block';
                     }
                 });
 
@@ -1235,12 +1243,13 @@ window.addEventListener('load', function () {
                     const hbVersion = document.getElementById("hbVersion").value;
                     const chainIssue = document.getElementById("chainIssue").value;
                     const binNumber = document.getElementById("binNumber").value;
+                    const skuID = document.getElementById("skuID").value;
 
                     // Remove the popup element
                     popupElement.remove();
 
                     // Copy the details for Quick Sharepoint & Planner and set the taskName and taskNotes
-                    copyAllDetailsForSharepoint(issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber);
+                    copyAllDetailsForSharepoint(issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber, skuID);
                 }
 
                 // Function to cancel Issue and Log
