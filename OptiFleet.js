@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.9.2
+// @version      3.9.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -89,8 +89,6 @@ window.addEventListener('load', function () {
         var hasRefreshed = false;
 
         let lastUpTime = {}; //GM_SuperValue.get("lastUpTime_"+siteName, {});
-
-
 
         function retrieveIssueMiners(callback) {
             // In case we swap company/site (Not actually sure if it matters for site, but might as well)
@@ -1109,10 +1107,10 @@ window.addEventListener('load', function () {
                 minerDetails['log'] = log;
                 minerDetails['hashRate'] = hashRate;
 
-                console.log(`${model} - ${serialNumber} - ${issue}`);
+                console.log(`${modelLite}_${hashRate}_${serialNumber}_${issue}`);
                 console.log(cleanedText);
 
-                GM_SuperValue.set("taskName", `${model} - ${serialNumber} - ${issue}`);
+                GM_SuperValue.set("taskName", `${modelLite}_${hashRate}_${serialNumber}_${issue}`);
                 GM_SuperValue.set("taskNotes", cleanedText);
                 GM_SuperValue.set("taskComment", log);
                 GM_SuperValue.set("detailsData", JSON.stringify(minerDetails));
@@ -5467,7 +5465,7 @@ window.addEventListener('load', function () {
             }, 500);
         }
 
-    } else if (currentUrl.includes("planner.cloud.microsoft/foundrydigital.com/Home/Planner/")) {
+    } else if (currentUrl.includes("planner.cloud.microsoft")) {
 
         const taskName = GM_SuperValue.get("taskName", "");
         if (taskName === "") {
@@ -5538,37 +5536,39 @@ window.addEventListener('load', function () {
                                         // Insert the text into the notes editor
                                         document.execCommand('insertText', false, taskNotes);
 
-                                        // Now lets add the comment to the task for the log
-                                        const commentField = document.querySelector('textarea[aria-label="New comment"]');
-                                        if (commentField) {
-                                            commentField.click();
-                                            commentField.focus();
-                                            document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
-                                        }
+                                        setTimeout(() => {
+                                            // Now lets add the comment to the task for the log
+                                            const commentField = document.querySelector('textarea[aria-label="New comment"]');
+                                            if (commentField) {
+                                                commentField.click();
+                                                commentField.focus();
+                                                document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
+                                            }
 
-                                        // Now find the send button and click it
-                                        const sendButton = document.querySelector('.sendCommentButton');
-                                        if (sendButton) {
-                                            sendButton.click();
+                                            // Now find the send button and click it
+                                            const sendButton = document.querySelector('.sendCommentButton');
+                                            if (sendButton) {
+                                                sendButton.click();
 
-                                            // We'll now reset the taskName and taskNotes values
-                                            GM_SuperValue.set("taskName", "");
-                                            GM_SuperValue.set("taskNotes", "");
-                                            GM_SuperValue.set("taskComment", "");
-                                            GM_SuperValue.set("detailsData", {});
+                                                // We'll now reset the taskName and taskNotes values
+                                                GM_SuperValue.set("taskName", "");
+                                                GM_SuperValue.set("taskNotes", "");
+                                                GM_SuperValue.set("taskComment", "");
+                                                GM_SuperValue.set("detailsData", {});
 
-                                        } else {
-                                            console.error('Notes editor not found.');
-                                        }
+                                            } else {
+                                                console.error('Notes editor not found.');
+                                            }
+                                        }, 100);
 
                                     } else {
                                         console.error('Notes editor not found.');
                                     }
-                                }, 500);
+                                }, 600);
                             } else {
                                 console.error('New element not found.');
                             }
-                        }, 500); // Add a 500ms delay before locating the new element
+                        }, 600); // Add a 500ms delay before locating the new element
                     } else {
                         console.error('Add task button not found.');
                     }
@@ -5580,10 +5580,10 @@ window.addEventListener('load', function () {
         var hasClicked = false;
         function clickAddTaskButton() {
             if(hasClicked) { return; }
+            
             const headers = document.querySelectorAll('.columnTitle');
-
             const header = Array.from(headers).find(el => el.textContent.trim() === 'Diagnosed');
-
+            
             if (header) {
                 hasClicked = true;
                 const container = header.closest('.columnContent');
@@ -5601,7 +5601,7 @@ window.addEventListener('load', function () {
                             addButton.click();
                         }
 
-                        // Set the value of the text field to "TEST" after clicking the button
+                        // Set the value of the text field to the task name
                         textField = container.querySelector('input[placeholder="Enter a task name * (required)"]');
                         if (textField) {
                             setupTask(textField);
