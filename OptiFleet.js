@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.9.6
+// @version      3.9.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1110,7 +1110,7 @@ window.addEventListener('load', function () {
                 console.log(`${modelLite}_${hashRate}_${serialNumber}_${issue}`);
                 console.log(cleanedText);
 
-                GM_SuperValue.set("taskName", `${modelLite}_${hashRate}_${serialNumber}_${issue}`);
+                GM_SuperValue.set("taskName", `${serialNumber}_${modelLite}_${hashRate}_${issue}`);
                 GM_SuperValue.set("taskNotes", cleanedText);
                 GM_SuperValue.set("taskComment", log);
                 GM_SuperValue.set("detailsData", JSON.stringify(minerDetails));
