@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.9.7
+// @version      3.9.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1120,7 +1120,7 @@ window.addEventListener('load', function () {
 
                 if(type === "Fortitude") {
                     textToCopy = `${serialNumber}\t${modelWithoutParens}\t${hbSerialNumber}\t${hbModel}\t${hbVersion}\t${chainIssue}\t${binNumber}`;
-                    GM_SuperValue.set("taskName", `${modelLite}_${hashRate}_${serialNumber}_${issue}_${skuID}`);
+                    GM_SuperValue.set("taskName", `${serialNumber}_${modelLite}_${hashRate}_${issue}_${skuID}`);
                 }
 
                 copyTextToClipboard(textToCopy);
