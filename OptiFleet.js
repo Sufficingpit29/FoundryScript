@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      3.9.8
+// @version      4.0.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -727,7 +727,7 @@ window.addEventListener('load', function () {
                 serialNumber: minerDetailsCrude['Serial Number'],
                 facility: minerDetailsCrude['Facility'],
                 ipAddress: minerDetailsCrude['IpAddress'],
-                locationID: minerDetailsCrude['Rack / Row / Position'],
+                locationID: minerDetailsCrude['Zone / Rack / Row / Position'],
                 activePool: minerDetailsCrude['Active Pool'],
                 status: minerDetailsCrude['Status'],
             };
@@ -1093,8 +1093,9 @@ window.addEventListener('load', function () {
                 copyTextToClipboard(textToCopy);
             }
 
-            function copyAllDetailsForSharepoint(issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber, skuID) {
+            function copyAllDetailsForSharepoint(onlyPlanner, issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber, skuID) {
                 var [cleanedText, minerDetails] = getMinerDetails();
+                console.log(minerDetails);
                 const { model, serialNumber, facility, ipAddress, locationID, activePool, status } = minerDetails;
                 let modelLite = model.replace('Antminer ', '');
                 let modelLiteSplit = modelLite.split(' (');
@@ -1123,22 +1124,19 @@ window.addEventListener('load', function () {
                     GM_SuperValue.set("taskName", `${serialNumber}_${modelLite}_${hashRate}_${issue}_${skuID}`);
                 }
 
-                copyTextToClipboard(textToCopy);
-                /*
-                //window.open("https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3", 'Paste Data').focus();
-                if(type === "Bitmain") {
-                    window.open("https://foundrydigitalllc.sharepoint.com/sites/SiteOps/Shared%20Documents/Forms/AllItems.aspx?FolderCTID=0x0120008E92A0115CE81A4697B69C652EF13609&id=%2Fsites%2FSiteOps%2FShared%20Documents%2F01%20Site%20Operations%2F01%20Documents%2F01%20Sites%2F05%20Minden%20NE&viewid=dae422b9%2D818b%2D4018%2Dabea%2D051873d09aa3", 'Looking').focus();
+                if(!onlyPlanner) {
+                    copyTextToClipboard(textToCopy);
+                    const sharePointLinks = {
+                        "Bitmain": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/EoZ4RPEfVj9EjKlBzWmVHVcBcqZQzo2BiBC8_eM0WoABiw?e=wOZWEz",
+                        "Fortitude": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/En56U6QoEzVCsNkYkXQOqxIBFLcql6OxnNJYBTX_r6ZIsw?e=oEb1JA",
+                        "RAMM": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/EsrLwwsTo8JCr2aO7FT924sBrQ-oP4Nehl8sFROGcirBwg?e=jKhBzT"
+                    }
+
+                    window.open(sharePointLinks[type]).focus();
                 } else {
-                    window.open(urlLookupExcel[type], 'Paste Data').focus();
-                }*/
-
-                const sharePointLinks = {
-                    "Bitmain": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/EoZ4RPEfVj9EjKlBzWmVHVcBcqZQzo2BiBC8_eM0WoABiw?e=wOZWEz",
-                    "Fortitude": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/En56U6QoEzVCsNkYkXQOqxIBFLcql6OxnNJYBTX_r6ZIsw?e=oEb1JA",
-                    "RAMM": "https://foundrydigitalllc.sharepoint.com/:f:/s/SiteOps/EsrLwwsTo8JCr2aO7FT924sBrQ-oP4Nehl8sFROGcirBwg?e=jKhBzT"
+                    let plannerUrl = urlLookupPlanner[type];
+                    window.open(plannerUrl).focus();
                 }
-
-                window.open(sharePointLinks[type], 'Paste Data').focus();
                 
             }
 
@@ -1191,7 +1189,8 @@ window.addEventListener('load', function () {
                             </div>
                             <div style="display: flex; justify-content: space-between;">
                                 <div>
-                                    <button type="button" id="submitBtn" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Next</button>
+                                    <button type="button" id="submitBtn1" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Sharepoint & Planner</button>
+                                    <button type="button" id="submitBtn2" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Only Planner</button>
                                     <button type="button" id="cancelBtn" style="background-color: #f44336; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Cancel</button>
                                 </div>
                                 <button type="button" id="linksBtn" style="background-color: #4287f5; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Edit Links</button>
@@ -1233,7 +1232,7 @@ window.addEventListener('load', function () {
                 popupElement.querySelector('#linksBtn').style.display = 'none';
 
                 // Function to submit Issue and Log
-                function submitIssueLog() {
+                function submitIssueLog(onlyPlanner) {
                     const issue = document.getElementById("issue").value;
                     const log = document.getElementById("log").value;
                     const type = document.getElementById("type").value;
@@ -1249,7 +1248,7 @@ window.addEventListener('load', function () {
                     popupElement.remove();
 
                     // Copy the details for Quick Sharepoint & Planner and set the taskName and taskNotes
-                    copyAllDetailsForSharepoint(issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber, skuID);
+                    copyAllDetailsForSharepoint(onlyPlanner, issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber, skuID);
                 }
 
                 // Function to cancel Issue and Log
@@ -1329,7 +1328,12 @@ window.addEventListener('load', function () {
                 document.body.appendChild(popupElement);
 
                 // Attach event listeners to the buttons
-                document.getElementById('submitBtn').addEventListener('click', submitIssueLog);
+                document.getElementById('submitBtn1').addEventListener('click', function() {
+                    submitIssueLog(false);
+                });
+                document.getElementById('submitBtn2').addEventListener('click', function() {
+                    submitIssueLog(true);
+                });
                 document.getElementById('cancelBtn').addEventListener('click', cancelIssueLog);
                 document.getElementById('linksBtn').addEventListener('click', editLinks);
             }
@@ -5343,7 +5347,7 @@ window.addEventListener('load', function () {
                 overlay.innerHTML = `
                     <p>Model: ${detailsData['model']}</p>
                     <p>Serial Number: ${detailsData['serialNumber']}</p>
-                    <p>Slot ID: ${detailsData['facility']}-${detailsData['locationID']}</p>
+                    <p>Slot ID: ${detailsData['locationID']}</p>
                     <button style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
                     <a href="${plannerUrl}" style="color: #fff; text-decoration: none;">Go to Planner</a>
                     </button>
@@ -5586,12 +5590,45 @@ window.addEventListener('load', function () {
             typeCharacter();
         }
 
+        function addAutoCardButtons() {
+            const columnsList = document.querySelector('ul.columnsList');
+            if (columnsList) {
+                const columnItems = columnsList.querySelectorAll('li');
+                columnItems.forEach(columnItem => {
+                    const columnTitle = columnItem.querySelector('.columnTitle');
+                    if (columnTitle) {
+                        const newButton = document.createElement('button');
+                        newButton.textContent = 'Auto-Create Card';
+                        newButton.style.marginTop = '6px';
+                        newButton.style.marginBottom = '6px';
+                        newButton.style.backgroundColor = 'green';
+                        newButton.style.color = 'white';
+                        newButton.style.border = 'none';
+                        newButton.style.padding = '5px 10px';
+                        newButton.style.borderRadius = '3px';
+                        newButton.style.cursor = 'pointer';
+                        newButton.style.textAlign = 'center';
+                        newButton.style.display = 'flex';
+                        newButton.style.alignItems = 'center';
+                        newButton.style.justifyContent = 'center';
+                        columnTitle.after(newButton);
+                        console.log('Added auto-create card button.');
+
+                        newButton.addEventListener('click', () => {
+                            clickAddTaskButton(columnTitle);
+                        });
+                    }
+
+                });
+            }
+        }
+
         var hasClicked = false;
-        function clickAddTaskButton() {
+        function clickAddTaskButton(header) {
             if(hasClicked) { return; }
             
-            const headers = document.querySelectorAll('.columnTitle');
-            const header = Array.from(headers).find(el => el.textContent.trim() === 'Diagnosed');
+            //const headers = document.querySelectorAll('.columnTitle');
+            //const header = Array.from(headers).find(el => el.textContent.trim() === 'Diagnosed');
             
             if (header) {
                 hasClicked = true;
@@ -5647,24 +5684,15 @@ window.addEventListener('load', function () {
             popup.innerHTML = `
                 <p>Model: ${detailsData['model']}</p>
                 <p>Serial Number: ${detailsData['serialNumber']}</p>
-                <p>Slot ID: ${detailsData['facility']}-${detailsData['locationID']}</p>
-                <button id="autoCreateCardButton" style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
-                Auto-Create Card
-                </button>
-                <button id="cancelButton" style="background-color: red; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
-                Cancel
+                <p>Slot ID: ${detailsData['locationID']}</p>
+                <button id="cancelButton" style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
+                Finish
                 </button>
             `;
 
             // Make sure it is always layered on top
             popup.style.zIndex = '9999';
             document.body.appendChild(popup);
-
-            const autoCreateCardButton = document.getElementById('autoCreateCardButton');
-            autoCreateCardButton.addEventListener('click', () => {
-                clickAddTaskButton();
-                document.body.removeChild(popup);
-            });
 
             const cancelButton = document.getElementById('cancelButton');
             cancelButton.addEventListener('click', () => {
@@ -5680,6 +5708,7 @@ window.addEventListener('load', function () {
         }
 
         setTimeout(createAutoCreateCardButton, 1000);
+        setTimeout(addAutoCardButtons, 1000);
 
         // Find the toast container and remove it
         function removeToastContainer() {
