@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.0.0
+// @version      4.0.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -5620,6 +5620,8 @@ window.addEventListener('load', function () {
                     }
 
                 });
+            } else {
+                setTimeout(addAutoCardButtons, 500);
             }
         }
 
@@ -5708,7 +5710,7 @@ window.addEventListener('load', function () {
         }
 
         setTimeout(createAutoCreateCardButton, 1000);
-        setTimeout(addAutoCardButtons, 1000);
+        setTimeout(addAutoCardButtons, 50);
 
         // Find the toast container and remove it
         function removeToastContainer() {
