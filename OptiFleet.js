@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.0.1
+// @version      4.0.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -727,7 +727,7 @@ window.addEventListener('load', function () {
                 serialNumber: minerDetailsCrude['Serial Number'],
                 facility: minerDetailsCrude['Facility'],
                 ipAddress: minerDetailsCrude['IpAddress'],
-                locationID: minerDetailsCrude['Zone / Rack / Row / Position'],
+                locationID: minerDetailsCrude['Zone / Rack / Row / Position'].replace(/ \/ /g, "-"),
                 activePool: minerDetailsCrude['Active Pool'],
                 status: minerDetailsCrude['Status'],
             };
@@ -5927,7 +5927,7 @@ window.addEventListener('load', function () {
                         'Voltage Abnormity': {
                             icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
                             start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
-                            end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!"],
+                            end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
                         },
                         'Temperature Sensor Error': {
                             icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
