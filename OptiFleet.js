@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.0.3
+// @version      4.4.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -508,6 +508,16 @@ window.addEventListener('load', function () {
                 serviceInstance.get(`/MinerInfo?siteId=${siteId}&zoneId=${-1}&zoneName=All%20Zones`)
                     .then((resp) => {
 
+                    // Populate the minerSNLookup
+                    let minerSNLookup = {};
+                    resp.miners.forEach(miner => {
+                        minerSNLookup[ miner.serialNumber] = miner.id;
+                    });
+                    if(siteName.includes("Minden")) {
+                        GM_SuperValue.set("minerSNLookup", minerSNLookup);
+                    }
+                    delete minerSNLookup;
+
                     // Set the IP Address to "Lease Expired" if it's null
                     resp.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
 
@@ -730,6 +740,7 @@ window.addEventListener('load', function () {
                 locationID: minerDetailsCrude['Zone / Rack / Row / Position'].replace(/ \/ /g, "-"),
                 activePool: minerDetailsCrude['Active Pool'],
                 status: minerDetailsCrude['Status'],
+                owner: minerDetailsCrude['Owner'],
             };
 
             return [cleanedText, minerDetails];
@@ -5081,15 +5092,14 @@ window.addEventListener('load', function () {
                     var [cleanedText, minerDetails] = getMinerDetails();
 
                     // Make sure this is a minden miner
-                    var facility = minerDetails['facility'];
-                    if (!facility.includes('Minden')) {
+                    var locationID = minerDetails['locationID'];
+                    if (!locationID.includes('Minden')) {
                         return;
                     }
 
-                    var locationID = minerDetails['locationID']; // Rack-Row-Col
                     var splitLocationID = locationID.split('-');
-                    var row = Number(splitLocationID[1]);
-                    var col = Number(splitLocationID[2]);
+                    var row = Number(splitLocationID[2]);
+                    var col = Number(splitLocationID[3]);
                     var rowWidth = 4;
                     var breakerNum = (row-1)*rowWidth + col;
                     if (row > 0 && col > 0) {
@@ -5099,6 +5109,80 @@ window.addEventListener('load', function () {
                 }, 500);
             }
             createBreakerNumBox();
+
+            //----------------------------------------------------------
+            
+            // Logic for seeing if the miner exists in a planner board
+            function checkIfInPlannerBoard() {
+                GM_SuperValue.set("locatePlannerCard", false);
+                GM_SuperValue.set('plannerCardsData', {});
+
+                // Load the planner boards in the background to get the most recent data
+                var [cleanedText, minerDetails] = getMinerDetails();
+                console.log(minerDetails);
+                if(!minerDetails || !minerDetails['owner'] || minerDetails['owner'] == "--") {
+                    setTimeout(checkIfInPlannerBoard, 500);
+                    return;
+                }
+
+                var owner = minerDetails['owner'];
+                var serialNumber = minerDetails['serialNumber'];
+                if(urlLookupPlanner[owner]) {
+
+                    
+                    GM_SuperValue.set("setPlannerCardData", serialNumber);
+
+                    // Open that website link in a hidden iframe
+                    var iframe = document.createElement('iframe');
+                    iframe.src = urlLookupPlanner[owner];
+                    iframe.style.position = 'absolute';
+                    iframe.style.top = '0';
+                    iframe.style.left = '0';
+                    iframe.style.width = '100%';
+                    iframe.style.height = '100%';
+                    iframe.style.zIndex = '-1';
+                    document.body.appendChild(iframe);
+
+                    // Add a data box that will be updated with the GM_SuperValue of plannerCardsData
+                    let found = false;
+                    var plannerDataBox = addDataBox("Planner Board", "Loading...", (mBox, h3, p) => {
+                        if(found) {
+                            return;
+                        }
+                        var plannerCardsData = GM_SuperValue.get('plannerCardsData', {});
+                        if(plannerCardsData[serialNumber]) {
+                            p.textContent = plannerCardsData[serialNumber];
+
+                            // Make it a clickable link
+                            p.style.cursor = 'pointer';
+                            p.onclick = function() {
+                                GM_SuperValue.set("locatePlannerCard", {
+                                    serialNumber: serialNumber,
+                                    columnTitle: p.textContent
+                                });
+
+                                var url = urlLookupPlanner[owner];
+                                window.open(url, '_blank');
+                            }
+
+                            // Make it blue and underlined
+                            p.style.color = '#0078d4';
+                            p.style.textDecoration = 'underline';
+
+                            found = true;
+                        } else if(!GM_SuperValue.get("setPlannerCardData", false)) {
+                            p.textContent = "None";
+                        } else {
+                            p.textContent = "Checking...";
+                        }
+                    }, 1000);
+                            
+                } else {
+                    console.log("Owner not in planner board list");
+                }
+            }
+            checkIfInPlannerBoard();
+            
         }
         
         // Miner Map/List, add temperature data
@@ -5480,22 +5564,239 @@ window.addEventListener('load', function () {
 
     } else if (currentUrl.includes("planner.cloud.microsoft")) {
 
+        // Logic for going to and highling the locatePlannerCard GM_SuperValue
+        function locatePlannerCard() {
+            const locatePlannerCardData = GM_SuperValue.get("locatePlannerCard", false);
+            if (!locatePlannerCardData) {
+                return;
+            }
+
+            let serialNumber = locatePlannerCardData.serialNumber;
+            let columnTitle = locatePlannerCardData.columnTitle;
+
+            // Find the card with the serial number
+            const cards = document.querySelectorAll('.taskCard');
+            if (cards.length === 0) {
+                setTimeout(() => {
+                    locatePlannerCard();
+                }, 100);
+                return;
+            }
+
+            cards.forEach(card => {
+                const taskName = card.getAttribute('aria-label');
+                if (taskName.includes(serialNumber)) {
+                    // Scroll to the card
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    // Highlight the card
+                    const container = card.querySelector('.container');
+                    if (container) {
+                        // Make the container grey, but then slowly fade it back to the original color
+                        container.style.transition = 'background-color 0.8s';
+                        container.style.backgroundColor = 'grey';
+                        setTimeout(() => {
+                            container.style.transition = 'background-color 3s';
+                            container.style.backgroundColor = '';
+                        }, 2000);
+                    }
+                
+                            
+                    // Reset the GM_SuperValue
+                    GM_SuperValue.set("locatePlannerCard", false);
+                } else {
+
+                    // Find all scrollable elements and scroll to bottom if it is the right column
+                    let foundColumn = false;
+                    const scrollableElements = document.querySelectorAll('.scrollable');
+                    scrollableElements.forEach(element => {
+                        // Get parent and see if columnTitle is contained in aria-label
+                        const parent = element.parentElement.parentElement;
+                        if (parent.getAttribute('aria-label').includes(columnTitle)) {
+                            // Then scroll to the bottom of the element
+                            element.scrollTop = element.scrollHeight;
+                            console.log("Scrolling to bottom of column: ", element);
+                            foundColumn = true;
+                        }
+                    });
+                    
+                    if (!foundColumn) {
+                        // Scroll horizontally all the way to the right on columnsList 
+                        const columnsList = document.querySelector('.columnsList');
+                        columnsList.scrollLeft = columnsList.scrollLeft + 10;
+                    }
+
+                    setTimeout(locatePlannerCard, 100);
+                    return;
+                }
+            });
+        }
+        locatePlannerCard();
+
+        // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
+        let scrollDownTimes = 0;
+        function collectPlannerCardData() {
+            let lookForSN = GM_SuperValue.get("setPlannerCardData", false);
+            if(!lookForSN) {
+                setTimeout(collectPlannerCardData, 100);
+                return;
+            }
+
+            /*
+            // Get all ms-TooltipHost elements and check if Repair is contained in the text
+            const tooltipHosts = document.querySelectorAll('.ms-TooltipHost');
+            let isRepair = false;
+            tooltipHosts.forEach(host => {
+                const tooltipText = host.textContent.trim();
+                if (tooltipText.includes('Repair')) {
+                    isRepair = true;
+                }
+            });
+            
+            // If not repair, then don't do anything
+            if (!isRepair) {
+                return;
+            }*/
+
+            // Find if columnsList exists
+            const columnsList = document.querySelector('.columnsList');
+            if (!columnsList) {
+                setTimeout(collectPlannerCardData, 100);
+                return;
+            }
+
+            // Find all scrollable elements and scroll to bottom
+            const scrollableElements = document.querySelectorAll('.scrollable');
+            scrollableElements.forEach(element => {
+                element.scrollTop = element.scrollHeight;
+            });
+            scrollDownTimes++;
+
+            // If we scrolled down 60 times, then we probably reached the end and the miner is not in the planner
+            if (scrollDownTimes > 60) {
+                console.error('Miner not found in planner.');
+                GM_SuperValue.set("setPlannerCardData", false);
+                return;
+            }
+            
+            let found = false;
+            let plannerCardsData = {};
+            // Loop through all the columns
+            columnsList.querySelectorAll('li').forEach(column => {
+                const columnElement = column.querySelector('.columnTitle h3');
+                if (columnElement) {
+                    const columnTitle = columnElement.innerText;
+                    const taskCards = column.querySelectorAll('.taskCard');
+                    taskCards.forEach(card => {
+                        const taskName = card.getAttribute('aria-label');
+                        const serialNumber = taskName.split('_')[0];
+                        plannerCardsData[serialNumber] = columnTitle;
+                        console.log("Miner Serial Number: ", serialNumber, "Column Title: ", columnTitle);
+                        if (serialNumber === lookForSN) {
+                            found = true;
+                        }
+                    });
+                }
+            });
+            
+            
+
+            if (!found) {
+                setTimeout(collectPlannerCardData, 100);
+            } else {
+                GM_SuperValue.set("plannerCardsData", plannerCardsData);
+                GM_SuperValue.set("setPlannerCardData", false);
+            }
+        }
+        collectPlannerCardData();
+
+        // Logic for adding button on planner card that will open the miner page
+        let previousMinerID = "";
+        function addOpenMinerButton() {
+            setTimeout(addOpenMinerButton, 100);
+
+            // Check if taskEditor-dialog-header exists
+            const taskDetailsTitleSection = document.querySelector('#taskDetailsTitleSectionId');
+            if (!taskDetailsTitleSection) {
+                return;
+            }
+
+            // Logic to get the serial number of the miner and check if it exists in the lookup
+            let taskNameTextField = document.querySelector('input[placeholder="Task name"]');
+            let taskName = taskNameTextField.value;
+            let serialNumber = taskName.split('_')[0];
+            let minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
+            let minerID = minerSNLookup[serialNumber];
+            
+
+            // Check if the button already exists
+            const openMinerButton = document.querySelector('#openMinerButton');
+            if (openMinerButton && previousMinerID === minerID) {
+                return;
+            } else if (openMinerButton) {
+                openMinerButton.remove();
+            }
+
+            // Store the minerID for future reference
+            previousMinerID = minerID;
+
+            // Don't try to add the button if the minerID is not found
+            if (!minerID) {
+                console.error('Miner ID not found in lookup.');
+                return;
+            }
+
+            // Create the miner link
+            let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+            
+            // Create the button and add it to into the taskEditor-dialog-header on the left side
+            const button = document.createElement('button');
+            button.id = 'openMinerButton';
+            button.textContent = 'Open Miner Page';
+            button.style.backgroundColor = 'green';
+            button.style.color = 'white';
+            button.style.border = '5px';
+            button.style.padding = '8px';
+            button.style.borderRadius = '3px';
+            button.style.cursor = 'pointer';
+            button.style.paddingTop = '4px';
+            button.style.paddingBottom = '4px';
+            button.style.display = 'flex';
+            button.style.alignItems = 'center';
+            button.style.justifyContent = 'center';
+            taskDetailsTitleSection.appendChild(button);
+
+            // Add an event listener to the button
+            button.addEventListener('click', () => {
+                window.open(minerLink, '_blank');
+            });
+
+        }
+        addOpenMinerButton();
+
+        //--------------------------------------------------
+
+        // Logic for automatically adding a task to the planner
         const taskName = GM_SuperValue.get("taskName", "");
         if (taskName === "") {
-            console.error('Task name not found in storage.');
             return;
         }
 
         const taskNotes = GM_SuperValue.get("taskNotes", "");
         if (taskNotes === "") {
-            console.error('Task notes not found in storage.');
             return;
         }
 
         const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
         if (Object.keys(detailsData).length === 0) {
-            console.error('Details data not found in storage.');
             return;
+        }
+
+        function ResetTaskData() {
+            GM_SuperValue.set('taskName', '');
+            GM_SuperValue.set('taskNotes', '');
+            GM_SuperValue.set('taskComment', '');
+            GM_SuperValue.set('detailsData', '{}');
         }
 
         // Function to simulate real typing using execCommand
@@ -5590,6 +5891,7 @@ window.addEventListener('load', function () {
             typeCharacter();
         }
 
+        let createCardButtons = [];
         function addAutoCardButtons() {
             const columnsList = document.querySelector('ul.columnsList');
             if (columnsList) {
@@ -5598,6 +5900,7 @@ window.addEventListener('load', function () {
                     const columnTitle = columnItem.querySelector('.columnTitle');
                     if (columnTitle) {
                         const newButton = document.createElement('button');
+                        createCardButtons.push(newButton);
                         newButton.textContent = 'Auto-Create Card';
                         newButton.style.marginTop = '6px';
                         newButton.style.marginBottom = '6px';
@@ -5628,6 +5931,19 @@ window.addEventListener('load', function () {
         var hasClicked = false;
         function clickAddTaskButton(header) {
             if(hasClicked) { return; }
+
+            ResetTaskData();
+
+            // Remove all the buttons
+            createCardButtons.forEach(button => {
+                button.remove();
+            });
+
+            // Remove the popup
+            const popup = document.getElementById('autoCreateCardPopup');
+            if (popup) {
+                document.body.removeChild(popup);
+            }
             
             //const headers = document.querySelectorAll('.columnTitle');
             //const header = Array.from(headers).find(el => el.textContent.trim() === 'Diagnosed');
@@ -5664,8 +5980,6 @@ window.addEventListener('load', function () {
                 } else {
                     console.error('Container not found.');
                 }
-            } else {
-                console.log('Header with title "Diagnosed" not found.');
             }
 
             return false; // Keep observing for further mutations
@@ -5673,6 +5987,7 @@ window.addEventListener('load', function () {
 
         function createAutoCreateCardButton() {
             const popup = document.createElement('div');
+            popup.id = 'autoCreateCardPopup';
             popup.style.position = 'fixed';
             popup.style.top = '20px';
             popup.style.right = '20px';
@@ -5687,8 +6002,8 @@ window.addEventListener('load', function () {
                 <p>Model: ${detailsData['model']}</p>
                 <p>Serial Number: ${detailsData['serialNumber']}</p>
                 <p>Slot ID: ${detailsData['locationID']}</p>
-                <button id="cancelButton" style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
-                Finish
+                <button id="cancelButton" style="background-color: red; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
+                Cancel
                 </button>
             `;
 
@@ -5698,10 +6013,7 @@ window.addEventListener('load', function () {
 
             const cancelButton = document.getElementById('cancelButton');
             cancelButton.addEventListener('click', () => {
-                GM_SuperValue.set('taskName', '');
-                GM_SuperValue.set('taskNotes', '');
-                GM_SuperValue.set('taskComment', '');
-                GM_SuperValue.set('detailsData', '{}');
+                ResetTaskData();
                 document.body.removeChild(popup);
 
                 window.close();
