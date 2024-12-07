@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.4.5
+// @version      4.4.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1122,6 +1122,8 @@ window.addEventListener('load', function () {
                 console.log(`${modelLite}_${hashRate}_${serialNumber}_${issue}`);
                 console.log(cleanedText);
 
+                console.log("Task Comment:", log);
+
                 GM_SuperValue.set("taskName", `${serialNumber}_${modelLite}_${hashRate}_${issue}`);
                 GM_SuperValue.set("taskNotes", cleanedText);
                 GM_SuperValue.set("taskComment", log);
@@ -1163,7 +1165,7 @@ window.addEventListener('load', function () {
                                 <input type="text" id="issue" name="issue" required style="width: 100%; padding: 5px; color: white;">
                             </div>
                             <div style="margin-bottom: 10px;">
-                                <label for="log" style="display: block; font-weight: bold;">Log:</label>
+                                <label for="log" style="display: block; font-weight: bold;">Comment/Log:</label>
                                 <textarea id="log" name="log" required style="width: 100%; height: 100px; padding: 5px; color: white;"></textarea>
                             </div>
                             <div id="hbSerialNumberContainer" style="margin-bottom: 10px; display: none;">
@@ -5854,26 +5856,34 @@ window.addEventListener('load', function () {
                                             // Now lets add the comment to the task for the log
                                             const commentField = document.querySelector('textarea[aria-label="New comment"]');
                                             if (commentField) {
+                                                commentField.scrollIntoView({ behavior: 'auto', block: 'center' });
                                                 commentField.click();
                                                 commentField.focus();
-                                                document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
+                                                commentField.click();
+                                                setTimeout(() => {
+                                                    commentField.click();
+                                                    console.log("Inputting:", GM_SuperValue.get("taskComment", ""));
+                                                    document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
+
+                                                    // Now find the send button and click it
+                                                    const sendButton = document.querySelector('.sendCommentButton');
+                                                    if (sendButton) {
+                                                        sendButton.click();
+
+                                                        // We'll now reset the taskName and taskNotes values
+                                                        GM_SuperValue.set("taskName", "");
+                                                        GM_SuperValue.set("taskNotes", "");
+                                                        GM_SuperValue.set("taskComment", "");
+                                                        GM_SuperValue.set("detailsData", {});
+
+                                                    } else {
+                                                        console.error('Notes editor not found.');
+                                                    }
+                                                }, 400);
                                             }
 
-                                            // Now find the send button and click it
-                                            const sendButton = document.querySelector('.sendCommentButton');
-                                            if (sendButton) {
-                                                sendButton.click();
-
-                                                // We'll now reset the taskName and taskNotes values
-                                                GM_SuperValue.set("taskName", "");
-                                                GM_SuperValue.set("taskNotes", "");
-                                                GM_SuperValue.set("taskComment", "");
-                                                GM_SuperValue.set("detailsData", {});
-
-                                            } else {
-                                                console.error('Notes editor not found.');
-                                            }
-                                        }, 100);
+                                            
+                                        }, 400);
 
                                     } else {
                                         console.error('Notes editor not found.');
@@ -5931,8 +5941,6 @@ window.addEventListener('load', function () {
         var hasClicked = false;
         function clickAddTaskButton(header) {
             if(hasClicked) { return; }
-
-            ResetTaskData();
 
             // Remove all the buttons
             createCardButtons.forEach(button => {
