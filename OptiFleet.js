@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.5.3
+// @version      4.6.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -5127,13 +5127,11 @@ window.addEventListener('load', function () {
                     return;
                 }
 
+                let failedToFind = false;
+
                 var owner = minerDetails['owner'].split(' ')[0];
                 var serialNumber = minerDetails['serialNumber'];
                 if(urlLookupPlanner[owner]) {
-                    let getPlannerCardData = GM_SuperValue.get("getPlannerCardData", {});
-                    getPlannerCardData[serialNumber] = true;
-                    GM_SuperValue.set("getPlannerCardData", getPlannerCardData);
-
                     // Open that website link in a hidden iframe
                     var iframe = document.createElement('iframe');
                     iframe.src = urlLookupPlanner[owner];
@@ -5144,48 +5142,62 @@ window.addEventListener('load', function () {
                     iframe.style.height = '100%';
                     iframe.style.zIndex = '-1';
                     document.body.appendChild(iframe);
-
-                    // Add a data box that will be updated with the GM_SuperValue of plannerCardsData
-                    let found = false;
-                    var plannerDataBox = addDataBox("Planner Board", "Loading...", (mBox, h3, p) => {
-                        if(found) {
-                            return;
-                        }
-                        var notGottenData = GM_SuperValue.get("getPlannerCardData", {})[serialNumber];
-                        var plannerCardsData = GM_SuperValue.get('plannerCardsData', {})[serialNumber];
-                        if(plannerCardsData) {
-                            p.textContent = plannerCardsData;
-
-                            // Make it a clickable link
-                            p.style.cursor = 'pointer';
-                            p.onclick = function() {
-                                GM_SuperValue.set("locatePlannerCard", {
-                                    serialNumber: serialNumber,
-                                    columnTitle: p.textContent
-                                });
-
-                                var url = urlLookupPlanner[owner];
-                                window.open(url, '_blank');
-                            }
-
-                            // Make it blue and underlined
-                            p.style.color = '#0078d4';
-                            p.style.textDecoration = 'underline';
-
-                            found = true;
-                        } else if(!notGottenData) {
-                            p.textContent = "None";
-                        } else {
-                            p.textContent = "Checking...";
-                        }
-                    }, 1000);
-                            
+                    setTimeout(() => {
+                        failedToFind = true;
+                    }, 12000);
                 } else {
                     console.log("Owner not in planner board list");
 
-                    // Add card just saying invalid owner
-                    addDataBox("Planner Board", "Unknown Owner");
+                    // Open all the planner boards in the background
+                    for(var key in urlLookupPlanner) {
+                        var iframe = document.createElement('iframe');
+                        iframe.src = urlLookupPlanner[key];
+                        iframe.style.position = 'absolute';
+                        iframe.style.top = '0';
+                        iframe.style.left = '0';
+                        iframe.style.width = '100%';
+                        iframe.style.height = '100%';
+                        iframe.style.zIndex = '-1';
+                        document.body.appendChild(iframe);
+                    }
+                    setTimeout(() => {
+                        failedToFind = true;
+                    }, 20000);
                 }
+
+                // Add a data box that will be updated with the GM_SuperValue of plannerCardsData
+                let found = false;
+                let plannerDataBox = addDataBox("Planner Board", "Loading...", (mBox, h3, p) => {
+                    if(found) {
+                        return;
+                    }
+                    let plannerCardsData = GM_SuperValue.get('plannerCardsData', {})[serialNumber];
+                    if(plannerCardsData) {
+                        p.textContent = plannerCardsData.columnTitle;
+
+                        // Make it a clickable link
+                        p.style.cursor = 'pointer';
+                        p.onclick = function() {
+                            GM_SuperValue.set("locatePlannerCard", {
+                                serialNumber: serialNumber,
+                                columnTitle: p.textContent
+                            });
+
+                            var url = plannerCardsData.url;
+                            window.open(url, '_blank');
+                        }
+
+                        // Make it blue and underlined
+                        p.style.color = '#0078d4';
+                        p.style.textDecoration = 'underline';
+
+                        found = true;
+                    } else if(failedToFind) {
+                        p.textContent = "Not Found";
+                    } else {
+                        p.textContent = "Checking...";
+                    }
+                }, 1000);
             }
             checkIfInPlannerBoard();
             
@@ -5688,15 +5700,19 @@ window.addEventListener('load', function () {
         }
         setTimeout(locatePlannerCard, 800);
 
+        // To do: Rework collectPlannerCardData to just collect all the planner cards and save them to a GM_SuperValue, then after 6 seconds a collectPlannerCardData GM_SuperValue will switch off from the orignal optifleet window to stop collecting? (Side thing, maybe see if we are just in an iframe to collect data regardless of value?)
+        // Will wipe data before collection to ensure deleted card arent in memory anymore, just in case
+        // Save url aswell so we can get back to the page
+
         // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
         let scrollDownTimes = 0;
         function collectPlannerCardData() {
-            let lookForSNs = GM_SuperValue.get("getPlannerCardData", {});
-            if(Object.keys(lookForSNs).length === 0) {
-                setTimeout(collectPlannerCardData, 100);
+
+            // Check if this window is actually a iframe
+            if (window === window.top) {
                 return;
             }
-            console.log("Looking for Serial Numbers: ", lookForSNs);
+            console.log("Collecting Planner Card Data");
 
             /*
             // Get all ms-TooltipHost elements and check if Repair is contained in the text
@@ -5727,16 +5743,7 @@ window.addEventListener('load', function () {
                 element.scrollTop = element.scrollHeight;
             });
             scrollDownTimes++;
-
-            // If we scrolled down 60 times, then we probably reached the end and the miner is not in the planner
-            if (scrollDownTimes > 60) {
-                console.error('Miner not found in planner.');
-                GM_SuperValue.set("getPlannerCardData", {});
-                return;
-            }
             
-            let found = false;
-            let plannerCardsData = {};
             // Loop through all the columns
             columnsList.querySelectorAll('li').forEach(column => {
                 const columnElement = column.querySelector('.columnTitle h3');
@@ -5746,16 +5753,13 @@ window.addEventListener('load', function () {
                     taskCards.forEach(card => {
                         const taskName = card.getAttribute('aria-label');
                         const serialNumber = taskName.split('_')[0];
-                        plannerCardsData[serialNumber] = columnTitle;
                         console.log("Miner Serial Number: ", serialNumber, "Column Title: ", columnTitle);
-                        if (lookForSNs.hasOwnProperty(serialNumber)) {
-                            let currentPlannerCardData = GM_SuperValue.get("plannerCardsData", {});
-                            currentPlannerCardData[serialNumber] = columnTitle;
-                            GM_SuperValue.set("plannerCardsData", currentPlannerCardData);
-                            let curGetPlannerCardData = GM_SuperValue.get("getPlannerCardData", {});
-                            delete curGetPlannerCardData[serialNumber];
-                            GM_SuperValue.set("getPlannerCardData", curGetPlannerCardData);
-                        }
+                        let currentPlannerCardData = GM_SuperValue.get("plannerCardsData", {});
+                        currentPlannerCardData[serialNumber] = {
+                            columnTitle: columnTitle,
+                            url: window.location.href
+                        };
+                        GM_SuperValue.set("plannerCardsData", currentPlannerCardData);
                     });
                 }
             });
