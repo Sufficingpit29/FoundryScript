@@ -3,7 +3,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.4.7
+// @version      4.5.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -5122,17 +5122,17 @@ window.addEventListener('load', function () {
                 // Load the planner boards in the background to get the most recent data
                 var [cleanedText, minerDetails] = getMinerDetails();
                 console.log(minerDetails);
-                if(!minerDetails || !minerDetails['owner'] || minerDetails['owner'] == "--") {
+                if(!minerDetails || !minerDetails['serialNumber'] || minerDetails['serialNumber'] == "--") {
                     setTimeout(checkIfInPlannerBoard, 500);
                     return;
                 }
 
-                var owner = minerDetails['owner'];
+                var owner = minerDetails['owner'].split(' ')[0];
                 var serialNumber = minerDetails['serialNumber'];
                 if(urlLookupPlanner[owner]) {
-
-                    
-                    GM_SuperValue.set("setPlannerCardData", serialNumber);
+                    let getPlannerCardData = GM_SuperValue.get("getPlannerCardData", {});
+                    getPlannerCardData[serialNumber] = true;
+                    GM_SuperValue.set("getPlannerCardData", getPlannerCardData);
 
                     // Open that website link in a hidden iframe
                     var iframe = document.createElement('iframe');
@@ -5151,9 +5151,10 @@ window.addEventListener('load', function () {
                         if(found) {
                             return;
                         }
-                        var plannerCardsData = GM_SuperValue.get('plannerCardsData', {});
-                        if(plannerCardsData[serialNumber]) {
-                            p.textContent = plannerCardsData[serialNumber];
+                        var notGottenData = GM_SuperValue.get("getPlannerCardData", {})[serialNumber];
+                        var plannerCardsData = GM_SuperValue.get('plannerCardsData', {})[serialNumber];
+                        if(plannerCardsData) {
+                            p.textContent = plannerCardsData;
 
                             // Make it a clickable link
                             p.style.cursor = 'pointer';
@@ -5172,7 +5173,7 @@ window.addEventListener('load', function () {
                             p.style.textDecoration = 'underline';
 
                             found = true;
-                        } else if(!GM_SuperValue.get("setPlannerCardData", false)) {
+                        } else if(!notGottenData) {
                             p.textContent = "None";
                         } else {
                             p.textContent = "Checking...";
@@ -5181,6 +5182,9 @@ window.addEventListener('load', function () {
                             
                 } else {
                     console.log("Owner not in planner board list");
+
+                    // Add card just saying invalid owner
+                    addDataBox("Planner Board", "Unknown Owner");
                 }
             }
             checkIfInPlannerBoard();
@@ -5567,9 +5571,22 @@ window.addEventListener('load', function () {
     } else if (currentUrl.includes("planner.cloud.microsoft")) {
 
         // Logic for going to and highling the locatePlannerCard GM_SuperValue
+        const locatingText = ` [Locating...]`;
+        let columnTitleTextElement = null;
+        let foundCard = false;
+        let notLookingTimes = 0;
         function locatePlannerCard() {
+            if (foundCard || notLookingTimes > 20) {
+                return;
+            }
+
             const locatePlannerCardData = GM_SuperValue.get("locatePlannerCard", false);
             if (!locatePlannerCardData) {
+                console.log("No locatePlannerCard Data found.");
+                notLookingTimes++;
+                setTimeout(() => {
+                    locatePlannerCard();
+                }, 100);
                 return;
             }
 
@@ -5588,12 +5605,29 @@ window.addEventListener('load', function () {
             cards.forEach(card => {
                 const taskName = card.getAttribute('aria-label');
                 if (taskName.includes(serialNumber)) {
-                    // Scroll to the card
-                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    console.log("Found the card: ", card);
 
                     // Highlight the card
                     const container = card.querySelector('.container');
                     if (container) {
+                        console.log("Found the container: ", container);
+                        foundCard = true;
+
+                        // Reset all scrollable elements to the top/left
+                        const scrollableElements = document.querySelectorAll('.scrollable');
+                        scrollableElements.forEach(element => {
+                            element.scrollTop = 0;
+                            element.scrollLeft = 0;
+                        });
+
+                        // Scroll to the card
+                        container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                        // Remove the locating text if it exists
+                        if (columnTitleTextElement && columnTitleTextElement.textContent.includes(locatingText)) {
+                            columnTitleTextElement.textContent = columnTitleTextElement.textContent.replace(locatingText, '');
+                        }
+
                         // Make the container grey, but then slowly fade it back to the original color
                         container.style.transition = 'background-color 0.8s';
                         container.style.backgroundColor = 'grey';
@@ -5601,24 +5635,43 @@ window.addEventListener('load', function () {
                             container.style.transition = 'background-color 3s';
                             container.style.backgroundColor = '';
                         }, 2000);
+
+                        // Reset the GM_SuperValue
+                        GM_SuperValue.set("locatePlannerCard", false);
+                    } else {
+                        setTimeout(() => {
+                            console.log("Retrying locatePlannerCard");
+                            locatePlannerCard();
+                        }, 100);
                     }
-                
-                            
-                    // Reset the GM_SuperValue
-                    GM_SuperValue.set("locatePlannerCard", false);
                 } else {
+
+                    if(foundCard) {
+                        return;
+                    }
 
                     // Find all scrollable elements and scroll to bottom if it is the right column
                     let foundColumn = false;
                     const scrollableElements = document.querySelectorAll('.scrollable');
                     scrollableElements.forEach(element => {
                         // Get parent and see if columnTitle is contained in aria-label
-                        const parent = element.parentElement.parentElement;
-                        if (parent.getAttribute('aria-label').includes(columnTitle)) {
-                            // Then scroll to the bottom of the element
-                            element.scrollTop = element.scrollHeight;
-                            console.log("Scrolling to bottom of column: ", element);
-                            foundColumn = true;
+                        const parent = element.parentElement;
+                        const columnTitleElement = parent.querySelector('.columnTitle');
+                        if(columnTitleElement) {
+                            let columnTitleTextElementTemp = columnTitleElement.querySelector('h3');
+                            if (columnTitleTextElementTemp && columnTitleTextElementTemp.textContent.includes(columnTitle)) {
+                                columnTitleTextElement = columnTitleTextElementTemp;
+
+                                // Then scroll to the bottom of the element
+                                element.scrollTop = element.scrollTop + 10;
+                                console.log("Scrolling to bottom of column: ", element);
+                                foundColumn = true;
+
+                                // Set the text to be its name with " [Locating...]" added onto it, so long as it doesn't already have it
+                                if (!columnTitleTextElementTemp.textContent.includes(locatingText)) {
+                                    columnTitleTextElementTemp.textContent = `${columnTitleTextElementTemp.textContent}${locatingText}`;
+                                }
+                            }
                         }
                     });
                     
@@ -5633,16 +5686,17 @@ window.addEventListener('load', function () {
                 }
             });
         }
-        locatePlannerCard();
+        setTimeout(locatePlannerCard, 800);
 
         // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
         let scrollDownTimes = 0;
         function collectPlannerCardData() {
-            let lookForSN = GM_SuperValue.get("setPlannerCardData", false);
-            if(!lookForSN) {
+            let lookForSNs = GM_SuperValue.get("getPlannerCardData", {});
+            if(Object.keys(lookForSNs).length === 0) {
                 setTimeout(collectPlannerCardData, 100);
                 return;
             }
+            console.log("Looking for Serial Numbers: ", lookForSNs);
 
             /*
             // Get all ms-TooltipHost elements and check if Repair is contained in the text
@@ -5677,7 +5731,7 @@ window.addEventListener('load', function () {
             // If we scrolled down 60 times, then we probably reached the end and the miner is not in the planner
             if (scrollDownTimes > 60) {
                 console.error('Miner not found in planner.');
-                GM_SuperValue.set("setPlannerCardData", false);
+                GM_SuperValue.set("getPlannerCardData", {});
                 return;
             }
             
@@ -5687,28 +5741,26 @@ window.addEventListener('load', function () {
             columnsList.querySelectorAll('li').forEach(column => {
                 const columnElement = column.querySelector('.columnTitle h3');
                 if (columnElement) {
-                    const columnTitle = columnElement.innerText;
+                    const columnTitle = columnElement.innerText.replace(locatingText, '');
                     const taskCards = column.querySelectorAll('.taskCard');
                     taskCards.forEach(card => {
                         const taskName = card.getAttribute('aria-label');
                         const serialNumber = taskName.split('_')[0];
                         plannerCardsData[serialNumber] = columnTitle;
                         console.log("Miner Serial Number: ", serialNumber, "Column Title: ", columnTitle);
-                        if (serialNumber === lookForSN) {
-                            found = true;
+                        if (lookForSNs.hasOwnProperty(serialNumber)) {
+                            let currentPlannerCardData = GM_SuperValue.get("plannerCardsData", {});
+                            currentPlannerCardData[serialNumber] = columnTitle;
+                            GM_SuperValue.set("plannerCardsData", currentPlannerCardData);
+                            let curGetPlannerCardData = GM_SuperValue.get("getPlannerCardData", {});
+                            delete curGetPlannerCardData[serialNumber];
+                            GM_SuperValue.set("getPlannerCardData", curGetPlannerCardData);
                         }
                     });
                 }
             });
             
-            
-
-            if (!found) {
-                setTimeout(collectPlannerCardData, 100);
-            } else {
-                GM_SuperValue.set("plannerCardsData", plannerCardsData);
-                GM_SuperValue.set("setPlannerCardData", false);
-            }
+            setTimeout(collectPlannerCardData, 100); // Retry every 100ms
         }
         collectPlannerCardData();
 
@@ -5744,7 +5796,28 @@ window.addEventListener('load', function () {
 
             // Don't try to add the button if the minerID is not found
             if (!minerID) {
-                console.error('Miner ID not found in lookup.');
+                
+                // If the name does seem to be formatted with the serial number, then let the user know it is not found
+                // Check if there are _ in the taskName, and no spaces in the serial number
+                if (taskName.includes('_') && !serialNumber.includes(' ') && serialNumber.length > 5) {
+                    // Create the button and add it to into the taskEditor-dialog-header on the left side
+                    const button = document.createElement('button');
+                    button.id = 'openMinerButton';
+                    button.textContent = 'Miner Not Found';
+                    button.style.backgroundColor = 'red';
+                    button.style.color = 'white';
+                    button.style.border = '5px';
+                    button.style.padding = '8px';
+                    button.style.borderRadius = '3px';
+                    button.style.cursor = 'pointer';
+                    button.style.paddingTop = '4px';
+                    button.style.paddingBottom = '4px';
+                    button.style.display = 'flex';
+                    button.style.alignItems = 'center';
+                    button.style.justifyContent = 'center';
+                    taskDetailsTitleSection.appendChild(button);
+                }
+
                 return;
             }
 
@@ -5779,258 +5852,276 @@ window.addEventListener('load', function () {
         //--------------------------------------------------
 
         // Logic for automatically adding a task to the planner
-        const taskName = GM_SuperValue.get("taskName", "");
-        if (taskName === "") {
-            return;
-        }
 
-        const taskNotes = GM_SuperValue.get("taskNotes", "");
-        if (taskNotes === "") {
-            return;
-        }
+        function setUpAutoCardLogic() {
+            const taskName = GM_SuperValue.get("taskName", "");
+            if (taskName === "") {
+                return;
+            }
 
-        const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
-        if (Object.keys(detailsData).length === 0) {
-            return;
-        }
+            const taskNotes = GM_SuperValue.get("taskNotes", "");
+            if (taskNotes === "") {
+                return;
+            }
 
-        function ResetTaskData() {
-            GM_SuperValue.set('taskName', '');
-            GM_SuperValue.set('taskNotes', '');
-            GM_SuperValue.set('taskComment', '');
-            GM_SuperValue.set('detailsData', '{}');
-        }
+            const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
+            if (Object.keys(detailsData).length === 0) {
+                return;
+            }
 
-        // Function to simulate real typing using execCommand
-        function setupTask(inputElement) {
+            function ResetTaskData() {
+                GM_SuperValue.set('taskName', '');
+                GM_SuperValue.set('taskNotes', '');
+                GM_SuperValue.set('taskComment', '');
+                GM_SuperValue.set('detailsData', '{}');
+            }
 
-            inputElement.focus();
+            // Function to simulate real typing using execCommand
+            function setupTask(inputElement) {
 
-            let i = 0;
-            function typeCharacter() {
-                if (i < taskName.length) {
-                    const char = taskName.charAt(i);
+                inputElement.focus();
 
-                    // Create and dispatch the keydown event
-                    const keydownEvent = new KeyboardEvent('keydown', { key: char });
-                    inputElement.dispatchEvent(keydownEvent);
+                let i = 0;
+                function typeCharacter() {
+                    if (i < taskName.length) {
+                        const char = taskName.charAt(i);
 
-                    // Insert the character
-                    document.execCommand('insertText', false, char);
+                        // Create and dispatch the keydown event
+                        const keydownEvent = new KeyboardEvent('keydown', { key: char });
+                        inputElement.dispatchEvent(keydownEvent);
 
-                    // Create and dispatch the keyup event
-                    const keyupEvent = new KeyboardEvent('keyup', { key: char });
-                    inputElement.dispatchEvent(keyupEvent);
+                        // Insert the character
+                        document.execCommand('insertText', false, char);
 
-                    i++;
-                    setTimeout(typeCharacter, 10);
-                } else {
+                        // Create and dispatch the keyup event
+                        const keyupEvent = new KeyboardEvent('keyup', { key: char });
+                        inputElement.dispatchEvent(keyupEvent);
 
-                    // Locate the add task button and click it
-                    const addTaskButton = document.querySelector('.addTaskButton');
-                    if (addTaskButton) {
-                        addTaskButton.click();
-
-                        // Locate the new element with the inputted text
-                        setTimeout(() => {
-                            const newElement = document.querySelector(`[aria-label="${taskName}"]`);
-                            if (newElement) {
-                                // Click the element
-                                newElement.click();
-
-                                // Now add the text to the notes
-                                setTimeout(() => {
-                                    const notesEditor = document.querySelector('.notes-editor');
-                                    if (notesEditor) {
-                                        // Click the notes editor to focus it and enter editing mode
-                                        notesEditor.click();
-                                        notesEditor.focus();
-
-                                        // Change the notes editor's background color to red for testing
-                                        //notesEditor.style.backgroundColor = 'red';
-
-                                        // Insert the text into the notes editor
-                                        document.execCommand('insertText', false, taskNotes);
-
-                                        setTimeout(() => {
-                                            // Now lets add the comment to the task for the log
-                                            const commentField = document.querySelector('textarea[aria-label="New comment"]');
-                                            if (commentField) {
-                                                commentField.scrollIntoView({ behavior: 'auto', block: 'center' });
-                                                commentField.click();
-                                                commentField.focus();
-                                                commentField.click();
-                                                setTimeout(() => {
-                                                    commentField.click();
-                                                    console.log("Inputting:", GM_SuperValue.get("taskComment", ""));
-                                                    document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
-
-                                                    // Now find the send button and click it
-                                                    const sendButton = document.querySelector('.sendCommentButton');
-                                                    if (sendButton) {
-                                                        sendButton.click();
-
-                                                        // We'll now reset the taskName and taskNotes values
-                                                        GM_SuperValue.set("taskName", "");
-                                                        GM_SuperValue.set("taskNotes", "");
-                                                        GM_SuperValue.set("taskComment", "");
-                                                        GM_SuperValue.set("detailsData", {});
-
-                                                    } else {
-                                                        console.error('Notes editor not found.');
-                                                    }
-                                                }, 400);
-                                            }
-
-                                            
-                                        }, 400);
-
-                                    } else {
-                                        console.error('Notes editor not found.');
-                                    }
-                                }, 600);
-                            } else {
-                                console.error('New element not found.');
-                            }
-                        }, 600); // Add a 500ms delay before locating the new element
+                        i++;
+                        setTimeout(typeCharacter, 10);
                     } else {
-                        console.error('Add task button not found.');
+
+                        // Locate the add task button and click it
+                        const addTaskButton = document.querySelector('.addTaskButton');
+                        if (addTaskButton) {
+                            addTaskButton.click();
+
+                            // Locate the new element with the inputted text
+                            setTimeout(() => {
+                                const newElement = document.querySelector(`[aria-label="${taskName}"]`);
+                                if (newElement) {
+                                    // Click the element
+                                    newElement.click();
+
+                                    // Now add the text to the notes
+                                    setTimeout(() => {
+                                        const notesEditor = document.querySelector('.notes-editor');
+                                        if (notesEditor) {
+                                            // Click the notes editor to focus it and enter editing mode
+                                            notesEditor.click();
+                                            notesEditor.focus();
+
+                                            // Change the notes editor's background color to red for testing
+                                            //notesEditor.style.backgroundColor = 'red';
+
+                                            // Insert the text into the notes editor
+                                            document.execCommand('insertText', false, taskNotes);
+
+                                            setTimeout(() => {
+                                                // Now lets add the comment to the task for the log
+                                                const commentField = document.querySelector('textarea[aria-label="New comment"]');
+                                                if (commentField) {
+                                                    commentField.scrollIntoView({ behavior: 'auto', block: 'center' });
+                                                    commentField.click();
+                                                    commentField.focus();
+                                                    commentField.click();
+                                                    setTimeout(() => {
+                                                        commentField.click();
+                                                        console.log("Inputting:", GM_SuperValue.get("taskComment", ""));
+                                                        document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
+
+                                                        // Now find the send button and click it
+                                                        const sendButton = document.querySelector('.sendCommentButton');
+                                                        if (sendButton) {
+                                                            sendButton.click();
+
+                                                            // We'll now reset the taskName and taskNotes values
+                                                            GM_SuperValue.set("taskName", "");
+                                                            GM_SuperValue.set("taskNotes", "");
+                                                            GM_SuperValue.set("taskComment", "");
+                                                            GM_SuperValue.set("detailsData", {});
+
+                                                        } else {
+                                                            console.error('Notes editor not found.');
+                                                        }
+                                                    }, 400);
+                                                }
+
+                                                
+                                            }, 400);
+
+                                        } else {
+                                            console.error('Notes editor not found.');
+                                        }
+                                    }, 600);
+                                } else {
+                                    console.error('New element not found.');
+                                }
+                            }, 600); // Add a 500ms delay before locating the new element
+                        } else {
+                            console.error('Add task button not found.');
+                        }
                     }
                 }
+                typeCharacter();
             }
-            typeCharacter();
-        }
 
-        let createCardButtons = [];
-        function addAutoCardButtons() {
-            const columnsList = document.querySelector('ul.columnsList');
-            if (columnsList) {
-                const columnItems = columnsList.querySelectorAll('li');
-                columnItems.forEach(columnItem => {
-                    const columnTitle = columnItem.querySelector('.columnTitle');
-                    if (columnTitle) {
-                        const newButton = document.createElement('button');
-                        createCardButtons.push(newButton);
-                        newButton.textContent = 'Auto-Create Card';
-                        newButton.style.marginTop = '6px';
-                        newButton.style.marginBottom = '6px';
-                        newButton.style.backgroundColor = 'green';
-                        newButton.style.color = 'white';
-                        newButton.style.border = 'none';
-                        newButton.style.padding = '5px 10px';
-                        newButton.style.borderRadius = '3px';
-                        newButton.style.cursor = 'pointer';
-                        newButton.style.textAlign = 'center';
-                        newButton.style.display = 'flex';
-                        newButton.style.alignItems = 'center';
-                        newButton.style.justifyContent = 'center';
-                        columnTitle.after(newButton);
-                        console.log('Added auto-create card button.');
+            let createCardButtons = [];
+            function addAutoCardButtons() {
 
-                        newButton.addEventListener('click', () => {
-                            clickAddTaskButton(columnTitle);
-                        });
+                // See if we're on a repair page
+                const tooltipHosts = document.querySelectorAll('.ms-TooltipHost');
+                let foundRepair = false;
+                for (const tooltipHost of tooltipHosts) {
+                    if (tooltipHost.textContent.includes('Repair')) {
+                        foundRepair = true;
+                        console.log('Found tooltipHost with "Repair":', tooltipHost);
+                        break;
                     }
+                }
+                if (!foundRepair) {
+                    setTimeout(addAutoCardButtons, 500);
+                    return;
+                }
 
-                });
-            } else {
+                const columnsList = document.querySelector('ul.columnsList');
+                if (columnsList) {
+                    const columnItems = columnsList.querySelectorAll('li');
+                    columnItems.forEach(columnItem => {
+                        const columnTitle = columnItem.querySelector('.columnTitle');
+                        // Column title exists and there is no button already
+                        if (columnTitle && !createCardButtons.some(button => button.previousElementSibling === columnTitle)) {
+                            const newButton = document.createElement('button');
+                            createCardButtons.push(newButton);
+                            newButton.textContent = 'Auto-Create Card';
+                            newButton.style.marginTop = '6px';
+                            newButton.style.marginBottom = '6px';
+                            newButton.style.backgroundColor = 'green';
+                            newButton.style.color = 'white';
+                            newButton.style.border = 'none';
+                            newButton.style.padding = '5px 10px';
+                            newButton.style.borderRadius = '3px';
+                            newButton.style.cursor = 'pointer';
+                            newButton.style.textAlign = 'center';
+                            newButton.style.display = 'flex';
+                            newButton.style.alignItems = 'center';
+                            newButton.style.justifyContent = 'center';
+                            columnTitle.after(newButton);
+                            console.log('Added auto-create card button.');
+
+                            newButton.addEventListener('click', () => {
+                                clickAddTaskButton(columnTitle);
+                            });
+                        }
+
+                    });
+                }
                 setTimeout(addAutoCardButtons, 500);
             }
-        }
 
-        var hasClicked = false;
-        function clickAddTaskButton(header) {
-            if(hasClicked) { return; }
+            var hasClicked = false;
+            function clickAddTaskButton(header) {
+                if(hasClicked) { return; }
 
-            // Remove all the buttons
-            createCardButtons.forEach(button => {
-                button.remove();
-            });
+                // Remove all the buttons
+                createCardButtons.forEach(button => {
+                    button.remove();
+                });
 
-            // Remove the popup
-            const popup = document.getElementById('autoCreateCardPopup');
-            if (popup) {
-                document.body.removeChild(popup);
-            }
-            
-            //const headers = document.querySelectorAll('.columnTitle');
-            //const header = Array.from(headers).find(el => el.textContent.trim() === 'Diagnosed');
-            
-            if (header) {
-                hasClicked = true;
-                const container = header.closest('.columnContent');
-
-                if (container) {
-                    const addButton = container.querySelector('.addButton');
-                    var textField = container.querySelector('input[placeholder="Enter a task name * (required)"]');
-
-                    if (addButton) {
-                        //addButton.style.backgroundColor = 'red';
-                        //addButton.style.color = 'white';
-
-                        // Click to start making new task if the menu isn't already there.
-                        if(!textField) {
-                            addButton.click();
-                        }
-
-                        // Set the value of the text field to the task name
-                        textField = container.querySelector('input[placeholder="Enter a task name * (required)"]');
-                        if (textField) {
-                            setupTask(textField);
-                        } else {
-                            console.error('Text field not found.');
-                        }
-
-                        return true; // Stop further mutation observations
-                    } else {
-                        console.error('Add task button not found.');
-                    }
-                } else {
-                    console.error('Container not found.');
+                // Remove the popup
+                const popup = document.getElementById('autoCreateCardPopup');
+                if (popup) {
+                    document.body.removeChild(popup);
                 }
+                
+                //const headers = document.querySelectorAll('.columnTitle');
+                //const header = Array.from(headers).find(el => el.textContent.trim() === 'Diagnosed');
+                
+                if (header) {
+                    hasClicked = true;
+                    const container = header.closest('.columnContent');
+
+                    if (container) {
+                        const addButton = container.querySelector('.addButton');
+                        var textField = container.querySelector('input[placeholder="Enter a task name * (required)"]');
+
+                        if (addButton) {
+                            //addButton.style.backgroundColor = 'red';
+                            //addButton.style.color = 'white';
+
+                            // Click to start making new task if the menu isn't already there.
+                            if(!textField) {
+                                addButton.click();
+                            }
+
+                            // Set the value of the text field to the task name
+                            textField = container.querySelector('input[placeholder="Enter a task name * (required)"]');
+                            if (textField) {
+                                setupTask(textField);
+                            } else {
+                                console.error('Text field not found.');
+                            }
+
+                            return true; // Stop further mutation observations
+                        } else {
+                            console.error('Add task button not found.');
+                        }
+                    } else {
+                        console.error('Container not found.');
+                    }
+                }
+
+                return false; // Keep observing for further mutations
             }
 
-            return false; // Keep observing for further mutations
+            function createAutoCreateCardButton() {
+                const popup = document.createElement('div');
+                popup.id = 'autoCreateCardPopup';
+                popup.style.position = 'fixed';
+                popup.style.top = '20px';
+                popup.style.right = '20px';
+                popup.style.backgroundColor = '#f2f2f2';
+                popup.style.padding = '10px';
+                popup.style.borderRadius = '5px';
+                popup.style.color = '#333';
+                popup.style.fontSize = '14px';
+                popup.style.fontWeight = 'bold';
+                popup.style.outline = '2px solid #333'; // Add outline
+                popup.innerHTML = `
+                    <p>Model: ${detailsData['model']}</p>
+                    <p>Serial Number: ${detailsData['serialNumber']}</p>
+                    <p>Slot ID: ${detailsData['locationID']}</p>
+                    <button id="cancelButton" style="background-color: red; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
+                        Cancel
+                    </button>
+                `;
+
+                // Make sure it is always layered on top
+                popup.style.zIndex = '9999';
+                document.body.appendChild(popup);
+
+                const cancelButton = document.getElementById('cancelButton');
+                cancelButton.addEventListener('click', () => {
+                    ResetTaskData();
+                    document.body.removeChild(popup);
+                    window.close();
+                });
+            }
+
+            setTimeout(createAutoCreateCardButton, 1000);
+            setTimeout(addAutoCardButtons, 50);
         }
-
-        function createAutoCreateCardButton() {
-            const popup = document.createElement('div');
-            popup.id = 'autoCreateCardPopup';
-            popup.style.position = 'fixed';
-            popup.style.top = '20px';
-            popup.style.right = '20px';
-            popup.style.backgroundColor = '#f2f2f2';
-            popup.style.padding = '10px';
-            popup.style.borderRadius = '5px';
-            popup.style.color = '#333';
-            popup.style.fontSize = '14px';
-            popup.style.fontWeight = 'bold';
-            popup.style.outline = '2px solid #333'; // Add outline
-            popup.innerHTML = `
-                <p>Model: ${detailsData['model']}</p>
-                <p>Serial Number: ${detailsData['serialNumber']}</p>
-                <p>Slot ID: ${detailsData['locationID']}</p>
-                <button id="cancelButton" style="background-color: red; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
-                Cancel
-                </button>
-            `;
-
-            // Make sure it is always layered on top
-            popup.style.zIndex = '9999';
-            document.body.appendChild(popup);
-
-            const cancelButton = document.getElementById('cancelButton');
-            cancelButton.addEventListener('click', () => {
-                ResetTaskData();
-                document.body.removeChild(popup);
-
-                window.close();
-            });
-
-        }
-
-        setTimeout(createAutoCreateCardButton, 1000);
-        setTimeout(addAutoCardButtons, 50);
+        setUpAutoCardLogic();
 
         // Find the toast container and remove it
         function removeToastContainer() {
