@@ -1,9 +1,11 @@
 //integrate some of the error checking into auto reboot?
 
+
+
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.6.1
+// @version      4.6.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -560,6 +562,7 @@ window.addEventListener('load', function () {
                         const lastUptimeValue = lastUptimeData.value;
                         const lastUptimeTime = lastUptimeData.time;
                         const isHashing = miner.hashrate > 0;
+                        const uptimeOverZero = uptimeValue > 0;
                         const minerOnline = miner.statusName === 'Online';
                         const notSameStatusUpdate = lastUptimeTime !== -1 && miner.lastStatsUpdate !== lastUptimeTime;
                         const sameBetweenChecks = uptimeValue === lastUptimeValue && notSameStatusUpdate;
@@ -584,7 +587,7 @@ window.addEventListener('load', function () {
                             lastUpTime[minerID].sameHashRateCount = 0;
                         }
 
-                        if (isHashing && minerOnline && (sameBetweenChecks || wasInListBefore)) { // || lastUptimeData.sameHashRateCount > 2)) {
+                        if (uptimeOverZero && isHashing && minerOnline && (sameBetweenChecks || wasInListBefore)) { // || lastUptimeData.sameHashRateCount > 2)) {
                             frozenMiners.push(miner);
                             lastUpTime[minerID].addedToList = true;
                         }
