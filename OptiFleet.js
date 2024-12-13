@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.6.2
+// @version      4.7.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -1083,6 +1083,8 @@ window.addEventListener('load', function () {
 
             // Clean Text fuction
             function cleanText(text) {
+                console.log("Cleaning Text");
+                console.log(text);
                 return text
                 .replace(/Copy\s*$/gm, '') // Remove 'Copy' button text
                 .replace(/All details copied!/, '') // Remove 'All details copied!' message
@@ -1103,6 +1105,8 @@ window.addEventListener('load', function () {
                 buttons.forEach(btn => btn.remove());
 
                 let textToCopy = cleanText(clone.innerText);
+
+
 
                 copyTextToClipboard(textToCopy);
             }
@@ -1371,6 +1375,40 @@ window.addEventListener('load', function () {
                 element.appendChild(copyButton);
             }
 
+            function fixAccountWorkerFormatting() {
+                const infoRows = document.querySelectorAll('.info-row');
+                infoRows.forEach(row => {
+                    const label = row.querySelector('.info-row-label');
+                    const activeAccountLabel = row.querySelector('#activeAccount');
+                    const activeWorkerLabel = row.querySelector('#activeWorker');
+                    if (label && label.textContent.trim() === 'Account / Worker' && activeAccountLabel && activeWorkerLabel && activeAccountLabel.textContent && activeWorkerLabel.textContent) {
+
+                        // print parent node
+                        console.log(row.parentNode);
+
+                        // Create new label
+                        const newLabel = document.createElement('div');
+                        newLabel.className = 'info-row-label';
+                        newLabel.textContent = '\nAccount / Worker\n';
+
+                        // Create new value div
+                        const newValue = document.createElement('div');
+                        newValue.className = 'info-row-value';
+                        newValue.id = 'accountWorker';
+                        newValue.textContent = activeAccountLabel.textContent + ' / ' + activeWorkerLabel.textContent;
+
+                        // Create new info-row div
+                        const newInfoRow = document.createElement('div');
+                        newInfoRow.className = 'info-row';
+                        newInfoRow.appendChild(newLabel);
+                        newInfoRow.appendChild(newValue);
+
+                        // Replace the old row with the new row
+                        row.parentNode.replaceChild(newInfoRow, row);
+                    }
+                });
+            }
+
             function addCopyButtonsToElements() {
                 const detailSections = document.querySelectorAll('.miner-details-section .info-row-value');
 
@@ -1388,7 +1426,13 @@ window.addEventListener('load', function () {
                         copyAllButton.onclick = function (event) {
                             event.preventDefault();
                             copyAllDetails();
-                            showSuccessMessage(container, "All details copied!");
+                            //showSuccessMessage(container, "All details copied!");
+
+                            // Change the button text to 'All details copied!' for 2 seconds
+                            copyAllButton.innerText = 'All details copied!';
+                            setTimeout(() => {
+                                copyAllButton.innerText = 'Copy All';
+                            }, 2000);
                         };
                         container.insertBefore(copyAllButton, container.firstChild);
                     }
@@ -1400,7 +1444,6 @@ window.addEventListener('load', function () {
                         sharepointPasteButton.onclick = function (event) {
                             event.preventDefault();
                             createDataInputPopup();
-                            showSuccessMessage(container, "Details for Sharepoint copied!");
                         };
                         container.insertBefore(sharepointPasteButton, container.firstChild);
                     }
@@ -1423,13 +1466,14 @@ window.addEventListener('load', function () {
 
             function addMutationObserver() {
                 const observer = new MutationObserver(() => {
+                    fixAccountWorkerFormatting();
                     addCopyButtonsToElements();
                 });
 
                 observer.observe(document.body, { childList: true, subtree: true });
             }
 
-            addCopyButtonsToElements();
+            //addCopyButtonsToElements();
             addMutationObserver();
         }
 
@@ -1509,6 +1553,14 @@ window.addEventListener('load', function () {
                                     contextMenu.style.position = 'fixed';
                                     contextMenu.style.top = event.clientY + 'px';
                                     contextMenu.style.left = event.clientX + 'px';
+
+                                    // If it goes off the screen, move it back on
+                                    if (event.clientX + contextMenu.offsetWidth > window.innerWidth) {
+                                        contextMenu.style.left = (window.innerWidth - contextMenu.offsetWidth) + 'px';
+                                    }
+                                    if (event.clientY + contextMenu.offsetHeight > window.innerHeight) {
+                                        contextMenu.style.top = (window.innerHeight - contextMenu.offsetHeight) + 'px';
+                                    }
                                 }
                             });
                         }
@@ -5147,6 +5199,9 @@ window.addEventListener('load', function () {
                     document.body.appendChild(iframe);
                     setTimeout(() => {
                         failedToFind = true;
+
+                        // close the iframe
+                        iframe.remove();
                     }, 12000);
                 } else {
                     console.log("Owner not in planner board list");
@@ -5703,10 +5758,6 @@ window.addEventListener('load', function () {
         }
         setTimeout(locatePlannerCard, 800);
 
-        // To do: Rework collectPlannerCardData to just collect all the planner cards and save them to a GM_SuperValue, then after 6 seconds a collectPlannerCardData GM_SuperValue will switch off from the orignal optifleet window to stop collecting? (Side thing, maybe see if we are just in an iframe to collect data regardless of value?)
-        // Will wipe data before collection to ensure deleted card arent in memory anymore, just in case
-        // Save url aswell so we can get back to the page
-
         // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
         let scrollDownTimes = 0;
         function collectPlannerCardData() {
@@ -5715,7 +5766,7 @@ window.addEventListener('load', function () {
             if (window === window.top) {
                 return;
             }
-            console.log("Collecting Planner Card Data");
+            //console.log("Collecting Planner Card Data");
 
             /*
             // Get all ms-TooltipHost elements and check if Repair is contained in the text
@@ -5756,7 +5807,7 @@ window.addEventListener('load', function () {
                     taskCards.forEach(card => {
                         const taskName = card.getAttribute('aria-label');
                         const serialNumber = taskName.split('_')[0];
-                        console.log("Miner Serial Number: ", serialNumber, "Column Title: ", columnTitle);
+                        //console.log("Miner Serial Number: ", serialNumber, "Column Title: ", columnTitle);
                         let currentPlannerCardData = GM_SuperValue.get("plannerCardsData", {});
                         currentPlannerCardData[serialNumber] = {
                             columnTitle: columnTitle,
@@ -5914,16 +5965,19 @@ window.addEventListener('load', function () {
                             addTaskButton.click();
 
                             // Locate the new element with the inputted text
-                            setTimeout(() => {
+                            const findNewCard_INTERVAL = setInterval(() => {
                                 const newElement = document.querySelector(`[aria-label="${taskName}"]`);
                                 if (newElement) {
+                                    clearInterval(findNewCard_INTERVAL);
                                     // Click the element
                                     newElement.click();
 
                                     // Now add the text to the notes
-                                    setTimeout(() => {
+                                    const findNotesEditor_INTERVAL = setInterval(() => {
                                         const notesEditor = document.querySelector('.notes-editor');
                                         if (notesEditor) {
+                                            clearInterval(findNotesEditor_INTERVAL);
+
                                             // Click the notes editor to focus it and enter editing mode
                                             notesEditor.click();
                                             notesEditor.focus();
@@ -5934,10 +5988,12 @@ window.addEventListener('load', function () {
                                             // Insert the text into the notes editor
                                             document.execCommand('insertText', false, taskNotes);
 
-                                            setTimeout(() => {
+                                            const findAddCommentButton_INTERVAL = setInterval(() => {
                                                 // Now lets add the comment to the task for the log
                                                 const commentField = document.querySelector('textarea[aria-label="New comment"]');
                                                 if (commentField) {
+                                                    clearInterval(findAddCommentButton_INTERVAL);
+
                                                     commentField.scrollIntoView({ behavior: 'auto', block: 'center' });
                                                     commentField.click();
                                                     commentField.focus();
