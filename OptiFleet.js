@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.7.5
+// @version      4.7.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/*
@@ -2112,6 +2112,17 @@ window.addEventListener('load', function () {
                                             rebootData[currentMiner.id].details.main = "Missing Location";
                                             rebootData[currentMiner.id].details.sub = [];
                                             rebootData[currentMiner.id].details.sub.push("Miner is unassigned.");
+                                            rebootData[currentMiner.id].details.color = 'red';
+                                            return;
+                                        }
+
+                                        // Check if the miner is in the frozen list
+                                        if(frozenMiners.includes(minerID) || minerID === 411660) { // remove 411660 later
+                                            rebootData[currentMiner.id] = rebootData[currentMiner.id] || {};
+                                            rebootData[currentMiner.id].details = {};
+                                            rebootData[currentMiner.id].details.main = "Frozen Miner";
+                                            rebootData[currentMiner.id].details.sub = [];
+                                            rebootData[currentMiner.id].details.sub.push("Miner is frozen.");
                                             rebootData[currentMiner.id].details.color = 'red';
                                             return;
                                         }
