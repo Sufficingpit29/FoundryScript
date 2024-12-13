@@ -5,13 +5,9 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.7.6
+// @version      4.7.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
-// @match        https://foundryoptifleet.com/*
-// @match        *://tasks.office.com/foundrydigital.com/*
-// @match        *://foundrydigitalllc.sharepoint.com/*
-// @match        *https://planner.cloud.microsoft/foundrydigital.com/Home/Planner/*
 // @match        *://*/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
@@ -35,8 +31,26 @@
 // @run-at       document-start
 // ==/UserScript==
 
+const allowedSites = [
+    "foundryoptifleet.com",
+    "planner",
+    "sharepoint",
+    "office",
+    "bitmain",
+];
 
 const currentUrl = window.location.href;
+
+// See if the URL likly contains a IP address
+const ipRegex = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
+const ipURLMatch = currentUrl.match(ipRegex);
+
+// Check if the current URL is allowed
+const allowedSiteMatch = allowedSites.some(site => currentUrl.includes(site));
+
+if(!ipURLMatch && !allowedSiteMatch) {
+    return false;
+}
 
 window.addEventListener('load', function () {
     var urlLookupExcel = {};
@@ -5183,6 +5197,7 @@ window.addEventListener('load', function () {
             // Logic for seeing if the miner exists in a planner board
             function checkIfInPlannerBoard() {
                 GM_SuperValue.set("locatePlannerCard", false);
+                GM_SuperValue.set('collectingPlannerCardData', false);
                 GM_SuperValue.set('plannerCardsData', {});
 
                 // Load the planner boards in the background to get the most recent data
@@ -5234,12 +5249,38 @@ window.addEventListener('load', function () {
                     }, 20000);
                 }
 
+                // Cycle 3 dots
+                let cycle = 0;
+                let dots = "";
+
                 // Add a data box that will be updated with the GM_SuperValue of plannerCardsData
-                let found = false;
+                let stopTrying = false;
+                let hasLoaded = false;
                 let plannerDataBox = addDataBox("Planner Board", "Loading...", (mBox, h3, p) => {
-                    if(found) {
+                    if(stopTrying) {
                         return;
                     }
+
+                    // Dots cycle logic
+                    cycle++;
+                    if(cycle > 3) {
+                        cycle = 0;
+                        dots = "";
+                    } else {
+                        dots += ".";
+                    }
+
+                    // Check if the data has loaded
+                    if(!hasLoaded) {
+                        hasLoaded = GM_SuperValue.get('collectingPlannerCardData', false);
+                        if(hasLoaded) {
+                            GM_SuperValue.set('collectingPlannerCardData', false);
+                            cycle = 0;
+                            dots = "";
+                        }
+                    }
+
+                    // Check if the data has been found/displays the data
                     let plannerCardsData = GM_SuperValue.get('plannerCardsData', {})[serialNumber];
                     if(plannerCardsData) {
                         p.textContent = plannerCardsData.columnTitle;
@@ -5260,11 +5301,31 @@ window.addEventListener('load', function () {
                         p.style.color = '#0078d4';
                         p.style.textDecoration = 'underline';
 
-                        found = true;
+                        stopTrying = true;
                     } else if(failedToFind) {
-                        p.textContent = "Not Found";
+                        if(!hasLoaded) {
+                            p.textContent = "[Failed to Load]";
+
+                            // Add subtext below to 'Try enableing redirects and popups, then reload'
+                            const subText = document.createElement('p');
+                            subText.textContent = "Try enabling redirects and popups, then reload the page.";
+                            subText.style.color = '#70707b';
+                            subText.style.fontSize = '0.8em';
+                            subText.style.marginTop = '5px';
+                            mBox.appendChild(subText);
+                            
+                            stopTrying = true;
+                        } else {
+                            p.textContent = "[Not Found]";
+                            
+                            stopTrying = true;
+                        }
                     } else {
-                        p.textContent = "Checking...";
+                        if(!hasLoaded) {
+                            p.textContent = "Loading" + dots;
+                        } else {
+                            p.textContent = "Checking" + dots;
+                        }
                     }
                 }, 1000);
             }
@@ -5777,6 +5838,10 @@ window.addEventListener('load', function () {
             if (window === window.top) {
                 return;
             }
+
+            // Set the GM_SuperValue that we're looking for the planner card
+            GM_SuperValue.set("collectingPlannerCardData", true);
+
             //console.log("Collecting Planner Card Data");
 
             /*
@@ -6209,10 +6274,6 @@ window.addEventListener('load', function () {
 
         removeToastContainer();
     }
-
-    // See if the URL likly contains a IP address
-    const ipRegex = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
-    const ipURLMatch = currentUrl.match(ipRegex);
 
     // Return if the URL doesn't match the IP regex
     if (ipURLMatch) {
