@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.7.9
+// @version      4.8.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -527,7 +527,10 @@ window.addEventListener('load', function () {
                     // Populate the minerSNLookup
                     let minerSNLookup = {};
                     resp.miners.forEach(miner => {
-                        minerSNLookup[ miner.serialNumber] = miner.id;
+                        minerSNLookup[miner.serialNumber] = {
+                            minerID: miner.id,
+                            slotID: miner.locationName.replace("Minden_", "")
+                        };
                     });
                     if(siteName.includes("Minden")) {
                         GM_SuperValue.set("minerSNLookup", minerSNLookup);
@@ -2120,7 +2123,7 @@ window.addEventListener('load', function () {
                                     function checkMiner(minerID) {
                                         var location = currentMiner.locationName;
                                         if(!location || location === "Unassigned") {
-                                            console.error("No location for miner: " + minerID);
+                                            //console.error("No location for miner: " + minerID);
                                             rebootData[currentMiner.id] = rebootData[currentMiner.id] || {};
                                             rebootData[currentMiner.id].details = {};
                                             rebootData[currentMiner.id].details.main = "Missing Location";
@@ -5724,7 +5727,7 @@ window.addEventListener('load', function () {
 
             const locatePlannerCardData = GM_SuperValue.get("locatePlannerCard", false);
             if (!locatePlannerCardData) {
-                console.log("No locatePlannerCard Data found.");
+                //console.log("No locatePlannerCard Data found.");
                 notLookingTimes++;
                 setTimeout(() => {
                     locatePlannerCard();
@@ -5901,8 +5904,6 @@ window.addEventListener('load', function () {
         // Logic for adding button on planner card that will open the miner page
         let previousMinerID = "";
         function addOpenMinerButton() {
-            setTimeout(addOpenMinerButton, 100);
-
             // Check if taskEditor-dialog-header exists
             const taskDetailsTitleSection = document.querySelector('#taskDetailsTitleSectionId');
             if (!taskDetailsTitleSection) {
@@ -5914,7 +5915,8 @@ window.addEventListener('load', function () {
             let taskName = taskNameTextField.value;
             let serialNumber = taskName.split('_')[0];
             let minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
-            let minerID = minerSNLookup[serialNumber];
+            const minerData = minerSNLookup[serialNumber] || {};
+            let minerID = minerData.minerID;
             
 
             // Check if the button already exists
@@ -5979,27 +5981,81 @@ window.addEventListener('load', function () {
             button.addEventListener('click', () => {
                 window.open(minerLink, '_blank');
             });
-
         }
-        addOpenMinerButton();
+
+        // Logic for displaying the Container/Location ID on the planner cards
+        function addSlotIDsToPlannerCards() {
+            // Loops through all taskCard elements and adds the slot ID to the card
+            const taskCards = document.querySelectorAll('.taskCard');
+            taskCards.forEach(card => {
+                const taskName = card.getAttribute('aria-label');
+                const serialNumber = taskName.split('_')[0];
+                const minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
+                const minerData = minerSNLookup[serialNumber] || {
+                    slotID : "Unknown"
+                };
+                const slotID = minerData.slotID;
+
+                // Check if it already exists, if it does, check if the slotID is different, if so delete the old one
+                let leaveAlone = false;
+                const slotIDElement = card.querySelector('.slotID');
+                if (slotIDElement) {
+                    if(slotIDElement.textContent !== `Slot ID: ${slotID}`) {
+                        slotIDElement.remove();
+                    } else {
+                        leaveAlone = true;
+                    }
+                }
+                
+                // If the name does seem to be formatted with the serial number, then add the slot ID to the card
+                // Check if there are multiple _ in the taskName, and no spaces in the serial number
+                if (taskName.includes('_') && !serialNumber.includes(' ') && serialNumber.length > 5 && !leaveAlone) {
+                    // Add it above textContent 
+                    const taskCardContent = card.querySelector('.textContent');
+                    const slotIDElement = document.createElement('div');
+                    slotIDElement.classList.add('slotID');
+                    slotIDElement.style.fontSize = '0.8em';
+                    slotIDElement.style.color = 'lightgrey';
+                    if(slotID === "Unknown") {
+                        slotIDElement.style.color = 'grey';
+                    }
+                    slotIDElement.style.marginTop = '5px';
+                    slotIDElement.style.marginBottom = '0px';
+                    slotIDElement.style.marginLeft = '15px';
+                    slotIDElement.textContent = `Slot ID: ${slotID}`;
+                    taskCardContent.prepend(slotIDElement);
+                }
+            });
+        }
+        
+        // Set up addSlotIDsToPlannerCards(); to only run when new cards are added
+        const observer = new MutationObserver((mutationsList, observer) => {
+            addSlotIDsToPlannerCards();
+            addOpenMinerButton();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
 
         //--------------------------------------------------
 
         // Logic for automatically adding a task to the planner
 
         function setUpAutoCardLogic() {
+            console.log("Setting up Auto Card Logic");
             const taskName = GM_SuperValue.get("taskName", "");
             if (taskName === "") {
+                console.log("No taskName found.");
                 return;
             }
 
-            const taskNotes = GM_SuperValue.get("taskNotes", "");
-            if (taskNotes === "") {
+            const taskNotes = GM_SuperValue.get("taskNotes", false);
+            if (!taskNotes) {
+                console.log("No taskNotes found.");
                 return;
             }
 
             const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
             if (Object.keys(detailsData).length === 0) {
+                console.log("No detailsData found.");
                 return;
             }
 
