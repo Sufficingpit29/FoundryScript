@@ -2254,11 +2254,11 @@ window.addEventListener('load', function () {
                                         const isPastMinTime = timeSinceLastSoftReboot >= minTime;
                                         const notPastForgetTime = timeSinceLastSoftReboot < forgetTime;
 
-                                        // Loops through the softRebootsTimes and remove any that are more than 6 hours old
+                                        // Loops through the softRebootsTimes and remove any that are more than 12 hours old
                                         lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
                                         lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
                                         lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes.filter((time) => {
-                                            return (new Date() - new Date(time)) < 6*60*60*1000;
+                                            return (new Date() - new Date(time)) < 12*60*60*1000;
                                         });
 
                                         const numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
@@ -2276,7 +2276,7 @@ window.addEventListener('load', function () {
 
                                         let hardRebootRecommended = lastRebootTimes[minerID].hardRebootRecommended || false;
                                         const timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
-                                        hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 6*60*60*1000; // 6 hours
+                                        hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 12*60*60*1000; // 12 hours
 
                                         const manualHardReboot = lastRebootTimes[minerID].manualHardReboot || false;
                                         
@@ -2296,7 +2296,7 @@ window.addEventListener('load', function () {
                                             }
 
                                             if(moreThan3SoftReboots) {
-                                                rebootData[minerID].details.sub.push(`${numOfSoftReboots} Soft Reboots sent from this computer in the last 6 hours`);
+                                                rebootData[minerID].details.sub.push(`${numOfSoftReboots} Soft Reboots sent from this computer in the last 12 hours`);
                                             }
 
                                             if(!isOnline) {
