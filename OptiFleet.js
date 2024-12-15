@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.8.0
+// @version      4.8.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -5983,57 +5983,82 @@ window.addEventListener('load', function () {
             });
         }
 
+        // Add observe
+        const dialogObserver = new MutationObserver((mutationsList, observer) => {
+            addOpenMinerButton();
+        });
+
+        const dialogContainer = document.querySelector('#teamsApp');
+        if (dialogContainer) {
+            dialogObserver.observe(dialogContainer, { childList: true, subtree: true });
+        }
+
+        function addSlotIDToCard(card) {
+            const taskName = card.getAttribute('aria-label');
+            const serialNumber = taskName.split('_')[0];
+            const minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
+            const minerData = minerSNLookup[serialNumber] || {
+                slotID : "Unknown"
+            };
+            const slotID = minerData.slotID;
+
+            // Check if it already exists, if it does, check if the slotID is different, if so delete the old one
+            let leaveAlone = false;
+            const slotIDElement = card.querySelector('.slotID');
+            if (slotIDElement) {
+                if(slotIDElement.textContent !== `Slot ID: ${slotID}`) {
+                    slotIDElement.remove();
+                } else {
+                    leaveAlone = true;
+                }
+            }
+            
+            // If the name does seem to be formatted with the serial number, then add the slot ID to the card
+            // Check if there are multiple _ in the taskName, and no spaces in the serial number
+            if (taskName.includes('_') && !serialNumber.includes(' ') && serialNumber.length > 5 && !leaveAlone) {
+                // Add it above textContent 
+                const taskCardContent = card.querySelector('.textContent');
+                const slotIDElement = document.createElement('div');
+                slotIDElement.classList.add('slotID');
+                slotIDElement.style.fontSize = '0.8em';
+                slotIDElement.style.color = 'lightgrey';
+                if(slotID === "Unknown") {
+                    slotIDElement.style.color = 'grey';
+                }
+                slotIDElement.style.marginTop = '5px';
+                slotIDElement.style.marginBottom = '0px';
+                slotIDElement.style.marginLeft = '15px';
+                slotIDElement.textContent = `Slot ID: ${slotID}`;
+                taskCardContent.prepend(slotIDElement);
+            }
+        }
+
         // Logic for displaying the Container/Location ID on the planner cards
         function addSlotIDsToPlannerCards() {
             // Loops through all taskCard elements and adds the slot ID to the card
             const taskCards = document.querySelectorAll('.taskCard');
             taskCards.forEach(card => {
-                const taskName = card.getAttribute('aria-label');
-                const serialNumber = taskName.split('_')[0];
-                const minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
-                const minerData = minerSNLookup[serialNumber] || {
-                    slotID : "Unknown"
-                };
-                const slotID = minerData.slotID;
-
-                // Check if it already exists, if it does, check if the slotID is different, if so delete the old one
-                let leaveAlone = false;
-                const slotIDElement = card.querySelector('.slotID');
-                if (slotIDElement) {
-                    if(slotIDElement.textContent !== `Slot ID: ${slotID}`) {
-                        slotIDElement.remove();
-                    } else {
-                        leaveAlone = true;
-                    }
-                }
-                
-                // If the name does seem to be formatted with the serial number, then add the slot ID to the card
-                // Check if there are multiple _ in the taskName, and no spaces in the serial number
-                if (taskName.includes('_') && !serialNumber.includes(' ') && serialNumber.length > 5 && !leaveAlone) {
-                    // Add it above textContent 
-                    const taskCardContent = card.querySelector('.textContent');
-                    const slotIDElement = document.createElement('div');
-                    slotIDElement.classList.add('slotID');
-                    slotIDElement.style.fontSize = '0.8em';
-                    slotIDElement.style.color = 'lightgrey';
-                    if(slotID === "Unknown") {
-                        slotIDElement.style.color = 'grey';
-                    }
-                    slotIDElement.style.marginTop = '5px';
-                    slotIDElement.style.marginBottom = '0px';
-                    slotIDElement.style.marginLeft = '15px';
-                    slotIDElement.textContent = `Slot ID: ${slotID}`;
-                    taskCardContent.prepend(slotIDElement);
-                }
+                addSlotIDToCard(card);
             });
         }
         
-        // Set up addSlotIDsToPlannerCards(); to only run when new cards are added
-        const observer = new MutationObserver((mutationsList, observer) => {
-            addSlotIDsToPlannerCards();
-            addOpenMinerButton();
+        // Set up only run addSlotIDToCard when either a card is changed/added
+        const cardObserver = new MutationObserver((mutationsList, observer) => {
+            mutationsList.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    console.log("Node Added:", node);
+                    if (node.classList && node.classList.contains('taskBoardCard')) {
+                        let card = node.querySelector('.taskCard');
+                        addSlotIDToCard(card);
+                    } else if (node.classList && node.classList.contains('listboxGroup')) {
+                        addSlotIDsToPlannerCards();
+                    }
+                });
+            });
         });
-        observer.observe(document.body, { childList: true, subtree: true });
+        
+        // Observe the any changes in the planner
+        cardObserver.observe(document.body, { childList: true, subtree: true });
 
         //--------------------------------------------------
 
