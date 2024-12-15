@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.8.2
+// @version      4.8.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -62,10 +62,16 @@ window.addEventListener('load', function () {
 
 
     const urlLookupPlanner = {
-        "Bitmain": "https://tasks.office.com/foundrydigital.com/Home/Planner/#/plantaskboard?groupId=efbb33a0-825d-4dff-8384-a8b34b58b606&planId=wkeUw2vf1kqEkw6-XXaSR2UABn4T",
-        "Fortitude": "https://tasks.office.com/foundrydigital.com/Home/Planner/#/plantaskboard?groupId=efbb33a0-825d-4dff-8384-a8b34b58b606&planId=TbJIxx_byEKhuMp-C4tXLGUAD3Tb",
-        "RAMM": "https://tasks.office.com/foundrydigital.com/Home/Planner/#/plantaskboard?groupId=efbb33a0-825d-4dff-8384-a8b34b58b606&planId=FHYUYbYUfkqd2-oSKLk7xGUAHvRz"
+        "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
+        "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
+        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz?tid=6681433f-a30d-43cd-8881-8e964fa723ad"
     };
+
+    const urlLookupPlannerGrid = {
+        "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
+        "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
+        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad"
+    }
 
     //-----------------
 
@@ -479,6 +485,7 @@ window.addEventListener('load', function () {
 
         // Check if minden
         if( siteName.includes("Minden") ) {
+            // Miner issue notification every minute
             setInterval(function() {
                 minerIssueNotification()
             }, 60000);
@@ -715,10 +722,6 @@ window.addEventListener('load', function () {
             }
         }, 500);
 
-        function getMinerData(minerId) {
-            return allMinersLookup[minerId];
-        }
-
         // ------------------------------
 
         function parseMinerDetails(text) {
@@ -765,6 +768,47 @@ window.addEventListener('load', function () {
 
             return [cleanedText, minerDetails];
         }
+
+        // Open all the planner boards in the background for card data collection
+        function openAllPlannerCards() {
+            console.log("siteName", siteName);
+            if( !siteName.includes("Minden") ) {
+                return;
+            }
+
+            console.log("Running openAllPlannerCards");
+            let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
+
+            console.log("Opening all planner cards for data collection");
+
+            // Check if the iframes already exist
+            var iframes = document.querySelectorAll('.planner-iframe');
+            if (iframes.length > 0) {
+                return;
+            }
+
+            // Create the iframes for the planner boards
+            for(var key in urlLookupPlanner) {
+                var iframe = document.createElement('iframe');
+                iframe.className = 'planner-iframe';
+                iframe.src = urlLookupPlanner[key];
+                iframe.style.position = 'absolute';
+                iframe.style.top = '0';
+                iframe.style.left = '0';
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+                iframe.style.zIndex = '-1';
+                document.body.appendChild(iframe);
+            }
+        }
+        setTimeout(() => {
+            openAllPlannerCards();
+        }, 6000);
+
+        // 60s refresh
+        setInterval(function() {
+            openAllPlannerCards();
+        }, 60000);
 
         // Non-Bitcoin Hash Rate Logic
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
@@ -1602,6 +1646,64 @@ window.addEventListener('load', function () {
                     const minerList = document.querySelector('#minerList');
                     if (minerList) {
                         clearInterval(minerListCheck);
+                        
+                        let plannerCardsDataAll = {};
+                        function updatePlannerLink(plannerElement) {
+                            let serialNumber = plannerElement.getAttribute('data-serial-number');
+                            let cardData = plannerCardsDataAll[serialNumber];
+                            if (cardData) {
+                                let columnTitle = cardData.columnTitle;
+                                plannerElement.textContent = columnTitle;
+
+                                // Make it a clickable link
+                                plannerElement.style.cursor = 'pointer';
+                                plannerElement.onclick = function() {
+                                    GM_SuperValue.set("locatePlannerCard", {
+                                        serialNumber: serialNumber,
+                                        columnTitle: columnTitle
+                                    });
+
+                                    var url = cardData.url;
+                                    window.open(url, '_blank');
+                                };
+
+                                // Make it blue and underlined
+                                plannerElement.style.color = '#0078d4';
+                                plannerElement.style.textDecoration = 'underline';
+                            } else {
+                                if (Object.keys(plannerCardsDataAll).length === 0) {
+                                    plannerElement.textContent = 'Planner Card: Checking...';
+                                } else {
+                                    plannerElement.textContent = 'Planner Card: Not Found';
+                                }
+
+                                // Remove the clickable link stuff
+                                plannerElement.style.cursor = 'default';
+                                plannerElement.onclick = null;
+                                plannerElement.style.color = 'white';
+                                plannerElement.style.textDecoration = 'none';
+                            }
+                        }
+
+                        function updatePlannerCardsData() {
+                            for(var key in urlLookupPlanner) {
+                                let plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
+                                let collectDataSuperValueID = "plannerCardsData_" + plannerID;
+                                let data = GM_SuperValue.get(collectDataSuperValueID, {});
+                                // combine into plannerCardsData
+                                plannerCardsDataAll = {...plannerCardsDataAll, ...data};
+                            }
+
+                            // Loop through all planner-elements and update the text
+                            const plannerElements = document.querySelectorAll('.planner-element');
+                            for (const plannerElement of plannerElements) {
+                                updatePlannerLink(plannerElement);
+                            }
+                        }
+                        updatePlannerCardsData();
+                        const updateCardList = setInterval(() => {
+                            updatePlannerCardsData();
+                        }, 10000);
 
                         // Add mutation observer to the minerList
                         const observer = new MutationObserver(() => {
@@ -1610,6 +1712,7 @@ window.addEventListener('load', function () {
                             // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
                             for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
                                 const slotID = minerData['Slot ID'].textContent;
+                                const serialNumber = minerData['Serial Number'].textContent;
 
                                 // Check if slotID has minden in it
                                 if (!slotID.includes('Minden')) {
@@ -1627,6 +1730,17 @@ window.addEventListener('load', function () {
                                     var newElement = document.createElement('div');
                                     newElement.textContent = 'Breaker Number: ' + breakerNum;
                                     minerData['Slot ID'].appendChild(newElement);
+                                }
+
+                                // Add the Planner Link too
+                                if (!minerData['Serial Number'].querySelector('.planner-element')) {
+                                    var plannerElement = document.createElement('div');
+                                    plannerElement.textContent = 'Planner Card: Checking...';
+                                    plannerElement.classList.add('planner-element');
+                                    plannerElement.setAttribute('data-serial-number', serialNumber);
+                                    minerData['Serial Number'].appendChild(plannerElement);
+
+                                    updatePlannerLink(plannerElement);
                                 }
                             }
 
@@ -5200,10 +5314,7 @@ window.addEventListener('load', function () {
             // Logic for seeing if the miner exists in a planner board
             function checkIfInPlannerBoard() {
                 GM_SuperValue.set("locatePlannerCard", false);
-                GM_SuperValue.set('collectingPlannerCardData', false);
-                GM_SuperValue.set('plannerCardsData', {});
 
-                // Load the planner boards in the background to get the most recent data
                 var [cleanedText, minerDetails] = getMinerDetails();
                 console.log(minerDetails);
                 if(!minerDetails || !minerDetails['serialNumber'] || minerDetails['serialNumber'] == "--") {
@@ -5211,59 +5322,14 @@ window.addEventListener('load', function () {
                     return;
                 }
 
-                let failedToFind = false;
-
-                var owner = minerDetails['owner'].split(' ')[0];
                 var serialNumber = minerDetails['serialNumber'];
-                if(urlLookupPlanner[owner]) {
-                    // Open that website link in a hidden iframe
-                    var iframe = document.createElement('iframe');
-                    iframe.src = urlLookupPlanner[owner];
-                    iframe.style.position = 'absolute';
-                    iframe.style.top = '0';
-                    iframe.style.left = '0';
-                    iframe.style.width = '100%';
-                    iframe.style.height = '100%';
-                    iframe.style.zIndex = '-1';
-                    document.body.appendChild(iframe);
-                    setTimeout(() => {
-                        failedToFind = true;
-
-                        // close the iframe
-                        iframe.remove();
-                    }, 12000);
-                } else {
-                    console.log("Owner not in planner board list");
-
-                    // Open all the planner boards in the background
-                    for(var key in urlLookupPlanner) {
-                        var iframe = document.createElement('iframe');
-                        iframe.src = urlLookupPlanner[key];
-                        iframe.style.position = 'absolute';
-                        iframe.style.top = '0';
-                        iframe.style.left = '0';
-                        iframe.style.width = '100%';
-                        iframe.style.height = '100%';
-                        iframe.style.zIndex = '-1';
-                        document.body.appendChild(iframe);
-                    }
-                    setTimeout(() => {
-                        failedToFind = true;
-                    }, 20000);
-                }
 
                 // Cycle 3 dots
                 let cycle = 0;
                 let dots = "";
 
                 // Add a data box that will be updated with the GM_SuperValue of plannerCardsData
-                let stopTrying = false;
-                let hasLoaded = false;
                 let plannerDataBox = addDataBox("Planner Board", "Loading...", (mBox, h3, p) => {
-                    if(stopTrying) {
-                        return;
-                    }
-
                     // Dots cycle logic
                     cycle++;
                     if(cycle > 3) {
@@ -5273,20 +5339,20 @@ window.addEventListener('load', function () {
                         dots += ".";
                     }
 
-                    // Check if the data has loaded
-                    if(!hasLoaded) {
-                        hasLoaded = GM_SuperValue.get('collectingPlannerCardData', false);
-                        if(hasLoaded) {
-                            GM_SuperValue.set('collectingPlannerCardData', false);
-                            cycle = 0;
-                            dots = "";
-                        }
+                    // Check if the data has been found/displays the data
+                    let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
+                    let plannerCardsDataAll = {};
+                    for(var key in urlLookupPlanner) {
+                        let plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
+                        let collectDataSuperValueID = "plannerCardsData_" + plannerID;
+                        let data = GM_SuperValue.get(collectDataSuperValueID, {});
+                        // combine into plannerCardsData
+                        plannerCardsDataAll = {...plannerCardsDataAll, ...data};
                     }
 
-                    // Check if the data has been found/displays the data
-                    let plannerCardsData = GM_SuperValue.get('plannerCardsData', {})[serialNumber];
-                    if(plannerCardsData) {
-                        p.textContent = plannerCardsData.columnTitle;
+                    let cardData = plannerCardsDataAll[serialNumber];
+                    if(cardData) {
+                        p.textContent = cardData.columnTitle;
 
                         // Make it a clickable link
                         p.style.cursor = 'pointer';
@@ -5296,38 +5362,34 @@ window.addEventListener('load', function () {
                                 columnTitle: p.textContent
                             });
 
-                            var url = plannerCardsData.url;
+                            var url = cardData.url;
                             window.open(url, '_blank');
                         }
 
                         // Make it blue and underlined
                         p.style.color = '#0078d4';
                         p.style.textDecoration = 'underline';
+                    } else {
+                        // Make it not clickable
+                        p.style.cursor = 'default';
+                        p.style.color = 'white';
+                        p.style.textDecoration = 'none';
 
-                        stopTrying = true;
-                    } else if(failedToFind) {
-                        if(!hasLoaded) {
-                            p.textContent = "[Failed to Load]";
-
-                            // Add subtext below to 'Try enableing redirects and popups, then reload'
-                            const subText = document.createElement('p');
-                            subText.textContent = "Try enabling redirects and popups, then reload the page.";
-                            subText.style.color = '#70707b';
-                            subText.style.fontSize = '0.8em';
-                            subText.style.marginTop = '5px';
-                            mBox.appendChild(subText);
-                            
-                            stopTrying = true;
+                        // If the last collection time was less than 30 seconds ago, display "Checking" with dots
+                        if(Date.now() - lastCollectionTime < 30000) {
+                            p.textContent = "Checking" + dots;
                         } else {
                             p.textContent = "[Not Found]";
-                            
-                            stopTrying = true;
-                        }
-                    } else {
-                        if(!hasLoaded) {
-                            p.textContent = "Loading" + dots;
-                        } else {
-                            p.textContent = "Checking" + dots;
+
+                            // Add subtext if it doesn't exist already
+                            if(!mBox.querySelector('p')) {
+                                const subText = document.createElement('p');
+                                subText.textContent = "This isn't 100% accurate, it can take a bit to update.";
+                                subText.style.color = '#70707b';
+                                subText.style.fontSize = '0.8em';
+                                subText.style.marginTop = '5px';
+                                mBox.appendChild(subText);
+                            }
                         }
                     }
                 }, 1000);
@@ -5721,6 +5783,10 @@ window.addEventListener('load', function () {
         let foundCard = false;
         let notLookingTimes = 0;
         function locatePlannerCard() {
+            if (window !== window.top) {
+                return;
+            }
+
             if (foundCard || notLookingTimes > 20) {
                 return;
             }
@@ -5835,33 +5901,38 @@ window.addEventListener('load', function () {
 
         // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
         let scrollDownTimes = 0;
+        let setDate = false;
+        let plannerID = currentUrl.match(/plan\/([^?]+)/)[1].split('/')[0];
+        let collectDataSuperValueID = "plannerCardsData_" + plannerID;
+        let newPlannerData = {};
+        let currentPlannerCardData = GM_SuperValue.get(collectDataSuperValueID, {});
         function collectPlannerCardData() {
-
             // Check if this window is actually a iframe
             if (window === window.top) {
                 return;
             }
 
-            // Set the GM_SuperValue that we're looking for the planner card
-            GM_SuperValue.set("collectingPlannerCardData", true);
+            if (!setDate) {
+                
+                GM_SuperValue.set('plannerCardsDataTime', Date.now());
 
-            //console.log("Collecting Planner Card Data");
+                // 40 second timer to just set the newPlannerData to the GM_SuperValue, as a way to clear any old cards that are no longer there but might still be in the SuperValue
+                let resetInterval = setInterval(() => {
+                    GM_SuperValue.set('plannerCardsDataTime', Date.now());
+                    console.log("Setting newPlannerData to GM_SuperValue");
+                    console.log(newPlannerData);
+                    GM_SuperValue.set(collectDataSuperValueID, newPlannerData);
 
-            /*
-            // Get all ms-TooltipHost elements and check if Repair is contained in the text
-            const tooltipHosts = document.querySelectorAll('.ms-TooltipHost');
-            let isRepair = false;
-            tooltipHosts.forEach(host => {
-                const tooltipText = host.textContent.trim();
-                if (tooltipText.includes('Repair')) {
-                    isRepair = true;
-                }
-            });
-            
-            // If not repair, then don't do anything
-            if (!isRepair) {
-                return;
-            }*/
+                    // Reset all scrollable elements to the top/left
+                    const scrollableElements = document.querySelectorAll('.scrollable');
+                    scrollableElements.forEach(element => {
+                        element.scrollTop = 0;
+                        element.scrollLeft = 0;
+                    });
+                }, 30000);
+
+                setDate = true;
+            }
 
             // Find if columnsList exists
             const columnsList = document.querySelector('.columnsList');
@@ -5887,12 +5958,14 @@ window.addEventListener('load', function () {
                         const taskName = card.getAttribute('aria-label');
                         const serialNumber = taskName.split('_')[0];
                         //console.log("Miner Serial Number: ", serialNumber, "Column Title: ", columnTitle);
-                        let currentPlannerCardData = GM_SuperValue.get("plannerCardsData", {});
-                        currentPlannerCardData[serialNumber] = {
+                        let cardData = {
                             columnTitle: columnTitle,
                             url: window.location.href
                         };
-                        GM_SuperValue.set("plannerCardsData", currentPlannerCardData);
+                        newPlannerData[serialNumber] = cardData;
+                        currentPlannerCardData[serialNumber] = cardData;
+                        GM_SuperValue.set(collectDataSuperValueID, currentPlannerCardData);
+                        //console.log("Adding SN: ", serialNumber, " to column: ", columnTitle);
                     });
                 }
             });
@@ -6041,16 +6114,35 @@ window.addEventListener('load', function () {
                 addSlotIDToCard(card);
             });
         }
+
+        // Keep trying to add the slot ID to the cards until there are taskCards
+        function wonkyEdgeCaseFixForSlotIDs() {
+            const taskCards = document.querySelectorAll('.taskCard');
+            if (taskCards.length === 0) {
+                setTimeout(() => {
+                    wonkyEdgeCaseFixForSlotIDs();
+                }, 500);
+                return;
+            }
+
+            addSlotIDsToPlannerCards();
+        }
+        wonkyEdgeCaseFixForSlotIDs();
         
         // Set up only run addSlotIDToCard when either a card is changed/added
         const cardObserver = new MutationObserver((mutationsList, observer) => {
+            if (window !== window.top) {
+                return;
+            }
             mutationsList.forEach(mutation => {
                 mutation.addedNodes.forEach(node => {
-                    console.log("Node Added:", node);
+                    //console.log("Node Added: ", node);
                     if (node.classList && node.classList.contains('taskBoardCard')) {
                         let card = node.querySelector('.taskCard');
                         addSlotIDToCard(card);
-                    } else if (node.classList && (node.classList.contains('listboxGroup') || node.classList.contains('scrollable'))) {
+                    } else if(node.classList && (node.classList.contains('listboxGroup') || (node.classList.contains('scrollable') && node.getAttribute('data-can-drag-to-scroll') === 'true'))) {
+                        //console.log("ListboxGroup or Scrollable with data-can-drag-to-scroll=true added, adding Slot IDs to Planner Cards");
+                        //console.log(node);
                         addSlotIDsToPlannerCards();
                     }
                 });
@@ -7532,13 +7624,3 @@ window.addEventListener('load', function () {
         }, 800);
     }
 });
-
-// Should fix darkmode messing with the form...?
-if(currentUrl.includes("https://forms.office.com/pages/responsepage.aspx")) {
-    //Opt out of darkmode, insert <meta name="color-scheme" content="only light"> into head
-    const head = document.querySelector('head');
-    const meta = document.createElement('meta');
-    meta.setAttribute('name', 'color-scheme');
-    meta.setAttribute('content', 'only light');
-    head.appendChild(meta);
-}
