@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.8.1
+// @version      4.8.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -6050,7 +6050,7 @@ window.addEventListener('load', function () {
                     if (node.classList && node.classList.contains('taskBoardCard')) {
                         let card = node.querySelector('.taskCard');
                         addSlotIDToCard(card);
-                    } else if (node.classList && node.classList.contains('listboxGroup')) {
+                    } else if (node.classList && (node.classList.contains('listboxGroup') || node.classList.contains('scrollable'))) {
                         addSlotIDsToPlannerCards();
                     }
                 });
