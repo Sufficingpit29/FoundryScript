@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.9.5
+// @version      4.9.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -707,6 +707,7 @@ window.addEventListener('load', function () {
             }));
         }
 
+        let updatePlannerCardsData;
         
         getPlannerCardData = function() {
             // Open a pop out blank window
@@ -817,7 +818,6 @@ window.addEventListener('load', function () {
                 let currentTime = new Date().getTime();
                 let timeDiff = (currentTime - lastCollectionTime) / 1000;
 
-                
                 if(timeDiff < 10 && !collectionStarted) {
                     collectionStarted = true;
                 }
@@ -875,6 +875,7 @@ window.addEventListener('load', function () {
                     // Time out to close the window
                     setTimeout(() => {
                         plannerCardWindow.close();
+                        updatePlannerCardsData();
                     }, 1000);
                 }
                 lastLength = foundPlannerCards.length;
@@ -1783,7 +1784,8 @@ window.addEventListener('load', function () {
                             let currentTime = new Date().getTime();
                             let timeDiff = (currentTime - lastCollectionTime) / 1000;
                             const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
-                            if (timeDiff > plannerCardConfig.retrieveInterval) {
+                            const retrievalInterval = plannerCardConfig.retrieveInterval*60;
+                            if (timeDiff > retrievalInterval) {
                                 plannerElement.textContent = '';
 
                                 // Remove the clickable link stuff
@@ -1826,7 +1828,8 @@ window.addEventListener('load', function () {
                             }
                         }
 
-                        function updatePlannerCardsData() {
+                        updatePlannerCardsData = function() {
+                            console.log("Updating Planner Cards Data");
                             for(var key in urlLookupPlanner) {
                                 let plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
                                 let collectDataSuperValueID = "plannerCardsData_" + plannerID;
@@ -5034,7 +5037,7 @@ window.addEventListener('load', function () {
                             if(plannerCardConfig.autoRetrieve) {
                                 plannerCardRefreshInterval = setInterval(() => {
                                     getPlannerCardData();
-                                }, plannerCardConfig.retrieveInterval * 1000);
+                                }, plannerCardConfig.retrieveInterval * 60 * 1000);
                             }
                         }
 
@@ -5729,7 +5732,6 @@ window.addEventListener('load', function () {
                     }
 
                     // Check if the data has been found/displays the data
-                    let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
                     let plannerCardsDataAll = {};
                     for(var key in urlLookupPlanner) {
                         let plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
