@@ -1,11 +1,7 @@
-//integrate some of the error checking into auto reboot?
-
-
-
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.8.7
+// @version      4.9.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -711,6 +707,180 @@ window.addEventListener('load', function () {
             }));
         }
 
+        
+        getPlannerCardData = function() {
+            // Open a pop out blank window
+            const plannerCardWindow = window.open('', '_blank', 'width=800,height=600');
+            plannerCardWindow.document.title = 'Planner Cards Data';
+
+            // Create a nice looking dark theme for saying it's loading
+            const loadingStyle = plannerCardWindow.document.createElement('style');
+            loadingStyle.textContent = `
+                body {
+                    background-color: #333;
+                    color: #fff;
+                    font-family: Arial, sans-serif;
+                    font-size: 16px;
+                    padding: 20px;
+                    margin: 0;
+                }
+            `;
+            plannerCardWindow.document.head.appendChild(loadingStyle);
+
+            // Cover the entire window with a dark overlay
+            const overlay = plannerCardWindow.document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: #333;
+            `;
+            plannerCardWindow.document.body.appendChild(overlay);
+
+            // Create a loading text element
+            const loadingText = plannerCardWindow.document.createElement('div');
+            loadingText.textContent = 'Getting Planner Cards Data...';
+            plannerCardWindow.document.body.appendChild(loadingText);
+
+            // Create a loading spinner element
+            const loadingSpinner = plannerCardWindow.document.createElement('div');
+            loadingSpinner.style.cssText = `
+                border: 6px solid #f3f3f3;
+                border-top: 6px solid #3498db;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 2s linear infinite;
+                margin: 0 auto;
+            `;
+            plannerCardWindow.document.body.appendChild(loadingSpinner);
+
+            // Create a style for the spinner animation
+            const spinnerStyle = plannerCardWindow.document.createElement('style');
+            spinnerStyle.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                ';
+            `;
+            plannerCardWindow.document.head.appendChild(spinnerStyle);
+
+            // Loops through the planner card URLs and open them
+            console.log("Opening all planner cards for data collection");
+
+            // Check if the iframes already exist
+            var iframes = plannerCardWindow.document.querySelectorAll('.planner-iframe');
+            if (iframes.length > 0) {
+                return;
+            }
+
+            // Create the iframes for the planner boards
+            for(var key in urlLookupPlanner) {
+                var iframe = plannerCardWindow.document.createElement('iframe');
+                iframe.className = 'planner-iframe';
+                iframe.src = urlLookupPlanner[key];
+                iframe.style.position = 'absolute';
+                iframe.style.top = '0';
+                iframe.style.left = '0';
+                iframe.style.width = '100%';
+                iframe.style.height = '100%';
+                iframe.style.zIndex = '-1';
+                plannerCardWindow.document.body.appendChild(iframe);
+            }
+
+            // 'Log' element showing what miner cards have been located to the user
+            const logElement = plannerCardWindow.document.createElement('div');
+            logElement.style.cssText = `
+                position: relative;
+                top: 0;
+                left: 0;
+                width: 100%;
+                padding: 10px;
+                background-color: #333;
+                color: #fff;
+                font-family: Arial, sans-serif;
+                font-size: 16px;
+                z-index: 999999;
+                white-space: pre-wrap;
+            `;
+            logElement.textContent = 'Located Planner Cards:';
+            plannerCardWindow.document.body.appendChild(logElement);
+
+            // Inteval to check the data loaded
+            let foundPlannerCards = [];
+            let lastLength = 0;
+            let collectionStarted = false;
+            const checkDataInterval = setInterval(() => {
+                let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
+                let currentTime = new Date().getTime();
+                let timeDiff = (currentTime - lastCollectionTime) / 1000;
+
+                
+                if(timeDiff < 10 && !collectionStarted) {
+                    collectionStarted = true;
+                }
+
+                if(!collectionStarted) {
+                    return;
+                }
+
+                let plannerCardsDataAll = {};
+                for(var key in urlLookupPlanner) {
+                    let plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
+                    let collectDataSuperValueID = "plannerCardsData_" + plannerID;
+                    let data = GM_SuperValue.get(collectDataSuperValueID, {});
+                    // combine into plannerCardsData
+                    plannerCardsDataAll = {...plannerCardsDataAll, ...data};
+                }
+
+                // Loop through the planner cards and add them to the log if they haven't been added yet
+                for(var key in plannerCardsDataAll) {
+                    // print the data in the value
+                    if(!foundPlannerCards.includes(key)) {
+                        foundPlannerCards.push(key);
+                        logElement.textContent += '\n  Miner: ' + key + ' card located. \n   -In column: ' + plannerCardsDataAll[key].columnTitle;
+                    }
+                }
+
+                // If the length of the foundPlannerCards array hasn't changed in the last 5 seconds, then we can assume all the data has been collected
+                if(foundPlannerCards.length === lastLength) {
+                    clearInterval(checkDataInterval);
+                    logElement.textContent += '\n\nAll planner cards located. Data collection complete.';
+                    // Remove the loading spinner and text
+                    loadingText.remove();
+                    loadingSpinner.remove();
+
+                    // Put a 'Finished' in big green letters at top
+                    const finishedText = plannerCardWindow.document.createElement('div');
+                    finishedText.textContent = 'Finished';
+                    finishedText.style.cssText = `
+                        position: relative;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        padding: 10px;
+                        background-color: #4CAF50;
+                        color: #fff;
+                        font-family: Arial, sans-serif;
+                        font-size: 24px;
+                        z-index: 999999;
+                        text-align: center;
+                    `;
+
+                    // Put before logElement
+                    logElement.before(finishedText);
+
+                    // Time out to close the window
+                    setTimeout(() => {
+                        plannerCardWindow.close();
+                    }, 1000);
+                }
+                lastLength = foundPlannerCards.length;
+            }, 1000);
+        }
+
         setInterval(function() {
             // Constantly checks if there siteId or companyId changes
             if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
@@ -768,47 +938,6 @@ window.addEventListener('load', function () {
 
             return [cleanedText, minerDetails];
         }
-
-        // Open all the planner boards in the background for card data collection
-        function openAllPlannerCards() {
-            console.log("siteName", siteName);
-            if( !siteName.includes("Minden") ) {
-                return;
-            }
-
-            console.log("Running openAllPlannerCards");
-            let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
-
-            console.log("Opening all planner cards for data collection");
-
-            // Check if the iframes already exist
-            var iframes = document.querySelectorAll('.planner-iframe');
-            if (iframes.length > 0) {
-                return;
-            }
-
-            // Create the iframes for the planner boards
-            for(var key in urlLookupPlanner) {
-                var iframe = document.createElement('iframe');
-                iframe.className = 'planner-iframe';
-                iframe.src = urlLookupPlanner[key];
-                iframe.style.position = 'absolute';
-                iframe.style.top = '0';
-                iframe.style.left = '0';
-                iframe.style.width = '100%';
-                iframe.style.height = '100%';
-                iframe.style.zIndex = '-1';
-                document.body.appendChild(iframe);
-            }
-        }
-        setTimeout(() => {
-            openAllPlannerCards();
-        }, 6000);
-
-        // 60s refresh
-        setInterval(function() {
-            openAllPlannerCards();
-        }, 60000);
 
         // Non-Bitcoin Hash Rate Logic
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
@@ -1270,9 +1399,9 @@ window.addEventListener('load', function () {
                             </div>
                             <div style="display: flex; justify-content: space-between;">
                                 <div>
-                                    <button type="button" id="submitBtn1" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Sharepoint & Planner</button>
-                                    <button type="button" id="submitBtn2" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Only Planner</button>
-                                    <button type="button" id="cancelBtn" style="background-color: #f44336; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Cancel</button>
+                                    <button type="button" id="submitBtn1" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Sharepoint</button>
+                                    <button type="button" id="submitBtn2" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Planner</button>
+                                    <button type="button" id="cancelBtn" style="background-color: #f44336; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Close</button>
                                 </div>
                                 <button type="button" id="linksBtn" style="background-color: #4287f5; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Edit Links</button>
                             </div>
@@ -1326,7 +1455,7 @@ window.addEventListener('load', function () {
                     const skuID = document.getElementById("skuID").value;
 
                     // Remove the popup element
-                    popupElement.remove();
+                    //popupElement.remove();
 
                     // Copy the details for Quick Sharepoint & Planner and set the taskName and taskNotes
                     copyAllDetailsForSharepoint(onlyPlanner, issue, log, type, hbSerialNumber, hbModel, hbVersion, chainIssue, binNumber, skuID);
@@ -1649,6 +1778,22 @@ window.addEventListener('load', function () {
                         
                         let plannerCardsDataAll = {};
                         function updatePlannerLink(plannerElement) {
+                            
+                            let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
+                            let currentTime = new Date().getTime();
+                            let timeDiff = (currentTime - lastCollectionTime) / 1000;
+                            const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
+                            if (timeDiff > plannerCardConfig.retrieveInterval) {
+                                plannerElement.textContent = '';
+
+                                // Remove the clickable link stuff
+                                plannerElement.style.cursor = 'default';
+                                plannerElement.onclick = null;
+                                plannerElement.style.color = 'white';
+                                plannerElement.style.textDecoration = 'none';
+                                return;
+                            }
+
                             let serialNumber = plannerElement.getAttribute('data-serial-number');
                             let cardData = plannerCardsDataAll[serialNumber];
                             if (cardData) {
@@ -1671,11 +1816,7 @@ window.addEventListener('load', function () {
                                 plannerElement.style.color = '#0078d4';
                                 plannerElement.style.textDecoration = 'underline';
                             } else {
-                                if (Object.keys(plannerCardsDataAll).length === 0) {
-                                    plannerElement.textContent = 'Planner Card: Checking...';
-                                } else {
-                                    plannerElement.textContent = 'Planner Card: Not Found';
-                                }
+                                plannerElement.textContent = 'Planner Card: Not Found';
 
                                 // Remove the clickable link stuff
                                 plannerElement.style.cursor = 'default';
@@ -4847,7 +4988,214 @@ window.addEventListener('load', function () {
                         };
 
                         // Add the full auto reboot button to the right of the dropdown
-                        actionsDropdown.before(fullAutoRebootButton);
+                        //actionsDropdown.before(fullAutoRebootButton);
+
+                        // Create a 'full' auto reboot button to the right of the dropdown
+                        const updatePlannerCardsDropdown = document.createElement('div');
+                        updatePlannerCardsDropdown.classList.add('op-dropdown');
+                        updatePlannerCardsDropdown.style.display = 'inline-block';
+                        updatePlannerCardsDropdown.innerHTML = `
+                            <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('updatePlannerCardsDropdown'); return false;">
+                                Refresh Planner Cards
+                                <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                            </button>
+                            <div id="updatePlannerCardsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
+                                <div class="m-menu">
+                                    <div class="m-menu-item" onclick="getPlannerCardData()">
+                                        Retrieve Planner Cards Data
+                                    </div>
+                                    <div class="m-menu-item" onclick="openPlannerCardDataConfig()">
+                                        Edit Config
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+
+                        // Add the update planner cards button to the right of the dropdown
+                        actionsDropdown.before(updatePlannerCardsDropdown);
+
+                        let plannerCardRefreshInterval;
+                        let firstLoad = true;
+                        function setUpPlannerCardRefresh() {
+                            const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
+                            
+                            // If first load and openOnLoad is enabled, open the planner cards
+                            if(firstLoad && plannerCardConfig.openOnLoad) {
+                                getPlannerCardData();
+                                firstLoad = false;
+                            }
+
+                            // Disable the refresh interval if it exists
+                            if(plannerCardRefreshInterval) {
+                                clearInterval(plannerCardRefreshInterval);
+                            }
+                            
+                            // If the autoRetrieve is enabled, set the interval to refresh the planner cards
+                            if(plannerCardConfig.autoRetrieve) {
+                                plannerCardRefreshInterval = setInterval(() => {
+                                    getPlannerCardData();
+                                }, plannerCardConfig.retrieveInterval * 1000);
+                            }
+                        }
+
+                        openPlannerCardDataConfig = function() {
+                            // Open a small overlay menu for editing if the user wants auto retrieval of planner data and how often
+                            const popup = document.createElement('div');
+                            popup.style.cssText = `
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                width: 100%;
+                                height: 100%;
+                                background-color: rgba(0, 0, 0, 0.5);
+                                z-index: 1000;
+                                display: flex;
+                                justify-content: center;
+                                align-items: center;
+                            `;
+                            document.body.appendChild(popup);
+
+                            const popupContent = document.createElement('div');
+                            popupContent.style.cssText = `
+                                padding: 20px;
+                                background-color: #333;
+                                border-radius: 10px;
+                            `;
+                            popup.appendChild(popupContent);
+
+                            const popupTitle = document.createElement('h2');
+                            popupTitle.textContent = 'Planner Card Data Config';
+                            popupTitle.style.color = 'white';
+                            popupTitle.style.marginBottom = '10px';
+                            popupContent.appendChild(popupTitle);
+
+                            const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
+                            
+                            // Auto retrieve checkbox
+                            const autoRetrieveContainer = document.createElement('div');
+                            autoRetrieveContainer.style.display = 'flex';
+                            autoRetrieveContainer.style.alignItems = 'center';
+
+                            const autoRetrieveCheckbox = document.createElement('input');
+                            autoRetrieveCheckbox.type = 'checkbox';
+                            autoRetrieveCheckbox.checked = plannerCardConfig.autoRetrieve;
+                            autoRetrieveCheckbox.style.marginBottom = '10px';
+                            autoRetrieveCheckbox.style.width = '20px'; // Set the width smaller
+                            autoRetrieveCheckbox.style.height = '20px'; // Set the height smaller
+                            autoRetrieveCheckbox.style.marginRight = '10px'; // Add some space to the right
+
+                            const autoRetrieveLabelText = document.createElement('span');
+                            autoRetrieveLabelText.innerText = 'Auto Retrieve';
+                            autoRetrieveLabelText.style.color = '#fff'; // Set text color to white for better contrast
+                            autoRetrieveLabelText.style.marginBottom = '10px';
+
+                            autoRetrieveContainer.appendChild(autoRetrieveCheckbox);
+                            autoRetrieveContainer.appendChild(autoRetrieveLabelText);
+                            popupContent.appendChild(autoRetrieveContainer);
+
+                            // Open on load checkbox
+                            const openOnLoadContainer = document.createElement('div');
+                            openOnLoadContainer.style.display = 'flex';
+                            openOnLoadContainer.style.alignItems = 'center';
+
+                            const openOnLoadCheckbox = document.createElement('input');
+                            openOnLoadCheckbox.type = 'checkbox';
+                            openOnLoadCheckbox.checked = plannerCardConfig.openOnLoad;
+                            openOnLoadCheckbox.style.marginBottom = '10px';
+                            openOnLoadCheckbox.style.width = '20px'; // Set the width smaller
+                            openOnLoadCheckbox.style.height = '20px'; // Set the height smaller
+                            openOnLoadCheckbox.style.marginRight = '10px'; // Add some space to the right
+
+                            const openOnLoadLabelText = document.createElement('span');
+                            openOnLoadLabelText.innerText = 'Open on Load';
+                            openOnLoadLabelText.style.color = '#fff'; // Set text color to white for better contrast
+                            openOnLoadLabelText.style.marginBottom = '10px';
+
+                            openOnLoadContainer.appendChild(openOnLoadCheckbox);
+                            openOnLoadContainer.appendChild(openOnLoadLabelText);
+                            popupContent.appendChild(openOnLoadContainer);
+
+                            // Retrieve interval input
+                            const retrieveIntervalLabel = document.createElement('label');
+                            retrieveIntervalLabel.textContent = 'Retrieve Interval (minutes)';
+                            retrieveIntervalLabel.style.color = 'white';
+                            retrieveIntervalLabel.style.marginBottom = '10px';
+                            popupContent.appendChild(retrieveIntervalLabel);
+                            
+                            const retrieveIntervalInput = document.createElement('input');
+                            retrieveIntervalInput.type = 'number';
+                            retrieveIntervalInput.min = 1;
+                            retrieveIntervalInput.value = plannerCardConfig.retrieveInterval;
+                            retrieveIntervalInput.style.width = '100%';
+                            retrieveIntervalInput.style.padding = '10px';
+                            retrieveIntervalInput.style.marginBottom = '10px';
+                            retrieveIntervalInput.style.color = 'white';
+                            popupContent.appendChild(retrieveIntervalInput);
+
+                            const buttonsDiv = document.createElement('div');
+                            buttonsDiv.style.display = 'flex';
+                            buttonsDiv.style.justifyContent = 'space-between';
+                            popupContent.appendChild(buttonsDiv);
+                            
+                            const submitButton = document.createElement('button');
+                            submitButton.textContent = 'Save';
+                            submitButton.style.padding = '10px 20px';
+                            submitButton.style.backgroundColor = '#4CAF50';
+                            submitButton.style.color = 'white';
+                            submitButton.style.border = 'none';
+                            submitButton.style.cursor = 'pointer';
+                            submitButton.style.borderRadius = '5px';
+                            submitButton.style.transition = 'background-color 0.3s';
+                            submitButton.style.display = 'block';
+                            submitButton.style.marginTop = '10px';
+                            buttonsDiv.appendChild(submitButton);
+
+                            submitButton.addEventListener('mouseenter', function() {
+                                this.style.backgroundColor = '#45a049';
+                            });
+
+                            submitButton.addEventListener('mouseleave', function() {
+                                this.style.backgroundColor = '#4CAF50';
+                            });
+
+                            submitButton.onclick = function() {
+                                const autoRetrieve = autoRetrieveCheckbox.checked;
+                                const openOnLoad = openOnLoadCheckbox.checked;
+                                const retrieveInterval = retrieveIntervalInput.value;
+                                GM_SuperValue.set('plannerCardConfig', {autoRetrieve: autoRetrieve, openOnLoad: openOnLoad, retrieveInterval: retrieveInterval});
+                                popup.remove();
+
+                                setUpPlannerCardRefresh();
+                            }
+
+                            const closeButton = document.createElement('button');
+                            closeButton.textContent = 'Cancel';
+                            closeButton.style.padding = '10px 20px';
+                            closeButton.style.backgroundColor = '#ff5e57';
+                            closeButton.style.color = 'white';
+                            closeButton.style.border = 'none';
+                            closeButton.style.cursor = 'pointer';
+                            closeButton.style.borderRadius = '5px';
+                            closeButton.style.transition = 'background-color 0.3s';
+                            closeButton.style.display = 'block';
+                            closeButton.style.marginTop = '10px';
+                            closeButton.style.marginLeft = '10px';
+                            buttonsDiv.appendChild(closeButton);
+
+                            closeButton.addEventListener('mouseenter', function() {
+                                this.style.backgroundColor = '#ff3832';
+                            });
+
+                            closeButton.addEventListener('mouseleave', function() {
+                                this.style.backgroundColor = '#ff5e57';
+                            });
+
+                            closeButton.onclick = function() {
+                                popup.remove();
+                            }
+                        }
+                        
+                        setUpPlannerCardRefresh();
                     }
 
                     function DetectFrozenMiners() {
@@ -5330,6 +5678,47 @@ window.addEventListener('load', function () {
 
                 // Add a data box that will be updated with the GM_SuperValue of plannerCardsData
                 let plannerDataBox = addDataBox("Planner Board", "Loading...", (mBox, h3, p) => {
+                    // Put h3 as a div, then add a 'refresh' button to the right of it, if we haven't already
+                    if(!mBox.querySelector('.refresh-button-container')) {
+                        const div = document.createElement('div');
+                        div.classList.add('refresh-button-container');
+                        div.style.cssText = `
+                            display: flex;
+                            justify-content: space-between;
+                        `;
+                        h3.style.display = 'inline-block';
+                        div.appendChild(h3);
+
+                        const refreshButton = document.createElement('button');
+                        refreshButton.textContent = 'Refresh';
+                        refreshButton.style.padding = '5px 5px';
+                        refreshButton.style.backgroundColor = '#0078d4';
+                        refreshButton.style.color = 'white';
+                        refreshButton.style.border = 'none';
+                        refreshButton.style.cursor = 'pointer';
+                        refreshButton.style.borderRadius = '5px';
+                        refreshButton.style.transition = 'background-color 0.3s';
+                        refreshButton.style.display = 'block';
+                        refreshButton.style.marginTop = '0px';
+                        refreshButton.style.marginRight = '0px';
+                        div.appendChild(refreshButton);
+
+                        refreshButton.addEventListener('mouseenter', function() {
+                            this.style.backgroundColor = '#005a9e';
+                        });
+
+                        refreshButton.addEventListener('mouseleave', function() {
+                            this.style.backgroundColor = '#0078d4';
+                        });
+
+                        refreshButton.onclick = function() {
+                            event.preventDefault();
+                            getPlannerCardData();
+                        }
+
+                        mBox.insertBefore(div, mBox.firstChild);
+                    }
+
                     // Dots cycle logic
                     cycle++;
                     if(cycle > 3) {
@@ -5374,22 +5763,16 @@ window.addEventListener('load', function () {
                         p.style.cursor = 'default';
                         p.style.color = 'white';
                         p.style.textDecoration = 'none';
+                        p.textContent = "[Not Found]";
 
-                        // If the last collection time was less than 30 seconds ago, display "Checking" with dots
-                        if(Date.now() - lastCollectionTime < 30000) {
-                            p.textContent = "Checking" + dots;
-                        } else {
-                            p.textContent = "[Not Found]";
-
-                            // Add subtext if it doesn't exist already
-                            if(!mBox.querySelector('p')) {
-                                const subText = document.createElement('p');
-                                subText.textContent = "This isn't 100% accurate, it can take a bit to update.";
-                                subText.style.color = '#70707b';
-                                subText.style.fontSize = '0.8em';
-                                subText.style.marginTop = '5px';
-                                mBox.appendChild(subText);
-                            }
+                        // Add subtext if it doesn't exist already
+                        if(!mBox.querySelector('p')) {
+                            const subText = document.createElement('p');
+                            subText.textContent = "This isn't 100% accurate, it can take a bit to update.";
+                            subText.style.color = '#70707b';
+                            subText.style.fontSize = '0.8em';
+                            subText.style.marginTop = '5px';
+                            mBox.appendChild(subText);
                         }
                     }
                 }, 1000);
@@ -5645,9 +6028,6 @@ window.addEventListener('load', function () {
                     <p>Model: ${detailsData['model']}</p>
                     <p>Serial Number: ${detailsData['serialNumber']}</p>
                     <p>Slot ID: ${detailsData['locationID']}</p>
-                    <button style="background-color: green; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">
-                    <a href="${plannerUrl}" style="color: #fff; text-decoration: none;">Go to Planner</a>
-                    </button>
                     <button id="cancelButton" style="background-color: red; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
                     Cancel
                     </button>
@@ -5735,6 +6115,10 @@ window.addEventListener('load', function () {
                             let excelOpened = GM_SuperValue.get('openedExcel', false);
                             taskName = GM_SuperValue.get("taskName", "");
                             if (taskName === "" || excelOpened) {
+                                GM_SuperValue.set('taskName', '');
+                                GM_SuperValue.set('taskNotes', '');
+                                GM_SuperValue.set('taskComment', '');
+                                GM_SuperValue.set('detailsData', {});
                                 window.close();
                             }
                         }, 100);
@@ -5974,6 +6358,10 @@ window.addEventListener('load', function () {
         }
         collectPlannerCardData();
 
+
+        
+        let minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
+
         // Logic for adding button on planner card that will open the miner page
         let previousMinerID = "";
         function addOpenMinerButton() {
@@ -5987,7 +6375,6 @@ window.addEventListener('load', function () {
             let taskNameTextField = document.querySelector('input[placeholder="Task name"]');
             let taskName = taskNameTextField.value;
             let serialNumber = taskName.split('_')[0];
-            let minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
             const minerData = minerSNLookup[serialNumber] || {};
             let minerID = minerData.minerID;
             
@@ -6069,7 +6456,6 @@ window.addEventListener('load', function () {
         function addSlotIDToCard(card) {
             const taskName = card.getAttribute('aria-label');
             const serialNumber = taskName.split('_')[0];
-            const minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
             const minerData = minerSNLookup[serialNumber] || {
                 slotID : "Unknown"
             };
