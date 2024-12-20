@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.9.6
+// @version      4.9.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -707,16 +707,15 @@ window.addEventListener('load', function () {
             }));
         }
 
-        let updatePlannerCardsData;
+        let updatePlannerCardsData = function() {}; // Placeholder function for the actual function that will be created later
         
         getPlannerCardData = function() {
             // Open a pop out blank window
             const plannerCardWindow = window.open('', '_blank', 'width=800,height=600');
             plannerCardWindow.document.title = 'Planner Cards Data';
-
+        
             // Create a nice looking dark theme for saying it's loading
-            const loadingStyle = plannerCardWindow.document.createElement('style');
-            loadingStyle.textContent = `
+            const style = `
                 body {
                     background-color: #333;
                     color: #fff;
@@ -724,154 +723,152 @@ window.addEventListener('load', function () {
                     font-size: 16px;
                     padding: 20px;
                     margin: 0;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
                 }
-            `;
-            plannerCardWindow.document.head.appendChild(loadingStyle);
-
-            // Cover the entire window with a dark overlay
-            const overlay = plannerCardWindow.document.createElement('div');
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: #333;
-            `;
-            plannerCardWindow.document.body.appendChild(overlay);
-
-            // Create a loading text element
-            const loadingText = plannerCardWindow.document.createElement('div');
-            loadingText.textContent = 'Getting Planner Cards Data...';
-            plannerCardWindow.document.body.appendChild(loadingText);
-
-            // Create a loading spinner element
-            const loadingSpinner = plannerCardWindow.document.createElement('div');
-            loadingSpinner.style.cssText = `
-                border: 6px solid #f3f3f3;
-                border-top: 6px solid #3498db;
-                border-radius: 50%;
-                width: 40px;
-                height: 40px;
-                animation: spin 2s linear infinite;
-                margin: 0 auto;
-            `;
-            plannerCardWindow.document.body.appendChild(loadingSpinner);
-
-            // Create a style for the spinner animation
-            const spinnerStyle = plannerCardWindow.document.createElement('style');
-            spinnerStyle.textContent = `
+                .overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: #333;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .spinner {
+                    border: 6px solid #f3f3f3;
+                    border-top: 6px solid #3498db;
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    animation: spin 2s linear infinite;
+                    margin-top: 20px;
+                }
                 @keyframes spin {
                     0% { transform: rotate(0deg); }
                     100% { transform: rotate(360deg); }
-                ';
+                }
+                .log {
+                    position: relative;
+                    width: 100%;
+                    padding: 10px;
+                    background-color: #333;
+                    color: #fff;
+                    font-family: Arial, sans-serif;
+                    font-size: 16px;
+                    z-index: 999999;
+                    white-space: pre-wrap;
+                    margin-top: 20px;
+                }
+                .finished {
+                    position: relative;
+                    width: 100%;
+                    padding: 10px;
+                    background-color: #4CAF50;
+                    color: #fff;
+                    font-family: Arial, sans-serif;
+                    font-size: 24px;
+                    text-align: center;
+                    margin-top: 20px;
+                }
             `;
-            plannerCardWindow.document.head.appendChild(spinnerStyle);
-
-            // Loops through the planner card URLs and open them
-            console.log("Opening all planner cards for data collection");
-
+            const styleElement = plannerCardWindow.document.createElement('style');
+            styleElement.textContent = style;
+            plannerCardWindow.document.head.appendChild(styleElement);
+        
+            // Create overlay with loading text and spinner
+            const overlay = plannerCardWindow.document.createElement('div');
+            overlay.className = 'overlay';
+            const loadingText = plannerCardWindow.document.createElement('div');
+            loadingText.textContent = 'Getting Planner Cards Data...';
+            const loadingSpinner = plannerCardWindow.document.createElement('div');
+            loadingSpinner.className = 'spinner';
+            overlay.appendChild(loadingText);
+            overlay.appendChild(loadingSpinner);
+            plannerCardWindow.document.body.appendChild(overlay);
+        
             // Check if the iframes already exist
-            var iframes = plannerCardWindow.document.querySelectorAll('.planner-iframe');
-            if (iframes.length > 0) {
+            if (plannerCardWindow.document.querySelectorAll('.planner-iframe').length > 0) {
                 return;
             }
-
+        
             // Create the iframes for the planner boards
-            for(var key in urlLookupPlanner) {
-                var iframe = plannerCardWindow.document.createElement('iframe');
+            for (const key in urlLookupPlanner) {
+                const iframe = plannerCardWindow.document.createElement('iframe');
                 iframe.className = 'planner-iframe';
                 iframe.src = urlLookupPlanner[key];
-                iframe.style.position = 'absolute';
-                iframe.style.top = '0';
-                iframe.style.left = '0';
-                iframe.style.width = '100%';
-                iframe.style.height = '100%';
-                iframe.style.zIndex = '-1';
+                iframe.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: -1;
+                `;
                 plannerCardWindow.document.body.appendChild(iframe);
             }
-
-            // 'Log' element showing what miner cards have been located to the user
+        
+            // Log element showing what planner cards have been located
             const logElement = plannerCardWindow.document.createElement('div');
-            logElement.style.cssText = `
-                position: relative;
-                top: 0;
-                left: 0;
-                width: 100%;
-                padding: 10px;
-                background-color: #333;
-                color: #fff;
-                font-family: Arial, sans-serif;
-                font-size: 16px;
-                z-index: 999999;
-                white-space: pre-wrap;
-            `;
+            logElement.className = 'log';
             logElement.textContent = 'Located Planner Cards:';
             plannerCardWindow.document.body.appendChild(logElement);
-
-            // Inteval to check the data loaded
+        
+            // Interval to check the data loaded
             let foundPlannerCards = [];
             let lastLength = 0;
             let collectionStarted = false;
             const checkDataInterval = setInterval(() => {
-                let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
-                let currentTime = new Date().getTime();
-                let timeDiff = (currentTime - lastCollectionTime) / 1000;
-
-                if(timeDiff < 10 && !collectionStarted) {
+                const lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
+                const currentTime = new Date().getTime();
+                const timeDiff = (currentTime - lastCollectionTime) / 1000;
+        
+                if (timeDiff < 10 && !collectionStarted) {
                     collectionStarted = true;
                 }
-
-                if(!collectionStarted) {
+        
+                if (!collectionStarted) {
                     return;
                 }
-
+        
                 let plannerCardsDataAll = {};
-                for(var key in urlLookupPlanner) {
-                    let plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
-                    let collectDataSuperValueID = "plannerCardsData_" + plannerID;
-                    let data = GM_SuperValue.get(collectDataSuperValueID, {});
-                    // combine into plannerCardsData
-                    plannerCardsDataAll = {...plannerCardsDataAll, ...data};
+                for (const key in urlLookupPlanner) {
+                    const plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
+                    const collectDataSuperValueID = "plannerCardsData_" + plannerID;
+                    const data = GM_SuperValue.get(collectDataSuperValueID, {});
+                    plannerCardsDataAll = { ...plannerCardsDataAll, ...data };
                 }
-
+        
                 // Loop through the planner cards and add them to the log if they haven't been added yet
-                for(var key in plannerCardsDataAll) {
-                    // print the data in the value
-                    if(!foundPlannerCards.includes(key)) {
+                for (const key in plannerCardsDataAll) {
+                    if (!foundPlannerCards.includes(key)) {
                         foundPlannerCards.push(key);
-                        logElement.textContent += '\n  Miner: ' + key + ' card located. \n   -In column: ' + plannerCardsDataAll[key].columnTitle;
+                        logElement.textContent += `\n  Miner: ${key} card located. \n   -In column: ${plannerCardsDataAll[key].columnTitle}`;
                     }
                 }
-
+        
                 // If the length of the foundPlannerCards array hasn't changed in the last 5 seconds, then we can assume all the data has been collected
-                if(foundPlannerCards.length === lastLength) {
+                if (foundPlannerCards.length === lastLength) {
                     clearInterval(checkDataInterval);
                     logElement.textContent += '\n\nAll planner cards located. Data collection complete.';
                     // Remove the loading spinner and text
-                    loadingText.remove();
-                    loadingSpinner.remove();
+                    overlay.remove();
 
+                    // Remove all the iframes
+                    const iframes = plannerCardWindow.document.querySelectorAll('.planner-iframe');
+                    iframes.forEach(iframe => iframe.remove());
+        
                     // Put a 'Finished' in big green letters at top
                     const finishedText = plannerCardWindow.document.createElement('div');
+                    finishedText.className = 'finished';
                     finishedText.textContent = 'Finished';
-                    finishedText.style.cssText = `
-                        position: relative;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        padding: 10px;
-                        background-color: #4CAF50;
-                        color: #fff;
-                        font-family: Arial, sans-serif;
-                        font-size: 24px;
-                        z-index: 999999;
-                        text-align: center;
-                    `;
-
-                    // Put before logElement
                     logElement.before(finishedText);
-
+        
                     // Time out to close the window
                     setTimeout(() => {
                         plannerCardWindow.close();
@@ -5169,6 +5166,7 @@ window.addEventListener('load', function () {
                                 popup.remove();
 
                                 setUpPlannerCardRefresh();
+                                updatePlannerCardsData();
                             }
 
                             const closeButton = document.createElement('button');
