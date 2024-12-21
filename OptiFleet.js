@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      4.9.7
+// @version      5.1.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
