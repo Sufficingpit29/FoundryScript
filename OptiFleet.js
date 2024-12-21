@@ -5,7 +5,8 @@
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
-// @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
+// @exclude      https://webshell.suite.office.com/*
+// @icon         https://foundryoptifleet.com/img/favicon-32x32.png
 // @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
 // @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
 // @grant        GM_setValue
@@ -31,11 +32,12 @@ const allowedSites = [
     "foundryoptifleet.com",
     "planner",
     "sharepoint",
-    "office",
+    "planner.cloud.office",
     "bitmain",
 ];
 
 const currentUrl = window.location.href;
+console.log("Current URL:", currentUrl);
 
 // See if the URL likly contains a IP address
 const ipRegex = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
@@ -45,6 +47,7 @@ const ipURLMatch = currentUrl.match(ipRegex);
 const allowedSiteMatch = allowedSites.some(site => currentUrl.includes(site));
 
 if(!ipURLMatch && !allowedSiteMatch) {
+    console.log("Script not for this site, exiting...");
     return false;
 }
 
@@ -56,12 +59,16 @@ window.addEventListener('load', function () {
     urlLookupExcel["Fortitude"] = GM_SuperValue.get("fortitudeLink", defaultExcelLink);;
     urlLookupExcel["RAMM"] = GM_SuperValue.get("rammLink", defaultExcelLink);
 
-
     const urlLookupPlanner = {
         "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
         "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
         "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz?tid=6681433f-a30d-43cd-8881-8e964fa723ad"
     };
+
+    function getPlannerID(string) {
+        const plannerID = string.match(/plan\/([^?]+)/)[1].split('/')[0];
+        return plannerID;
+    }
 
     const urlLookupPlannerGrid = {
         "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
@@ -87,6 +94,7 @@ window.addEventListener('load', function () {
         var allMinersData = {};
         var allMinersLookup = {};
         let frozenMiners = [];
+        const disableFrozenMiners = true;
         let gotFrozenData = false;
         let gotFrozenDataFor = {};
         let activeMiners = 0;
@@ -569,53 +577,53 @@ window.addEventListener('load', function () {
                         }, 500);
                     }
                     
-                    // Sets up a lookup table
-                    delete frozenMiners;
-                    frozenMiners = [];
-                    miners.forEach(miner => {
-                        allMinersLookup[miner.id] = miner;
-                        
-                        // If the miner is frozen, add it to the frozen miners list
-                        const minerID = miner.id;
-                        const uptimeValue = miner.uptimeValue;
-                        const lastUptimeData = lastUpTime[minerID] || { value: -1, time: -1, addedToList: false, lastHashRate: -1, sameHashRateCount: 0 };
-                        const lastUptimeValue = lastUptimeData.value;
-                        const lastUptimeTime = lastUptimeData.time;
-                        const isHashing = miner.hashrate > 0;
-                        const uptimeOverZero = uptimeValue > 0;
-                        const minerOnline = miner.statusName === 'Online';
-                        const notSameStatusUpdate = lastUptimeTime !== -1 && miner.lastStatsUpdate !== lastUptimeTime;
-                        const sameBetweenChecks = uptimeValue === lastUptimeValue && notSameStatusUpdate;
-                        const wasInListBefore = uptimeValue === lastUptimeValue && lastUptimeData.addedToList;
-                        const sameHashRate = notSameStatusUpdate && lastUptimeData.lastHashRate === miner.hashrate;
+                    if(!disableFrozenMiners) {
+                        // Sets up a lookup table
+                        delete frozenMiners;
+                        frozenMiners = [];
+                        miners.forEach(miner => {
+                            allMinersLookup[miner.id] = miner;
+                            
+                            // If the miner is frozen, add it to the frozen miners list
+                            const minerID = miner.id;
+                            const uptimeValue = miner.uptimeValue;
+                            const lastUptimeData = lastUpTime[minerID] || { value: -1, time: -1, addedToList: false, lastHashRate: -1, sameHashRateCount: 0 };
+                            const lastUptimeValue = lastUptimeData.value;
+                            const lastUptimeTime = lastUptimeData.time;
+                            const isHashing = miner.hashrate > 0;
+                            const uptimeOverZero = uptimeValue > 0;
+                            const minerOnline = miner.statusName === 'Online';
+                            const notSameStatusUpdate = lastUptimeTime !== -1 && miner.lastStatsUpdate !== lastUptimeTime;
+                            const sameBetweenChecks = uptimeValue === lastUptimeValue && notSameStatusUpdate;
+                            const wasInListBefore = uptimeValue === lastUptimeValue && lastUptimeData.addedToList;
+                            const sameHashRate = notSameStatusUpdate && lastUptimeData.lastHashRate === miner.hashrate;
 
-                        
+                            if(!foundActiveMiners && (miner.statusName === 'Online' || miner.statusName === 'Offline')) {
+                                activeMiners++;
+                            }
 
-                        if(!foundActiveMiners && (miner.statusName === 'Online' || miner.statusName === 'Offline')) {
-                            activeMiners++;
-                        }
+                            if(notSameStatusUpdate) {
+                                gotFrozenData = true;
+                                gotFrozenDataFor[minerID] = true;
+                            }
+                            
+                            lastUpTime[minerID] = { value: uptimeValue, time: miner.lastStatsUpdate };
+                            if(sameHashRate) {
+                                lastUpTime[minerID].sameHashRateCount++;
+                            } else {
+                                lastUpTime[minerID].sameHashRateCount = 0;
+                            }
 
-                        if(notSameStatusUpdate) {
-                            gotFrozenData = true;
-                            gotFrozenDataFor[minerID] = true;
-                        }
-                        
-                        lastUpTime[minerID] = { value: uptimeValue, time: miner.lastStatsUpdate };
-                        if(sameHashRate) {
-                            lastUpTime[minerID].sameHashRateCount++;
-                        } else {
-                            lastUpTime[minerID].sameHashRateCount = 0;
-                        }
+                            if (uptimeOverZero && isHashing && minerOnline && (sameBetweenChecks || wasInListBefore)) { // || lastUptimeData.sameHashRateCount > 2)) {
+                                frozenMiners.push(miner);
+                                lastUpTime[minerID].addedToList = true;
+                            }
 
-                        if (uptimeOverZero && isHashing && minerOnline && (sameBetweenChecks || wasInListBefore)) { // || lastUptimeData.sameHashRateCount > 2)) {
-                            frozenMiners.push(miner);
-                            lastUpTime[minerID].addedToList = true;
-                        }
-
-                        lastUpTime[minerID].lastHashRate = miner.hashrate;
-                    });
-                    GM_SuperValue.set("lastUpTime_"+siteName, lastUpTime);
-                    foundActiveMiners = true;
+                            lastUpTime[minerID].lastHashRate = miner.hashrate;
+                        });
+                        GM_SuperValue.set("lastUpTime_"+siteName, lastUpTime);
+                        foundActiveMiners = true;
+                    }
 
                     // Get the miners data
                     allMinersData = miners;
@@ -799,6 +807,9 @@ window.addEventListener('load', function () {
         
             // Create the iframes for the planner boards
             for (const key in urlLookupPlanner) {
+                const plannerID = getPlannerID(urlLookupPlanner[key]);
+                GM_SuperValue.set("plannerPageLoaded_"+plannerID, false);
+
                 const iframe = plannerCardWindow.document.createElement('iframe');
                 iframe.className = 'planner-iframe';
                 iframe.src = urlLookupPlanner[key];
@@ -822,6 +833,7 @@ window.addEventListener('load', function () {
             // Interval to check the data loaded
             let foundPlannerCards = [];
             let lastLength = 0;
+            let lastLengthSameCount = 0;
             let collectionStarted = false;
             const checkDataInterval = setInterval(() => {
                 const lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
@@ -836,12 +848,16 @@ window.addEventListener('load', function () {
                     return;
                 }
         
+                let loadedAllPages = true;
                 let plannerCardsDataAll = {};
                 for (const key in urlLookupPlanner) {
-                    const plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
-                    const collectDataSuperValueID = "plannerCardsData_" + plannerID;
-                    const data = GM_SuperValue.get(collectDataSuperValueID, {});
+                    const plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
+                    const data = GM_SuperValue.get("plannerCardsData_" + plannerID, {});
                     plannerCardsDataAll = { ...plannerCardsDataAll, ...data };
+
+                    if (!GM_SuperValue.get("plannerPageLoaded_"+plannerID, false)) {
+                        loadedAllPages = false;
+                    }
                 }
         
                 // Loop through the planner cards and add them to the log if they haven't been added yet
@@ -851,9 +867,12 @@ window.addEventListener('load', function () {
                         logElement.textContent += `\n  Miner: ${key} card located. \n   -In column: ${plannerCardsDataAll[key].columnTitle}`;
                     }
                 }
+                
+                // Scroll to the bottom of page
+                plannerCardWindow.scrollTo(0, document.body.scrollHeight);
         
                 // If the length of the foundPlannerCards array hasn't changed in the last 5 seconds, then we can assume all the data has been collected
-                if (foundPlannerCards.length === lastLength) {
+                if (foundPlannerCards.length === lastLength && lastLengthSameCount >= 5 && loadedAllPages) {
                     clearInterval(checkDataInterval);
                     logElement.textContent += '\n\nAll planner cards located. Data collection complete.';
                     // Remove the loading spinner and text
@@ -868,6 +887,9 @@ window.addEventListener('load', function () {
                     finishedText.className = 'finished';
                     finishedText.textContent = 'Finished';
                     logElement.before(finishedText);
+
+                    // Scroll to top of the page
+                    plannerCardWindow.scrollTo(0, 0);
         
                     // Time out to close the window
                     setTimeout(() => {
@@ -875,7 +897,13 @@ window.addEventListener('load', function () {
                         updatePlannerCardsData();
                     }, 1000);
                 }
+                if (lastLength === foundPlannerCards.length && loadedAllPages) {
+                    lastLengthSameCount++;
+                } else {
+                    lastLengthSameCount = 0;
+                }
                 lastLength = foundPlannerCards.length;
+
             }, 1000);
         }
 
@@ -1828,7 +1856,7 @@ window.addEventListener('load', function () {
                         updatePlannerCardsData = function() {
                             console.log("Updating Planner Cards Data");
                             for(var key in urlLookupPlanner) {
-                                let plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
+                                let plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
                                 let collectDataSuperValueID = "plannerCardsData_" + plannerID;
                                 let data = GM_SuperValue.get(collectDataSuperValueID, {});
                                 // combine into plannerCardsData
@@ -2389,7 +2417,7 @@ window.addEventListener('load', function () {
                                         }
 
                                         // Check if the miner is in the frozen list
-                                        if(frozenMiners.includes(minerID) || minerID === 411660) { // remove 411660 later
+                                        if(frozenMiners.includes(minerID)) { // remove 411660 later
                                             rebootData[currentMiner.id] = rebootData[currentMiner.id] || {};
                                             rebootData[currentMiner.id].details = {};
                                             rebootData[currentMiner.id].details.main = "Frozen Miner";
@@ -5200,6 +5228,7 @@ window.addEventListener('load', function () {
                     }
 
                     function DetectFrozenMiners() {
+                        if(disableFrozenMiners) { return; }
                         console.log("Checking for frozen miners...");
                         if(Object.keys(gotFrozenDataFor).length > 0) {
                             activeMiners = 0;
@@ -5380,7 +5409,7 @@ window.addEventListener('load', function () {
 
                     // Add new tab
                     const tabsContainer = document.querySelector('.tabs');
-                    if (tabsContainer) {
+                    if (tabsContainer && !disableFrozenMiners) {
                         const frozenMinersTab = document.createElement('div');
                         frozenMinersTab.id = 'frozenMiners';
                         frozenMinersTab.custom = true;
@@ -5732,7 +5761,7 @@ window.addEventListener('load', function () {
                     // Check if the data has been found/displays the data
                     let plannerCardsDataAll = {};
                     for(var key in urlLookupPlanner) {
-                        let plannerID = urlLookupPlanner[key].match(/plan\/([^?]+)/)[1].split('/')[0];
+                        let plannerID = getPlannerID(urlLookupPlanner[key]) //.match(/plan\/([^?]+)/)[1].split('/')[0];
                         let collectDataSuperValueID = "plannerCardsData_" + plannerID;
                         let data = GM_SuperValue.get(collectDataSuperValueID, {});
                         // combine into plannerCardsData
@@ -5764,6 +5793,9 @@ window.addEventListener('load', function () {
                         p.style.color = 'white';
                         p.style.textDecoration = 'none';
                         p.textContent = "[Not Found]";
+
+
+                        // Remember to set this to diplay nothing
 
                         // Add subtext if it doesn't exist already
                         if(!mBox.querySelector('p')) {
@@ -6286,10 +6318,8 @@ window.addEventListener('load', function () {
         // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
         let scrollDownTimes = 0;
         let setDate = false;
-        let plannerID = currentUrl.match(/plan\/([^?]+)/)[1].split('/')[0];
-        let collectDataSuperValueID = "plannerCardsData_" + plannerID;
+        let plannerID = getPlannerID(currentUrl); //.match(/plan\/([^?]+)/)[1].split('/')[0];
         let newPlannerData = {};
-        let currentPlannerCardData = GM_SuperValue.get(collectDataSuperValueID, {});
         function collectPlannerCardData() {
             // Check if this window is actually a iframe
             if (window === window.top) {
@@ -6297,24 +6327,9 @@ window.addEventListener('load', function () {
             }
 
             if (!setDate) {
-                
+                GM_SuperValue.get("plannerCardsData_" + plannerID, {});
+                GM_SuperValue.set("plannerPageLoaded_"+plannerID, true);
                 GM_SuperValue.set('plannerCardsDataTime', Date.now());
-
-                // 40 second timer to just set the newPlannerData to the GM_SuperValue, as a way to clear any old cards that are no longer there but might still be in the SuperValue
-                let resetInterval = setInterval(() => {
-                    GM_SuperValue.set('plannerCardsDataTime', Date.now());
-                    console.log("Setting newPlannerData to GM_SuperValue");
-                    console.log(newPlannerData);
-                    GM_SuperValue.set(collectDataSuperValueID, newPlannerData);
-
-                    // Reset all scrollable elements to the top/left
-                    const scrollableElements = document.querySelectorAll('.scrollable');
-                    scrollableElements.forEach(element => {
-                        element.scrollTop = 0;
-                        element.scrollLeft = 0;
-                    });
-                }, 30000);
-
                 setDate = true;
             }
 
@@ -6347,8 +6362,7 @@ window.addEventListener('load', function () {
                             url: window.location.href
                         };
                         newPlannerData[serialNumber] = cardData;
-                        currentPlannerCardData[serialNumber] = cardData;
-                        GM_SuperValue.set(collectDataSuperValueID, currentPlannerCardData);
+                        GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
                         //console.log("Adding SN: ", serialNumber, " to column: ", columnTitle);
                     });
                 }
@@ -6544,19 +6558,19 @@ window.addEventListener('load', function () {
 
         function setUpAutoCardLogic() {
             console.log("Setting up Auto Card Logic");
-            const taskName = GM_SuperValue.get("taskName", "");
+            let taskName = GM_SuperValue.get("taskName", "");
             if (taskName === "") {
                 console.log("No taskName found.");
                 return;
             }
 
-            const taskNotes = GM_SuperValue.get("taskNotes", false);
+            let taskNotes = GM_SuperValue.get("taskNotes", false);
             if (!taskNotes) {
                 console.log("No taskNotes found.");
                 return;
             }
 
-            const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
+            let detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
             if (Object.keys(detailsData).length === 0) {
                 console.log("No detailsData found.");
                 return;
@@ -6571,7 +6585,6 @@ window.addEventListener('load', function () {
 
             // Function to simulate real typing using execCommand
             function setupTask(inputElement) {
-
                 inputElement.focus();
 
                 let i = 0;
@@ -6677,18 +6690,24 @@ window.addEventListener('load', function () {
             let createCardButtons = [];
             function addAutoCardButtons() {
 
+                let taskName = GM_SuperValue.get("taskName", "");
+                if (taskName === "") {
+                    console.log("No taskName found.");
+                    return;
+                }
+
                 // See if we're on a repair page
                 const tooltipHosts = document.querySelectorAll('.ms-TooltipHost');
                 let foundRepair = false;
                 for (const tooltipHost of tooltipHosts) {
                     if (tooltipHost.textContent.includes('Repair')) {
                         foundRepair = true;
-                        console.log('Found tooltipHost with "Repair":', tooltipHost);
+                        //console.log('Found tooltipHost with "Repair":', tooltipHost);
                         break;
                     }
                 }
                 if (!foundRepair) {
-                    setTimeout(addAutoCardButtons, 500);
+                    setTimeout(addAutoCardButtons, 1000);
                     return;
                 }
 
@@ -6697,8 +6716,10 @@ window.addEventListener('load', function () {
                     const columnItems = columnsList.querySelectorAll('li');
                     columnItems.forEach(columnItem => {
                         const columnTitle = columnItem.querySelector('.columnTitle');
+                        const newBucketColumn = columnTitle.getAttribute('title') === 'Add a new bucket';
+
                         // Column title exists and there is no button already
-                        if (columnTitle && !createCardButtons.some(button => button.previousElementSibling === columnTitle)) {
+                        if (!newBucketColumn && columnTitle && !createCardButtons.some(button => button.previousElementSibling === columnTitle)) {
                             const newButton = document.createElement('button');
                             createCardButtons.push(newButton);
                             newButton.textContent = 'Auto-Create Card';
@@ -6765,6 +6786,7 @@ window.addEventListener('load', function () {
                             // Set the value of the text field to the task name
                             textField = container.querySelector('input[placeholder="Enter a task name * (required)"]');
                             if (textField) {
+                                GM_SuperValue.set("taskName", "");
                                 setupTask(textField);
                             } else {
                                 console.error('Text field not found.');
@@ -6817,7 +6839,7 @@ window.addEventListener('load', function () {
             }
 
             setTimeout(createAutoCreateCardButton, 1000);
-            setTimeout(addAutoCardButtons, 50);
+            setTimeout(addAutoCardButtons, 500);
         }
         setUpAutoCardLogic();
 
