@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.1.1
+// @version      5.2.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1219,8 +1219,34 @@ window.addEventListener('load', function () {
                             return;
                         }
 
-                        // Update to make sure we have the latest miner data
-                        updateAllMinersData();
+                        function createNotification(text) {
+                            const notification = document.createElement('div');
+                            notification.className = 'notification';
+                            notification.style.cssText = `
+                                position: fixed;
+                                top: 10px;
+                                right: 10px;
+                                background-color: #dc3545;
+                                color: #fff;
+                                padding: 10px;
+                                border-radius: 5px;
+                                z-index: 999999;
+                                transition: opacity 0.5s ease;
+                                opacity: 1;
+                            `;
+                            notification.textContent = text;
+                            document.body.appendChild(notification);
+
+                            setTimeout(function() {
+                                notification.style.opacity = '0';
+                            }, 8000);
+                        }
+
+                        // if allMinersData is empty, notify the user that the data is still loading
+                        if (Object.keys(allMinersData).length === 0) {
+                            createNotification("Miner data is still loading, please wait a moment.");
+                            return;
+                        }
 
                         // Find the miner with the serial number
                         var minerID = false;
@@ -1234,6 +1260,10 @@ window.addEventListener('load', function () {
                         // If we found the miner, open the miner page
                         if(minerID) {
                             window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`).focus();
+                        } else {
+                            createNotification("Miner with serial number " + serialInputted + " not found.");
+
+                            console.log("Miner with serial number", serialInputted, "not found.");
                         }
                     }, 500);
                 }
@@ -5794,9 +5824,6 @@ window.addEventListener('load', function () {
                         p.style.textDecoration = 'none';
                         p.textContent = "[Not Found]";
 
-
-                        // Remember to set this to diplay nothing
-
                         // Add subtext if it doesn't exist already
                         if(!mBox.querySelector('p')) {
                             const subText = document.createElement('p');
@@ -5806,6 +5833,17 @@ window.addEventListener('load', function () {
                             subText.style.marginTop = '5px';
                             mBox.appendChild(subText);
                         }
+                    }
+
+                    // add sub text to tell the user that this might need refreshed if cards changed
+                    if(!mBox.querySelector('.refresh-text')) {
+                        const refreshText = document.createElement('p');
+                        refreshText.classList.add('refresh-text');
+                        refreshText.textContent = 'This might need refreshed if cards changed.';
+                        refreshText.style.color = '#70707b';
+                        refreshText.style.fontSize = '0.8em';
+                        refreshText.style.marginTop = '5px';
+                        mBox.appendChild(refreshText);
                     }
                 }, 1000);
             }
