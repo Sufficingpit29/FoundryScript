@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.2.0
+// @version      5.3.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -112,7 +112,6 @@ window.addEventListener('load', function () {
         var lastCompanyId = companyId;
         var lastMinerDataUpdate = 0;
         var reloadCards = false;
-        var hasRefreshed = false;
 
         let lastUpTime = {}; //GM_SuperValue.get("lastUpTime_"+siteName, {});
 
@@ -514,10 +513,11 @@ window.addEventListener('load', function () {
             });
         }
 
+        function createHashRateElements() {}
+
         function updateAllMinersData(keepTrying = false, callback) {
             console.log("Updating all miners data");
             // Reset allMinersLookup
-            const lastMinersLookup = { ...allMinersLookup };
             delete allMinersLookup;
             allMinersLookup = {};
 
@@ -552,23 +552,7 @@ window.addEventListener('load', function () {
                     resp.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
 
                     let miners = resp.miners;
-                    console.log("Miners Data:", miners);
-
-                    // Get first miner in the list and if it existed before/changed any
-                    const firstMiner = miners[0];
-                    if (miners.length > 0) {
-                        //console.log("First Miner:", !lastMinersLookup[firstMiner.id]);
-                        //console.log("Last Site ID:", lastSiteId, "Current Site ID:", siteId);
-                        //console.log(lastSiteId === '-1' || siteId === '-1', Object.keys(lastMinersLookup).length, miners.length);
-                        // Either the a miner no longer exists or we've swaped from/to an all sites and the length changed, if either of those are true we can assume the data has changed
-                        // Or hasRefreshed so let's reload the data regardless, just in case anything changed
-                        if (!lastMinersLookup[firstMiner.id] || (lastSiteId === '-1' || siteId === '-1') && Object.keys(lastMinersLookup).length !== miners.length || hasRefreshed) {
-                            lastMinerDataUpdate = Date.now();
-                            reloadCards = true;
-                            hasRefreshed = false;
-                            console.log("Miner data updated");
-                        }
-                    }
+                    //console.log("Miners Data:", miners);
     
                     if(keepTrying && Date.now() - lastMinerDataUpdate > 1000 && miners.length === 0) {
                         console.log("Retrying to get miner data");
@@ -626,12 +610,18 @@ window.addEventListener('load', function () {
                     }
 
                     // Get the miners data
-                    allMinersData = miners;
+                    allMinersData = [ ...miners ];
+
+                    // Setup the hash rate elements
+                    reloadCards = true;
+                    createHashRateElements();
 
                     // Call the callback function if it exists
                     if (callback) {
-                        callback(miners);
+                        callback(allMinersData);
                     }
+
+                    delete miners;
                 }).catch((error) => {
                     console.error("Error fetching miners data:", error);
 
@@ -656,23 +646,38 @@ window.addEventListener('load', function () {
         }
         updateAllMinersData();
 
-        // Looks for refreshing and then updates the hash rate elements
-        var startedRefresh = false;
-        const chipObserverInterval = setInterval(() => {
-            const autoRefreshChip = document.querySelector('#refreshBtn');
-            if (autoRefreshChip) {
-                var curText = autoRefreshChip.shadowRoot.textContent.toLowerCase();
-                if (startedRefresh && !curText.includes("refreshing...")) {
-                    startedRefresh = false;
-                    hasRefreshed = true;
-                    updateAllMinersData();
-                }
-                if(curText.includes("refreshing...")) {
-                    console.log("Refreshing...");
-                    startedRefresh = true;
-                }
+        function setupRefreshCheck() {
+            // Looks for refreshing and then updates the hash rate elements
+            const shadowRoot = document.querySelector('#refreshBtn').shadowRoot;
+            const targetIcon = shadowRoot.querySelector('m-icon[name="refresh-cw"]');
+            let currentTimeout = null;
+            if (targetIcon) {
+                const observer = new MutationObserver((mutationsList, observer) => {
+                    for (const mutation of mutationsList) {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                            // Clear the timeout
+                            if(currentTimeout) {
+                                clearTimeout(currentTimeout);
+                            }
+
+                            // timeout checking if transform rotate is 0
+                            currentTimeout = setTimeout(() => {
+                                const transform = targetIcon.style.transform;
+                                if(transform.includes('rotate(0deg)')) {
+                                    updateAllMinersData();
+                                }
+                            }, 1000);
+                        }
+                    }
+                });
+
+                observer.observe(targetIcon, { attributes: true });
+            } else {
+                console.log('Target icon not found, trying again in 1 second.');
+                setTimeout(setupRefreshCheck, 1000);
             }
-        }, 100);
+        }
+        setupRefreshCheck();
 
         function retrieveContainerTempData(callback) {
             serviceInstance.get(`/sensors?siteId=${siteId}`)
@@ -1024,7 +1029,6 @@ window.addEventListener('load', function () {
                                 <div>
                                     <div class="green-dot"></div>
                                     &nbsp;
-                                    <span class="m-text">Realtime</span>
                                 </div>
                             </div>
                             <div class="bar-chart-section">
@@ -1083,10 +1087,7 @@ window.addEventListener('load', function () {
             }
 
             // Function to loop through all miners, find the non-supported miners, calculate the hash rate and add the hash rate info element
-            function createHashRateElements() {
-
-                // Update the miner data
-                updateAllMinersData();
+            createHashRateElements = function() {
 
                 // Keep checking until the miner data is updated
                 if (!reloadCards) {
@@ -1148,18 +1149,6 @@ window.addEventListener('load', function () {
 
             // Call the function to create the hash rate elements
             createHashRateElements();
-
-            setInterval(function() {
-                // Check if reloadCards is true and if so, run the createHashRateElements function
-                if (reloadCards) {
-                    createHashRateElements();
-                }
-
-                // Constantly checks if there siteId or companyId changes and updates the hash rate elements
-                if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
-                    removeAllHashRateElements();
-                }
-            }, 500);
         }
 
         // SN Scanner Logic
@@ -7061,7 +7050,7 @@ window.addEventListener('load', function () {
                         'Fan Speed Error': {
                             icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
                             start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /\[WARN\] FAN \d+ Fail/],
-                            end: ["stop_mining: fan lost", " has failed to run at expected RPM"],
+                            end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", " has failed to run at expected RPM"]
                         },
                         'SOC INIT Fail': {
                             icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
@@ -7092,7 +7081,7 @@ window.addEventListener('load', function () {
                         'Voltage Abnormity': {
                             icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
                             start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
-                            end: ["power voltage err", "stop_mining_and_restart", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
+                            end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
                         },
                         'Temperature Sensor Error': {
                             icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
