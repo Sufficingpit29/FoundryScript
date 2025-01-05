@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Watch
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.3
 // @description  Consolidates all the sites together into a single tab.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -161,8 +161,6 @@ window.addEventListener('load', async function () {
 
             // Set the title of the popout window
             popoutWindow.document.title = 'Opti-Watch';
-
-
         }
 
         createOptiWatchButton();
@@ -428,7 +426,7 @@ window.addEventListener('load', async function () {
                     tooltip.style.borderRadius = '5px';
                     tooltip.style.zIndex = '1';
 
-                    tooltip.innerText = `${site.siteName} - Agent ${site.isOnline ? 'Online' : 'Offline'}\nNon-Hashing: ${site.hashingInventory.notHashingCount}/${site.hashingInventory.totalActiveOrUnreachableCount}`;
+                    tooltip.innerText = `${site.siteName} - Agent ${site.isOnline ? 'Online' : 'Offline'}\nNon-Hashing: ${site.hashingInventory.notHashingCount}/${site.hashingInventory.totalActiveOrUnreachableCount}\nHashing Percentage: ${((site.hashingInventory.hashingCount / site.hashingInventory.totalActiveOrUnreachableCount) * 100).toFixed(1)}%`;
                     statusIcon.appendChild(tooltip);
                 });
 
