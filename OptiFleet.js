@@ -1,7 +1,11 @@
+// To do:
+// - Add a thing for when your create a card it will bring you to the card if it already exists and tell you it already exists.
+// - Auto select owner for creating a card
+
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.3.2
+// @version      5.3.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -28,6 +32,12 @@
 // @run-at       document-start
 // ==/UserScript==
 
+
+const currentUrl = window.location.href;
+if(currentUrl.includes("OptiWatch")) {
+    return;
+}
+
 const allowedSites = [
     "foundryoptifleet.com",
     "planner",
@@ -36,7 +46,6 @@ const allowedSites = [
     "bitmain",
 ];
 
-const currentUrl = window.location.href;
 console.log("Current URL:", currentUrl);
 
 // See if the URL likly contains a IP address
@@ -101,7 +110,6 @@ window.addEventListener('load', function () {
         let foundActiveMiners = false;
 
         let OptiFleetService2 = Object.getPrototypeOf(unsafeWindow.ms);
-        console.log("OptiFleetService2", OptiFleetService2);
         var serviceInstance = Object.getPrototypeOf(unsafeWindow.ms);
         
         var viewServiceInstance = new MinerViewService();
