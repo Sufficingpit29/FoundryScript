@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.3.4
+// @version      5.3.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1741,16 +1741,17 @@ window.addEventListener('load', function () {
                 if (minerGrid) {
                     // Loop through all the columns and store the index for each column & name
                     var columnIndexes = {};
-                    const columns = minerGrid.querySelectorAll('.k-header');
+                    const gridHeader = minerGrid.querySelector('.k-grid-header');
+                    var columns = Array.from(gridHeader.querySelector('[role="row"]').children);
                     columns.forEach((column, index) => {
                         // Get the title of the column, and store the index
                         const title = column.getAttribute('data-title');
                         columnIndexes[title] = index;
                     });
 
-                    const rows = minerGrid.querySelectorAll('tr.k-master-row');
+                    const rows = minerGrid.querySelectorAll('[role="row"]');
+                    // Loop through all the rows and store the data for each miner
                     rows.forEach(row => {
-
                         const uid = row.getAttribute('data-uid');
                         let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
                         
@@ -1812,8 +1813,8 @@ window.addEventListener('load', function () {
                         for (const [key, colIndex] of Object.entries(columnIndexes)) {
                             let colRowElement = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(colIndex+1)) + ')');
                             if (minerLinkElement && colRowElement) {
-                                // Store the data in the minersListTableLookup
-                                let minerID = minerLinkElement.getAttribute('data-miner-id');
+                                // Store the data in the minersListTableLookup 
+                                const minerID = minerLinkElement.getAttribute('data-miner-id');
                                 minersListTableLookup[minerID] = minersListTableLookup[minerID] || {};
                                 minersListTableLookup[minerID][key] = colRowElement;
                             }
@@ -1907,8 +1908,15 @@ window.addEventListener('load', function () {
 
                             // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
                             for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
-                                const slotID = minerData['Slot ID'].textContent;
-                                const serialNumber = minerData['Serial Number'].textContent;
+                                const modelCell = minerData['Model'];
+                                const slotIDCell = minerData['Slot ID'];
+                                const statusCell = minerData['Status'];
+
+                                // Get the serial number from the model cell, second child is the serial number
+                                const serialNumber = modelCell.children[1].innerText;
+                                const slotID = slotIDCell.innerText;
+                                const status = statusCell.innerText;
+                                console.log("serialNumber", serialNumber);
 
                                 // Check if slotID has minden in it
                                 if (!slotID.includes('Minden')) {
@@ -1929,12 +1937,12 @@ window.addEventListener('load', function () {
                                 }
 
                                 // Add the Planner Link too
-                                if (!minerData['Serial Number'].querySelector('.planner-element')) {
+                                if (!statusCell.querySelector('.planner-element')) {
                                     var plannerElement = document.createElement('div');
                                     plannerElement.textContent = 'Planner Card: Checking...';
                                     plannerElement.classList.add('planner-element');
                                     plannerElement.setAttribute('data-serial-number', serialNumber);
-                                    minerData['Serial Number'].appendChild(plannerElement);
+                                    statusCell.appendChild(plannerElement);
 
                                     updatePlannerLink(plannerElement);
                                 }
@@ -1948,22 +1956,22 @@ window.addEventListener('load', function () {
                                     var containerNum = containerText.replace(/^0+/, '');
         
                                     // Check if slotID has minden in it
-                                    if (!slotID.includes('Minden')) {
+                                    if (!slotID.includes('Minden') || true) {
                                         continue;
                                     }
-        
+                                    // This is very broken and messed up now
                                     const containerTemp = containerTempData[containerNum].temp.toFixed(2);
-                                    var curTextContent = minerData['Temp.'].textContent; 
+                                    var curTextContent = minerData['Stats'].children[0].textContent;
                                     if (containerTemp && !curTextContent.includes('C')) { // doesn't contain added text already
                                         if(curTextContent === "999-999-999" || curTextContent === "255-255-255" || curTextContent === "---") {
                                             curTextContent = "Error";
                                         }
                                         
-                                        minerData['Temp.'].textContent = "Boards: " + curTextContent;
+                                        minerData['Stats'].children[0].textContent = "Boards: " + curTextContent;
 
                                         var newElement = document.createElement('div');
                                         newElement.innerHTML = `C${containerText}: <span>${containerTemp}</span>`;
-                                        minerData['Temp.'].appendChild(newElement);
+                                        minerData['Stats'].children[0].appendChild(newElement);
 
                                         // Set the text color of the temp based on the container temp
                                         const tempSpan = newElement.querySelector('span');
