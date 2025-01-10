@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.3.3
+// @version      5.3.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2432,6 +2432,8 @@ window.addEventListener('load', function () {
 
                                     function checkMiner(minerID) {
                                         var location = currentMiner.locationName;
+                                        rebootData[currentMiner.id] = rebootData[currentMiner.id] || {};
+                                        rebootData[currentMiner.id].miner = currentMiner;
                                         if(!location || location === "Unassigned") {
                                             //console.error("No location for miner: " + minerID);
                                             rebootData[currentMiner.id] = rebootData[currentMiner.id] || {};
@@ -2843,10 +2845,11 @@ window.addEventListener('load', function () {
                                                     });
 
                                                     function setUpRowData(row, currentMiner) {
-                                                        let minerID = currentMiner.id;
-                                                        let minerRebootData = rebootData[minerID];
-                                                        let model = currentMiner.modelName;
-                                                        let slotID = currentMiner.locationName;
+                                                        currentMiner = currentMiner || {};
+                                                        let minerID = currentMiner.id || "Missing ID";
+                                                        let minerRebootData = rebootData[minerID] || {};
+                                                        let model = currentMiner.modelName || "Missing Model";
+                                                        let slotID = currentMiner.locationName || "Missing Slot ID";
 
                                                         var splitSlotID = slotID.split('-');
                                                         var containerID = splitSlotID[0].split('_')[1];
@@ -2863,6 +2866,7 @@ window.addEventListener('load', function () {
                                                         let paddedSlotIDBreaker = `${reconstructedSlotID}  [${breakerNum.toString().padStart(2, '0')}]`;
 
                                                         let minerSerialNumber = currentMiner.serialNumber;
+                                                        minerRebootData.details = minerRebootData.details || {};
                                                         minerRebootData.details.main = minerRebootData.details.main || "ERROR";
                                                         minerRebootData.details.sub = minerRebootData.details.sub || ["Failed to get details!"];
                                                         
@@ -3322,7 +3326,7 @@ window.addEventListener('load', function () {
                                                                         let offlineTimeFormatted = formatUptime(offlineTime/1000);
                                                                         rebootData[minerID].details.sub.push("Offline for: " + offlineTimeFormatted);
                                                                     }
-                                                                    
+
                                                                     setUpRowData(row, currentMiner);
                                                                 });
                                                             });
@@ -3758,15 +3762,10 @@ window.addEventListener('load', function () {
 
                                                     // Add the miner data to the table body
                                                     const popupTableBody = popupResultElement.querySelector('tbody');
-                                                    Object.keys(rebootData).forEach(minerID => {
-                                                        if (true) {
-                                                            const minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                                                            const row = document.createElement('tr');
-
-                                                            let curMiner = rebootData[minerID].miner;
-                                                            setUpRowData(row, curMiner);
-                                                            popupTableBody.appendChild(row);
-                                                        }
+                                                    Object.values(rebootData).forEach(data => {
+                                                        const row = document.createElement('tr');
+                                                        setUpRowData(row, data.miner);
+                                                        popupTableBody.appendChild(row);
                                                     });
 
                                                     document.title = orginalTitle;
