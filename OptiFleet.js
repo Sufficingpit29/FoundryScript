@@ -1,5 +1,4 @@
 // To do:
-// - Fix the container temp not working in issues list now
 // - Add a thing for when your create a card it will bring you to the card if it already exists and tell you it already exists.
 // - Auto select owner for creating a card
 // - Somehow integrate my error grab system into the card creation?
@@ -7,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.3.7
+// @version      5.3.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -886,8 +885,8 @@ window.addEventListener('load', function () {
                 // Scroll to the bottom of page
                 plannerCardWindow.scrollTo(0, document.body.scrollHeight);
         
-                // If the length of the foundPlannerCards array hasn't changed in the last 5 seconds, then we can assume all the data has been collected
-                if (foundPlannerCards.length === lastLength && lastLengthSameCount >= 5 && loadedAllPages) {
+                // If the length of the foundPlannerCards array hasn't changed in the last 12 seconds, then we can assume all the data has been collected
+                if (foundPlannerCards.length === lastLength && lastLengthSameCount >= 12 && loadedAllPages) {
                     clearInterval(checkDataInterval);
                     logElement.textContent += '\n\nAll planner cards located. Data collection complete.';
                     // Remove the loading spinner and text
@@ -1958,31 +1957,44 @@ window.addEventListener('load', function () {
                                     var containerNum = containerText.replace(/^0+/, '');
         
                                     // Check if slotID has minden in it
-                                    if (!slotID.includes('Minden') || true) {
+                                    if (!slotID.includes('Minden')) {
                                         continue;
                                     }
                                     // This is very broken and messed up now
                                     const containerTemp = containerTempData[containerNum].temp.toFixed(2);
-                                    var curTextContent = minerData['Stats'].children[0].textContent;
+                                    let statsElement = minerData['Stats'].querySelector('.miner-stats');
+                                    if(!statsElement) {
+                                        statsElement = minerData['Stats'];
+                                    }
+                                    let curTextContent = "";
+                                    if(statsElement.children.length > 0) {
+                                        curTextContent = statsElement.children[0].textContent;
+                                    }
+                                    // random test number between 0 and 100
                                     if (containerTemp && !curTextContent.includes('C')) { // doesn't contain added text already
-                                        if(curTextContent === "999-999-999" || curTextContent === "255-255-255" || curTextContent === "---") {
-                                            curTextContent = "Error";
-                                        }
-                                        
-                                        minerData['Stats'].children[0].textContent = "Boards: " + curTextContent;
+                                     
+                                        //statsElement.children[0].textContent = "Boards: " + curTextContent;
 
                                         var newElement = document.createElement('div');
-                                        newElement.innerHTML = `C${containerText}: <span>${containerTemp}</span>`;
-                                        minerData['Stats'].children[0].appendChild(newElement);
+                                        newElement.innerHTML = `<span>C${containerText}:</span> <span>${containerTemp}F</span>`;
+                                        statsElement.prepend(newElement);
 
                                         // Set the text color of the temp based on the container temp
-                                        const tempSpan = newElement.querySelector('span');
+                                        const tempSpans = newElement.querySelectorAll('span');
+                                        const tempSpan1 = tempSpans[0];
+                                        const tempSpan2 = tempSpans[1];
+                                        tempSpan1.style.color = '#B2B2B8';
                                         if (containerTemp > 80) {
-                                            tempSpan.style.color = 'red';
+                                            tempSpan2.style.color = 'red';
+                                            tempSpan2.textContent += ' 🔥';
                                         } else if (containerTemp > 70) {
-                                            tempSpan.style.color = 'yellow';
+                                            tempSpan2.style.color = 'yellow';
+                                            tempSpan2.textContent += ' ⚠️';
+                                        } else if (containerTemp <= 24) {
+                                            tempSpan2.style.color = '#38a9ff';
+                                            tempSpan2.textContent += ' ❄️';
                                         } else {
-                                            tempSpan.style.color = 'white';
+                                            tempSpan2.style.color = 'white';
                                         }
                                     }
                                 }
@@ -2498,8 +2510,13 @@ window.addEventListener('load', function () {
                                         rebootData[minerID].details = [];
                                         rebootData[minerID].miner = currentMiner;
 
+                                        
+                                        lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
+                                        const manualHardReboot = lastRebootTimes[minerID].manualHardReboot || false;
+                                        const hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
+
                                         if(isOnline) {
-                                            if(moreThanOneHour && belowMaxTemp && (!hashRateEfficiency || hashRateEfficiency > 0)) { // If the miner passed the conditions, then we can reboot it
+                                            if(moreThanOneHour && belowMaxTemp && (!hashRateEfficiency || hashRateEfficiency > 0) && !manualHardReboot && !hardRebootAttemptedTime) { // If the miner passed the conditions, then we can reboot it
 
                                                 // Loop through lastRebootTimes, and get the last reboot time for each miner, if it has been less than 15 minutes, we will count that as activly rebooting
                                                 var rebootCount = getTotalRebootCount()[0];
@@ -2519,7 +2536,6 @@ window.addEventListener('load', function () {
                                                     rebootData[minerID].details.sub.push("Soft Reboot ends at: " + new Date(new Date(new Date().toISOString()).getTime() + min15*1000).toLocaleTimeString());
 
                                                     // Update the lastRebootTimes
-                                                    lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
                                                     lastRebootTimes[minerID].upTimeAtReboot = upTime;
                                                     lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
                                                     lastRebootTimes[minerID].softRebootsTimes.push(new Date().toISOString());
@@ -2595,15 +2611,12 @@ window.addEventListener('load', function () {
                                             rebootData[minerID].details.sub.push("Miner might be stuck at 0 uptime? Please wait for confirmation check...");
                                         }
 
-                                        const hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
                                         const timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
                                         const hardRebootAttempted = (timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000) || hardRebootAttemptedTime === true;
 
                                         let hardRebootRecommended = lastRebootTimes[minerID].hardRebootRecommended || false;
                                         const timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
                                         hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 12*60*60*1000; // 12 hours
-
-                                        const manualHardReboot = lastRebootTimes[minerID].manualHardReboot || false;
                                         
                                         if( !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || manualHardReboot)) {
                                             lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
@@ -7068,7 +7081,7 @@ window.addEventListener('load', function () {
                             }
                         },
                         'ASIC Number Error': {
-                            icon: "https://img.icons8.com/?size=100&id=77422&format=png&color=FFFFFF",
+                            icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
                             start: ["Chain[0]: find "],
                             end: ["stop_mining: asic number is not right"],
                             conditions: (text) => {
