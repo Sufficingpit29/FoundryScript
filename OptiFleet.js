@@ -1,11 +1,13 @@
 // To do:
+// - Fix the container temp not working in issues list now
 // - Add a thing for when your create a card it will bring you to the card if it already exists and tell you it already exists.
 // - Auto select owner for creating a card
+// - Somehow integrate my error grab system into the card creation?
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.3.5
+// @version      5.3.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -7032,6 +7034,9 @@ window.addEventListener('load', function () {
 
             // If the log content exists, run the error tab setup
             if (logContent) {
+                // Scroll to bottom of the log content
+                logContent.scrollTop = logContent.scrollHeight;
+
                 // On tab change
                 const tabs = document.querySelectorAll('.tab span');
                 tabs.forEach(tab => {
@@ -7060,6 +7065,14 @@ window.addEventListener('load', function () {
                             end: ["stop_mining: soc init failed"],
                             conditions: (text) => {
                                 return text.includes('only find');
+                            }
+                        },
+                        'ASIC Number Error': {
+                            icon: "https://img.icons8.com/?size=100&id=77422&format=png&color=FFFFFF",
+                            start: ["Chain[0]: find "],
+                            end: ["stop_mining: asic number is not right"],
+                            conditions: (text) => {
+                                return text.includes('asic number is not right');
                             }
                         },
                         'Fan Speed Error': {
@@ -7101,6 +7114,11 @@ window.addEventListener('load', function () {
                         'Temperature Sensor Error': {
                             icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
                             start: "Exit due to TEMPERATURE SENSORS FAILED",
+                        },
+                        'Temperature Too Low': {
+                            icon: "https://img.icons8.com/?size=100&id=0Bm1Quaegs8d&format=png&color=FFFFFF",
+                            start: "ERROR_TEMP_TOO_LOW",
+                            end: "stop_mining"
                         },
                         'Temperature Overheat': {
                             icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
