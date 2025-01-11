@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.3.6
+// @version      5.3.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -7033,7 +7033,7 @@ window.addEventListener('load', function () {
             removeOldErrorTab();
 
             // If the log content exists, run the error tab setup
-            if (logContent) {
+            if(logContent && logContent.textContent.includes("\n")) {
                 // Scroll to bottom of the log content
                 logContent.scrollTop = logContent.scrollHeight;
 
@@ -7747,7 +7747,9 @@ window.addEventListener('load', function () {
                         }
                     }
 
-                    if(isScanning) {
+                    createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant));
+                    createErrorTab("Other Errors", errorsFound.filter(error => error.unimportant));
+                    if(isScanning && logContent && logContent.textContent.includes("\n")) {
                         const minerID = foundMiner.id;
                         let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
                         errorsFoundSave[minerID] = errorsFound.filter(error => !error.unimportant) || [];
@@ -7813,9 +7815,6 @@ window.addEventListener('load', function () {
                         //GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
                         console.log('Errors found and saved');
                     }
-
-                    createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant));
-                    createErrorTab("Other Errors", errorsFound.filter(error => error.unimportant));
                 }
 
                 //setTimeout(adjustLayout, 500);
