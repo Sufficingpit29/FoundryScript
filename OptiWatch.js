@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Watch
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Consolidates all the sites together into a single tab.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -506,7 +506,6 @@ window.addEventListener('load', async function () {
                     siteTitle.style.marginBottom = '5px';
                     siteTitle.innerText = site.siteName;
 
-                    /*
                     // Create "Auto-Reboot Element" button
                     let autoRebootButton = doc.createElement('button');
                     autoRebootButton.innerText = 'Enable Auto-Reboot';
@@ -551,17 +550,17 @@ window.addEventListener('load', async function () {
                     autoRebootPanel.style.padding = '10px';
                     autoRebootPanel.style.backgroundColor = '#555';
                     autoRebootPanel.style.borderRadius = '5px';
-                    autoRebootPanel.innerText = 'Auto-Reboot Element Panel';
+                    autoRebootPanel.innerText = 'Auto-Reboot Element Panel, this does not do anything yet.';
                     autoRebootPanel.style.display = 'none'; // Initially hidden
 
                     if (enabledAutoReboots[site.siteId]) {
                         autoRebootPanel.style.display = 'block';
                         autoRebootButton.innerText = 'Disable Auto-Reboot';
                     }
-                    */
+
                     siteTitleContainer.appendChild(onlineStatus);
                     siteTitleContainer.appendChild(siteTitle);
-                    //siteTitleContainer.appendChild(autoRebootButton);
+                    siteTitleContainer.appendChild(autoRebootButton);
 
                     let siteMetricsContainer = doc.createElement('div');
                     siteMetricsContainer.className = 'm-grid-list is-size-l';
@@ -701,7 +700,7 @@ window.addEventListener('load', async function () {
 
                     sitePane.appendChild(siteTitleContainer);
                     sitePane.appendChild(siteMetricsContainer);
-                    //sitePane.appendChild(autoRebootPanel); // Append the auto-reboot panel
+                    sitePane.appendChild(autoRebootPanel); // Append the auto-reboot panel
                     companySitesContainer.appendChild(sitePane);
                 }
 
