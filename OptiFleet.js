@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.4.0
+// @version      5.4.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -4457,12 +4457,45 @@ window.addEventListener('load', function () {
                                                     <div style="display: inline-block; margin-left: 5px; cursor: pointer; position: relative; float: right;">
                                                         <div style="width: 20px; height: 20px; border-radius: 50%; background-color: #0078d4; color: white; text-align: center; line-height: 20px; font-size: 12px; border: 1px solid black; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;">!</div>
                                                         <div style="display: none; position: absolute; top: 20px; right: 0; background-color: #444947; color: white; padding: 5px; border-radius: 5px; z-index: 9999; white-space: nowrap; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.5);">
-                                                            [Error Log]
+                                                             <div style="display: flex; align-items: center; justify-content: space-between;">
+                                                                <div>
+                                                                    [Error Log]
+                                                                </div>
+                                                                <div style="display: flex; gap: 5px; align-items: center;">
+                                                                    <button class="copy-button" style="padding: 5px; background-color: green; color: white; border: none; cursor: pointer; border-radius: 5px;">Copy</button>
+                                                                   
+                                                                </div>
+                                                            </div>
                                                             <div style="display: block; padding: 5px; background-color: #444947; color: white; border-radius: 5px; margin-top: 5px; white-space: pre-wrap;">${error.text}</div>
                                                         </div>
                                                     </div>
                                                 </td>
                                             `;
+                                            // <button class="create-card-button" style="padding: 5px; background-color: #0078d4; color: white; border: none; cursor: pointer; border-radius: 5px;">Create Card</button>
+                                            // Add event listener for the copy button
+                                            const copyButton = row.querySelector('.copy-button');
+                                            copyButton.addEventListener('click', () => {
+                                                const errorText = error.text;
+                                                navigator.clipboard.writeText(errorText).then(() => {
+                                                    console.log('Text copied to clipboard');
+                                                }).catch(err => {
+                                                    console.error('Failed to copy text: ', err);
+                                                });
+                                                
+                                                // Make the button say copied
+                                                copyButton.textContent = 'Copied!';
+                                                setTimeout(() => {
+                                                    copyButton.textContent = 'Copy';
+                                                }, 1000);
+
+                                            });
+
+                                            /*
+                                            // Add event listener for the create card button
+                                            const createCardButton = row.querySelector('.create-card-button');
+                                            createCardButton.addEventListener('click', () => {
+                                                // Create card logic here
+                                            });*/
                                             
                                             row.minerID = minerID;
                                             row.minerDataCopy = structuredClone(currentMiner);
