@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Watch
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4
 // @description  Consolidates all the sites together into a single tab.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -306,9 +306,12 @@ window.addEventListener('load', async function () {
         document.head.appendChild(style);
 
         let longesttotalhashingtextWidth = 0; // Define longesttotalhashingtextWidth outside the function as a quick fix for it resizing the width to zero after refresh sometimes.
+        let enabledAutoReboots = {};
 
         // Function to create the overlay in the popout window
         function createOverlay(doc, sites) {
+            longesttotalhashingtextWidth = 0;
+
             // Create overlay div
             let overlay = doc.createElement('div');
             overlay.style.position = 'fixed';
@@ -386,7 +389,7 @@ window.addEventListener('load', async function () {
                 let onlineStatusIcons = '';
                 for (const site of company.sites) {
                     let onlineStatusIcon = `
-                        <span class="online-status-icon" title="${site.siteName} - Agent ${site.isOnline ? 'Online' : 'Offline'}" style="margin-right: 10px; position: relative;">
+                        <span class="online-status-icon" title="${site.siteName} - Agent ${site.agentName} ${site.isOnline ? 'Online' : 'Offline'}" style="margin-right: 10px; position: relative;">
                             ${site.isOnline ? getOnlineIcon : offlineIcon}
                         </span>
                     `;
@@ -426,7 +429,7 @@ window.addEventListener('load', async function () {
                     tooltip.style.borderRadius = '5px';
                     tooltip.style.zIndex = '1';
 
-                    tooltip.innerText = `${site.siteName} - Agent ${site.isOnline ? 'Online' : 'Offline'}\nNon-Hashing: ${site.hashingInventory.notHashingCount}/${site.hashingInventory.totalActiveOrUnreachableCount}\nHashing Percentage: ${((site.hashingInventory.hashingCount / site.hashingInventory.totalActiveOrUnreachableCount) * 100).toFixed(1)}%`;
+                    tooltip.innerText = `${site.siteName}:\n[${site.agentName}] ${site.isOnline ? 'Online' : 'Offline'}\nNon-Hashing: ${site.hashingInventory.notHashingCount}/${site.hashingInventory.totalActiveOrUnreachableCount}\nHashing Percentage: ${((site.hashingInventory.hashingCount / site.hashingInventory.totalActiveOrUnreachableCount) * 100).toFixed(1)}%`;
                     statusIcon.appendChild(tooltip);
                 });
 
@@ -488,7 +491,7 @@ window.addEventListener('load', async function () {
 
                     let siteTitleContainer = doc.createElement('div');
                     siteTitleContainer.style.display = 'flex';
-                    siteTitleContainer.style.alignItems = 'center';
+                    siteTitleContainer.style.justifyContent = 'space-between'; // Align items to the sides
 
                     // Online status
                     let onlineStatus = doc.createElement('div');
@@ -503,8 +506,62 @@ window.addEventListener('load', async function () {
                     siteTitle.style.marginBottom = '5px';
                     siteTitle.innerText = site.siteName;
 
+                    /*
+                    // Create "Auto-Reboot Element" button
+                    let autoRebootButton = doc.createElement('button');
+                    autoRebootButton.innerText = 'Enable Auto-Reboot';
+                    autoRebootButton.style.padding = '5px 10px';
+                    autoRebootButton.style.marginBottom = '10px';
+                    autoRebootButton.style.fontSize = '14px';
+                    autoRebootButton.style.cursor = 'pointer';
+                    autoRebootButton.style.backgroundColor = '#28a745'; // Green color
+                    autoRebootButton.style.color = '#fff';
+                    autoRebootButton.style.border = 'none';
+                    autoRebootButton.style.borderRadius = '5px';
+                    autoRebootButton.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.1)';
+                    autoRebootButton.style.transition = 'background-color 0.3s';
+                    autoRebootButton.style.marginLeft = 'auto'; // Align to right
+
+                    // Add hover effect
+                    autoRebootButton.addEventListener('mouseover', function() {
+                        autoRebootButton.style.backgroundColor = '#218838';
+                    });
+
+                    autoRebootButton.addEventListener('mouseout', function() {
+                        autoRebootButton.style.backgroundColor = '#28a745';
+                    });
+
+                    // Add click event to the button
+                    autoRebootButton.addEventListener('click', function() {
+                        // Toggle the auto-reboot panel
+                        if (autoRebootPanel.style.display === 'none') {
+                            autoRebootPanel.style.display = 'block';
+                            autoRebootButton.innerText = 'Disable Auto-Reboot';
+                            enabledAutoReboots[site.siteId] = true;
+                        } else {
+                            autoRebootPanel.style.display = 'none';
+                            autoRebootButton.innerText = 'Enable Auto-Reboot';
+                            enabledAutoReboots[site.siteId] = false;
+                        }
+                    });
+
+                    // Create new scroll panel element below the stats elements
+                    let autoRebootPanel = doc.createElement('div');
+                    autoRebootPanel.style.marginTop = '10px';
+                    autoRebootPanel.style.padding = '10px';
+                    autoRebootPanel.style.backgroundColor = '#555';
+                    autoRebootPanel.style.borderRadius = '5px';
+                    autoRebootPanel.innerText = 'Auto-Reboot Element Panel';
+                    autoRebootPanel.style.display = 'none'; // Initially hidden
+
+                    if (enabledAutoReboots[site.siteId]) {
+                        autoRebootPanel.style.display = 'block';
+                        autoRebootButton.innerText = 'Disable Auto-Reboot';
+                    }
+                    */
                     siteTitleContainer.appendChild(onlineStatus);
                     siteTitleContainer.appendChild(siteTitle);
+                    //siteTitleContainer.appendChild(autoRebootButton);
 
                     let siteMetricsContainer = doc.createElement('div');
                     siteMetricsContainer.className = 'm-grid-list is-size-l';
@@ -642,9 +699,9 @@ window.addEventListener('load', async function () {
                     siteMetricsContainer.appendChild(hashRate);
                     siteMetricsContainer.appendChild(hashingImpact);
 
-                    
                     sitePane.appendChild(siteTitleContainer);
                     sitePane.appendChild(siteMetricsContainer);
+                    //sitePane.appendChild(autoRebootPanel); // Append the auto-reboot panel
                     companySitesContainer.appendChild(sitePane);
                 }
 
