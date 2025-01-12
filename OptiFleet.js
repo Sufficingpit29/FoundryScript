@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.3.9
+// @version      5.4.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2515,8 +2515,34 @@ window.addEventListener('load', function () {
                                         const manualHardReboot = lastRebootTimes[minerID].manualHardReboot || false;
                                         const hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
 
-                                        if(isOnline) {
-                                            if(moreThanOneHour && belowMaxTemp && (!hashRateEfficiency || hashRateEfficiency > 0) && !manualHardReboot && !hardRebootAttemptedTime) { // If the miner passed the conditions, then we can reboot it
+                                        // If the miner has a lastRebootTime and it is at or more than 15 minutes and still has a 0 hash rate, then we can flag it to be hard rebooted, or if the miner last uptime is the same as the current uptime
+                                        const minTime = 15*60*1000; // 15 minutes
+                                        const forgetTime = 60*60*1000; // 1 hours
+
+                                        const isPastMinTime = timeSinceLastSoftReboot >= minTime;
+                                        const notPastForgetTime = timeSinceLastSoftReboot < forgetTime;
+
+                                        // Loops through the softRebootsTimes and remove any that are more than 12 hours old
+                                        lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
+                                        lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
+                                        lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes.filter((time) => {
+                                            return (new Date() - new Date(time)) < 12*60*60*1000;
+                                        });
+
+                                        const numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
+                                        const moreThan3SoftReboots = numOfSoftReboots >= 3;
+
+                                        
+                                        const timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
+                                        const hardRebootAttempted = (timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000) || hardRebootAttemptedTime === true;
+
+                                        let hardRebootRecommended = lastRebootTimes[minerID].hardRebootRecommended || false;
+                                        const timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
+                                        hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 12*60*60*1000; // 12 hours
+                                        let hardRebootRecommendedBool = !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || manualHardReboot);
+
+                                        if(isOnline && !hardRebootRecommendedBool && !hardRebootAttempted) {
+                                            if(moreThanOneHour && belowMaxTemp && (!hashRateEfficiency || hashRateEfficiency > 0)) { // If the miner passed the conditions, then we can reboot it
 
                                                 // Loop through lastRebootTimes, and get the last reboot time for each miner, if it has been less than 15 minutes, we will count that as activly rebooting
                                                 var rebootCount = getTotalRebootCount()[0];
@@ -2587,38 +2613,14 @@ window.addEventListener('load', function () {
                                                 rebootData[minerID].details.sub.push("Miner is in Low Power Mode.");
                                             }
                                         }
-                                    
-                                        // If the miner has a lastRebootTime and it is at or more than 15 minutes and still has a 0 hash rate, then we can flag it to be hard rebooted, or if the miner last uptime is the same as the current uptime
-                                        const minTime = 15*60*1000; // 15 minutes
-                                        const forgetTime = 60*60*1000; // 1 hours
-
-                                        const isPastMinTime = timeSinceLastSoftReboot >= minTime;
-                                        const notPastForgetTime = timeSinceLastSoftReboot < forgetTime;
-
-                                        // Loops through the softRebootsTimes and remove any that are more than 12 hours old
-                                        lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
-                                        lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes || [];
-                                        lastRebootTimes[minerID].softRebootsTimes = lastRebootTimes[minerID].softRebootsTimes.filter((time) => {
-                                            return (new Date() - new Date(time)) < 12*60*60*1000;
-                                        });
-
-                                        const numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
-                                        const moreThan3SoftReboots = numOfSoftReboots >= 3;
 
                                         // Check if the miner is at 0 uptime and is online, if so that might indicate it is stuck, but we only do it if the normal soft reboot conditions have gone through and is now skipping
                                         const stuckAtZero = upTime === 0 && isOnline && rebootData[minerID].details.main === "Soft Reboot Skipped";
                                         if(stuckAtZero) {
                                             rebootData[minerID].details.sub.push("Miner might be stuck at 0 uptime? Please wait for confirmation check...");
                                         }
-
-                                        const timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
-                                        const hardRebootAttempted = (timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000) || hardRebootAttemptedTime === true;
-
-                                        let hardRebootRecommended = lastRebootTimes[minerID].hardRebootRecommended || false;
-                                        const timeSinceHardRebootRecommended = hardRebootRecommended ? (new Date() - new Date(hardRebootRecommended)) : false;
-                                        hardRebootRecommended = timeSinceHardRebootRecommended && timeSinceHardRebootRecommended < 12*60*60*1000; // 12 hours
                                         
-                                        if( !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || manualHardReboot)) {
+                                        if( hardRebootRecommendedBool ) {
                                             lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
 
                                             rebootData[minerID].details.main = "Hard Reboot Recommended";
