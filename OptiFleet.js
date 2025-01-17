@@ -6428,8 +6428,8 @@ window.addEventListener('load', function () {
                 return;
             }
 
-            // If last gottime is more than 1 seconds, close the window
-            if (Date.now() - lastGotTime > 1000) {
+            // If last gottime is more than 3 seconds, close the window
+            if (Date.now() - lastGotTime > 3000) {
                 console.log("Closing window because probably at end of planner cards.");
                 GM_SuperValue.set("plannerCardsClosePage_"+plannerID, true);
                 return;
