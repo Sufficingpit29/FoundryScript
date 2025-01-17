@@ -1,12 +1,11 @@
 // To do:
-// - Add a thing for when your create a card it will bring you to the card if it already exists and tell you it already exists.
 // - Auto select owner for creating a card
 // - Somehow integrate my error grab system into the card creation?
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.4.4
+// @version      5.5.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -81,9 +80,9 @@ window.addEventListener('load', function () {
     }
 
     const urlLookupPlannerGrid = {
-        "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
         "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
-        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad"
+        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
+        "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
     }
 
     //-----------------
@@ -729,7 +728,6 @@ window.addEventListener('load', function () {
             }));
         }
 
-        /*
         let updatePlannerCardsData = function() {}; // Placeholder function for the actual function that will be created later
         
         getPlannerCardData = function() {
@@ -813,6 +811,8 @@ window.addEventListener('load', function () {
             const loadingSpinner = plannerCardWindow.document.createElement('div');
             loadingSpinner.className = 'spinner';
             
+            // Add a sleek dark background to the overlay
+            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
             plannerCardWindow.document.body.appendChild(overlay);
             plannerCardWindow.document.body.appendChild(loadingText);
             plannerCardWindow.document.body.appendChild(loadingSpinner);
@@ -823,19 +823,22 @@ window.addEventListener('load', function () {
             }
         
             // Create the iframes for the planner boards
-            for (const key in urlLookupPlanner) {
+            let iframes = [];
+            for (const key in urlLookupPlannerGrid) {
                 const plannerID = getPlannerID(urlLookupPlanner[key]);
                 GM_SuperValue.set("plannerPageLoaded_"+plannerID, false);
+                GM_SuperValue.set("plannerCardsClosePage_"+plannerID, false);
 
                 const iframe = plannerCardWindow.document.createElement('iframe');
                 iframe.className = 'planner-iframe';
-                iframe.src = urlLookupPlanner[key];
+                iframes[plannerID] = iframe;
+                iframe.src = urlLookupPlannerGrid[key];
                 iframe.style.cssText = `
                     position: absolute;
                     top: 0;
                     left: 0;
-                    width: 5000%;
-                    height: 5000%;
+                    width: 100%;
+                    height: 100%;
                     z-index: -1;
                 `;
                 plannerCardWindow.document.body.appendChild(iframe);
@@ -844,7 +847,7 @@ window.addEventListener('load', function () {
             // Log element showing what planner cards have been located
             const logElement = plannerCardWindow.document.createElement('div');
             logElement.className = 'log';
-            logElement.textContent = 'Locating planner cards...';
+            logElement.textContent = '';
             plannerCardWindow.document.body.appendChild(logElement);
         
             // Interval to check the data loaded
@@ -865,15 +868,18 @@ window.addEventListener('load', function () {
                     return;
                 }
         
-                let loadedAllPages = true;
                 let plannerCardsDataAll = {};
                 for (const key in urlLookupPlanner) {
                     const plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
                     const data = GM_SuperValue.get("plannerCardsData_" + plannerID, {});
                     plannerCardsDataAll = { ...plannerCardsDataAll, ...data };
 
-                    if (!GM_SuperValue.get("plannerPageLoaded_"+plannerID, false)) {
-                        loadedAllPages = false;
+                    // if plannerCardsClosePage_ is true, close the page
+                    if(GM_SuperValue.get("plannerCardsClosePage_"+plannerID, false)) {
+                        GM_SuperValue.set("plannerCardsClosePage_"+plannerID, false);
+                        const iframe = iframes[plannerID];
+                        iframe.remove();
+                        return;
                     }
                 }
         
@@ -881,15 +887,15 @@ window.addEventListener('load', function () {
                 for (const key in plannerCardsDataAll) {
                     if (!foundPlannerCards.includes(key)) {
                         foundPlannerCards.push(key);
-                        logElement.textContent = `Miner: ${key} card located. \n   -In column: ${plannerCardsDataAll[key].columnTitle}\n${logElement.textContent}`;
+                        //logElement.textContent = `Miner: ${key} card located. \n   -In column: ${plannerCardsDataAll[key].columnTitle}\n${logElement.textContent}`;
                     }
                 }
 
                 // Scroll to top of the page
-                plannerCardWindow.scrollTo(0, 0);
+                //plannerCardWindow.scrollTo(0, 0);
         
-                // If the length of the foundPlannerCards array hasn't changed in the last 12 seconds, then we can assume all the data has been collected
-                if (foundPlannerCards.length === lastLength && lastLengthSameCount >= 12 && loadedAllPages) {
+                // if all the iframes are closed
+                if (plannerCardWindow.document.querySelectorAll('.planner-iframe').length === 0) {
                     clearInterval(checkDataInterval);
                     logElement.textContent = 'All planner cards located. Data collection complete.\n\n' + logElement.textContent;
                     // Remove the loading spinner and text
@@ -915,18 +921,11 @@ window.addEventListener('load', function () {
                     setTimeout(() => {
                         plannerCardWindow.close();
                         updatePlannerCardsData();
-                    }, 1000);
+                    }, 100);
                 }
-                if (lastLength === foundPlannerCards.length && loadedAllPages) {
-                    lastLengthSameCount++;
-                } else {
-                    lastLengthSameCount = 0;
-                }
-                lastLength = foundPlannerCards.length;
-
             }, 1000);
         }
-        */
+        
         setInterval(function() {
             // Constantly checks if there siteId or companyId changes
             if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
@@ -1837,7 +1836,7 @@ window.addEventListener('load', function () {
                     if (minerList) {
                         clearInterval(minerListCheck);
                         
-                        /*
+                        
                         let plannerCardsDataAll = {};
                         function updatePlannerLink(plannerElement) {
                             
@@ -1909,11 +1908,11 @@ window.addEventListener('load', function () {
                         const updateCardList = setInterval(() => {
                             updatePlannerCardsData();
                         }, 10000);
-                        */
+                        
                         // Add mutation observer to the minerList
                         const observer = new MutationObserver(() => {
                             getCurrentMinerList();
-                            /*
+                            
                             // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
                             for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
                                 const modelCell = minerData['Model'];
@@ -1955,7 +1954,7 @@ window.addEventListener('load', function () {
                                     updatePlannerLink(plannerElement);
                                 }
                             }
-                            */
+                            
                             // Container Temp
                             retrieveContainerTempData((containerTempData) => {
                                 for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
@@ -5108,7 +5107,7 @@ window.addEventListener('load', function () {
 
                         // Add the full auto reboot button to the right of the dropdown
                         //actionsDropdown.before(fullAutoRebootButton);
-                        /*
+                        
                         // Create a 'getPlannerCardData' button to the right of the dropdown
                         const updatePlannerCardsDropdown = document.createElement('div');
                         updatePlannerCardsDropdown.classList.add('op-dropdown');
@@ -5316,7 +5315,7 @@ window.addEventListener('load', function () {
                         }
                         
                         setUpPlannerCardRefresh();
-                        */
+                        
                     }
 
                     function DetectFrozenMiners() {
@@ -5793,7 +5792,7 @@ window.addEventListener('load', function () {
                 }
 
                 var serialNumber = minerDetails['serialNumber'];
-                /*
+                
                 // Cycle 3 dots
                 let cycle = 0;
                 let dots = "";
@@ -5908,7 +5907,7 @@ window.addEventListener('load', function () {
                         mBox.appendChild(refreshText);
                     }
                 }, 1000);
-                */
+                
             }
             checkIfInPlannerBoard();
             
@@ -6418,13 +6417,21 @@ window.addEventListener('load', function () {
         setTimeout(locatePlannerCard, 800);
 
         // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
-        let scrollDownTimes = 0;
+        let lastGotTime = Date.now();
         let setDate = false;
         let plannerID = getPlannerID(currentUrl); //.match(/plan\/([^?]+)/)[1].split('/')[0];
         let newPlannerData = {};
+        let collectIndex = 1;
         function collectPlannerCardData() {
             // Check if this window is actually a iframe
             if (window === window.top) {
+                return;
+            }
+
+            // If last gottime is more than 1 seconds, close the window
+            if (Date.now() - lastGotTime > 1000) {
+                console.log("Closing window because probably at end of planner cards.");
+                GM_SuperValue.set("plannerCardsClosePage_"+plannerID, true);
                 return;
             }
 
@@ -6435,42 +6442,62 @@ window.addEventListener('load', function () {
                 setDate = true;
             }
 
-            // Find if columnsList exists
-            const columnsList = document.querySelector('.columnsList');
-            if (!columnsList) {
-                setTimeout(collectPlannerCardData, 100);
+            // Get the grid-body element
+            const gridBody = document.querySelector('.grid-body');
+            if (!gridBody) {
+                setTimeout(collectPlannerCardData, 10);
                 return;
             }
 
-            // Find all scrollable elements and scroll to bottom
-            const scrollableElements = document.querySelectorAll('.scrollable');
-            scrollableElements.forEach(element => {
-                element.scrollTop = element.scrollHeight;
-            });
-            scrollDownTimes++;
+            // Get the aria-rowindex element of whatever index we are on
+            const ariaRowIndex = gridBody.querySelector(`[aria-rowindex="${collectIndex}"]`);
+            if (!ariaRowIndex) {
+                setTimeout(collectPlannerCardData, 10);
+                return;
+            }
+            ariaRowIndex.scrollIntoView({ behavior: 'auto', block: 'center' });
+
+            const taskNameElement = ariaRowIndex.querySelector('[aria-colindex="2"]');
+            if (!taskNameElement) {
+                setTimeout(collectPlannerCardData, 10);
+                return;
+            }
+            taskNameElement.scrollIntoView({ behavior: 'auto', block: 'center' });
+
+            const columnTitleElement = ariaRowIndex.querySelector('[aria-colindex="6"]');
+            if (!columnTitleElement) {
+                setTimeout(collectPlannerCardData, 10);
+                return;
+            }
+            columnTitleElement.scrollIntoView({ behavior: 'auto', block: 'center' });
+
+            // Get the name of the card
+            const taskName = taskNameElement.textContent.trim();
+            const columnTitle = columnTitleElement.textContent.replace('', '').trim();
+
+            if (taskName === "" || columnTitle === "") {
+                setTimeout(collectPlannerCardData, 10);
+                return;
+            }
+
+            lastGotTime = Date.now();
+
+            // Highlight the row
+            ariaRowIndex.style.backgroundColor = 'grey';
+
+            const serialNumber = taskName.split('_')[0];
+            console.log("Miner Serial Number: ", serialNumber);
+            console.log("Column Title: [" + columnTitle + "]");
+            let cardData = {
+                columnTitle: columnTitle,
+                url: window.location.href.replace('grid', 'board')
+            };
+            newPlannerData[serialNumber] = cardData;
+            GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
+
+            collectIndex++;
             
-            // Loop through all the columns
-            columnsList.querySelectorAll('li').forEach(column => {
-                const columnElement = column.querySelector('.columnTitle h3');
-                if (columnElement) {
-                    const columnTitle = columnElement.innerText.replace(locatingText, '');
-                    const taskCards = column.querySelectorAll('.taskCard');
-                    taskCards.forEach(card => {
-                        const taskName = card.getAttribute('aria-label');
-                        const serialNumber = taskName.split('_')[0];
-                        //console.log("Miner Serial Number: ", serialNumber, "Column Title: ", columnTitle);
-                        let cardData = {
-                            columnTitle: columnTitle,
-                            url: window.location.href
-                        };
-                        newPlannerData[serialNumber] = cardData;
-                        GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
-                        //console.log("Adding SN: ", serialNumber, " to column: ", columnTitle);
-                    });
-                }
-            });
-            
-            setTimeout(collectPlannerCardData, 100); // Retry every 100ms
+            setTimeout(collectPlannerCardData, 1); // Retry every 100ms
         }
         collectPlannerCardData();
 
