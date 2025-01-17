@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.4.1
+// @version      5.4.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -729,6 +729,7 @@ window.addEventListener('load', function () {
             }));
         }
 
+        /*
         let updatePlannerCardsData = function() {}; // Placeholder function for the actual function that will be created later
         
         getPlannerCardData = function() {
@@ -808,11 +809,13 @@ window.addEventListener('load', function () {
             overlay.className = 'overlay';
             const loadingText = plannerCardWindow.document.createElement('div');
             loadingText.textContent = 'Getting Planner Cards Data...';
+            loadingText.style.zIndex = '999999';
             const loadingSpinner = plannerCardWindow.document.createElement('div');
             loadingSpinner.className = 'spinner';
-            overlay.appendChild(loadingText);
-            overlay.appendChild(loadingSpinner);
+            
             plannerCardWindow.document.body.appendChild(overlay);
+            plannerCardWindow.document.body.appendChild(loadingText);
+            plannerCardWindow.document.body.appendChild(loadingSpinner);
         
             // Check if the iframes already exist
             if (plannerCardWindow.document.querySelectorAll('.planner-iframe').length > 0) {
@@ -831,8 +834,8 @@ window.addEventListener('load', function () {
                     position: absolute;
                     top: 0;
                     left: 0;
-                    width: 100%;
-                    height: 100%;
+                    width: 5000%;
+                    height: 5000%;
                     z-index: -1;
                 `;
                 plannerCardWindow.document.body.appendChild(iframe);
@@ -841,7 +844,7 @@ window.addEventListener('load', function () {
             // Log element showing what planner cards have been located
             const logElement = plannerCardWindow.document.createElement('div');
             logElement.className = 'log';
-            logElement.textContent = 'Located Planner Cards:';
+            logElement.textContent = 'Locating planner cards...';
             plannerCardWindow.document.body.appendChild(logElement);
         
             // Interval to check the data loaded
@@ -878,17 +881,17 @@ window.addEventListener('load', function () {
                 for (const key in plannerCardsDataAll) {
                     if (!foundPlannerCards.includes(key)) {
                         foundPlannerCards.push(key);
-                        logElement.textContent += `\n  Miner: ${key} card located. \n   -In column: ${plannerCardsDataAll[key].columnTitle}`;
+                        logElement.textContent = `Miner: ${key} card located. \n   -In column: ${plannerCardsDataAll[key].columnTitle}\n${logElement.textContent}`;
                     }
                 }
-                
-                // Scroll to the bottom of page
-                plannerCardWindow.scrollTo(0, document.body.scrollHeight);
+
+                // Scroll to top of the page
+                plannerCardWindow.scrollTo(0, 0);
         
                 // If the length of the foundPlannerCards array hasn't changed in the last 12 seconds, then we can assume all the data has been collected
                 if (foundPlannerCards.length === lastLength && lastLengthSameCount >= 12 && loadedAllPages) {
                     clearInterval(checkDataInterval);
-                    logElement.textContent += '\n\nAll planner cards located. Data collection complete.';
+                    logElement.textContent = 'All planner cards located. Data collection complete.\n\n' + logElement.textContent;
                     // Remove the loading spinner and text
                     overlay.remove();
 
@@ -902,8 +905,11 @@ window.addEventListener('load', function () {
                     finishedText.textContent = 'Finished';
                     logElement.before(finishedText);
 
-                    // Scroll to top of the page
-                    plannerCardWindow.scrollTo(0, 0);
+                    // Remove spinner and loading text
+                    loadingText.remove();
+                    loadingSpinner.remove();
+
+                    
         
                     // Time out to close the window
                     setTimeout(() => {
@@ -920,7 +926,7 @@ window.addEventListener('load', function () {
 
             }, 1000);
         }
-
+        */
         setInterval(function() {
             // Constantly checks if there siteId or companyId changes
             if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
@@ -1831,6 +1837,7 @@ window.addEventListener('load', function () {
                     if (minerList) {
                         clearInterval(minerListCheck);
                         
+                        /*
                         let plannerCardsDataAll = {};
                         function updatePlannerLink(plannerElement) {
                             
@@ -1902,7 +1909,7 @@ window.addEventListener('load', function () {
                         const updateCardList = setInterval(() => {
                             updatePlannerCardsData();
                         }, 10000);
-
+                        */
                         // Add mutation observer to the minerList
                         const observer = new MutationObserver(() => {
                             getCurrentMinerList();
@@ -1917,7 +1924,7 @@ window.addEventListener('load', function () {
                                 const serialNumber = modelCell.children[1].innerText;
                                 const slotID = slotIDCell.innerText;
                                 const status = statusCell.innerText;
-                                console.log("serialNumber", serialNumber);
+                                //console.log("serialNumber", serialNumber);
 
                                 // Check if slotID has minden in it
                                 if (!slotID.includes('Minden')) {
@@ -5101,8 +5108,8 @@ window.addEventListener('load', function () {
 
                         // Add the full auto reboot button to the right of the dropdown
                         //actionsDropdown.before(fullAutoRebootButton);
-
-                        // Create a 'full' auto reboot button to the right of the dropdown
+                        /*
+                        // Create a 'getPlannerCardData' button to the right of the dropdown
                         const updatePlannerCardsDropdown = document.createElement('div');
                         updatePlannerCardsDropdown.classList.add('op-dropdown');
                         updatePlannerCardsDropdown.style.display = 'inline-block';
@@ -5309,6 +5316,7 @@ window.addEventListener('load', function () {
                         }
                         
                         setUpPlannerCardRefresh();
+                        */
                     }
 
                     function DetectFrozenMiners() {
@@ -5785,7 +5793,7 @@ window.addEventListener('load', function () {
                 }
 
                 var serialNumber = minerDetails['serialNumber'];
-
+                /*
                 // Cycle 3 dots
                 let cycle = 0;
                 let dots = "";
@@ -5900,6 +5908,7 @@ window.addEventListener('load', function () {
                         mBox.appendChild(refreshText);
                     }
                 }, 1000);
+                */
             }
             checkIfInPlannerBoard();
             
@@ -6311,6 +6320,7 @@ window.addEventListener('load', function () {
 
             let serialNumber = locatePlannerCardData.serialNumber;
             let columnTitle = locatePlannerCardData.columnTitle;
+            let cardCreateCheck = locatePlannerCardData.cardCreateCheck;
 
             // Find the card with the serial number
             const cards = document.querySelectorAll('.taskCard');
@@ -6667,7 +6677,160 @@ window.addEventListener('load', function () {
                 console.log("No detailsData found.");
                 return;
             }
+            let serialNumber = detailsData['serialNumber'];
 
+            // find the aria-label="Filter text box" and input the serial number
+            const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
+            if (filterTextBox) {
+                filterTextBox.value = serialNumber;
+                filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+                console.log("Inputting serial number into filter text box:", serialNumber);
+
+                // Set background color to the filter text box
+                filterTextBox.style.transition = 'background-color 0.8s';
+                filterTextBox.style.backgroundColor = '#c3b900';
+            } else {
+                console.log("Filter text box not found.");
+                timeout = setTimeout(setUpAutoCardLogic, 500);
+                return;
+            }
+
+            // Add the shake animation effect
+            const shakeKeyframes = `
+                @keyframes shake {
+                    0% { transform: translate(1px, 1px) rotate(0deg); }
+                    10% { transform: translate(-1px, -2px) rotate(-1deg); }
+                    20% { transform: translate(-3px, 0px) rotate(1deg); }
+                    30% { transform: translate(3px, 2px) rotate(0deg); }
+                    40% { transform: translate(1px, -1px) rotate(1deg); }
+                    50% { transform: translate(-1px, 2px) rotate(-1deg); }
+                    60% { transform: translate(-3px, 1px) rotate(0deg); }
+                    70% { transform: translate(3px, 1px) rotate(-1deg); }
+                    80% { transform: translate(-1px, -1px) rotate(1deg); }
+                    90% { transform: translate(1px, 2px) rotate(0deg); }
+                    100% { transform: translate(1px, -2px) rotate(-1deg); }
+                }
+            `;
+            const style = document.createElement('style');
+            style.innerHTML = shakeKeyframes;
+            document.head.appendChild(style);
+
+            // Add pulse animation effect
+            const pulseKeyframes = `
+                @keyframes pulse {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.01); }
+                    100% { transform: scale(1); }
+                }
+            `;
+            const style2 = document.createElement('style');
+            style2.innerHTML = pulseKeyframes;
+            document.head.appendChild(style2);
+
+            let stopChecking = false;
+            let existingCard = false;
+            let maxTries = 30;
+            let curTry = 0;
+            function FindIfCardExists() {
+                if (stopChecking) { return; }
+                // Get all the cards and scroll to it if the same serial number is found
+                const cards = document.querySelectorAll('.taskCard');
+                curTry++;
+                console.log("Checking for card with serial number:", serialNumber);
+                if (cards.length === 0) {
+                    setTimeout(() => {
+                        FindIfCardExists();
+                    }, 100);
+                    return;
+                }
+                
+                if (curTry >= maxTries) {
+                    // Reset the search bar
+                    filterTextBox.value = '';
+                    filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    console.log("Max tries reached, card not found.");
+
+                    // Set search bar color
+                    filterTextBox.style.backgroundColor = 'orange';
+                    timeout = setTimeout(() => {
+                        filterTextBox.style.backgroundColor = '';
+                    }, 1000);
+                    return;
+                }
+                cards.forEach(card => {
+                    const taskName = card.getAttribute('aria-label');
+                    const container = card.querySelector('.container');
+                    if (taskName.includes(serialNumber)) {
+                        existingCard = container;
+                        let columnTitle = container.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.querySelector('.columnTitle h3').textContent;
+                        
+                        // Set search bar color
+                        filterTextBox.style.backgroundColor = '#1797ff';
+                        timeout = setTimeout(() => {
+                            filterTextBox.style.backgroundColor = '';
+                        }, 1000);
+
+                        // Scroll to the card
+                        container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                        // heightlight the card red and shake it
+                        container.style.transition = 'background-color 0.8s';
+                        container.style.backgroundColor = 'red';
+                        container.style.animation = 'shake 1s';
+                        setTimeout(() => {
+                            container.style.transition = 'background-color 1s';
+                            container.style.animation = '';
+                            container.style.backgroundColor = '';
+                            // set to 'pulse' animation
+                            container.style.animation = 'pulse 1s infinite';
+
+                            // red outline
+                            container.style.outline = '2px solid red';
+                        }, 1000);
+
+                        // Create a notification that the card already exists
+                        const notification = document.createElement('div');
+                        notification.style.position = 'fixed';
+                        notification.style.top = '20px';
+                        notification.style.left = '20px';
+                        notification.style.backgroundColor = '#ff4d4d'; // Red background
+                        notification.style.padding = '10px 20px';
+                        notification.style.borderRadius = '5px';
+                        notification.style.color = '#fff'; // White text for readability
+                        notification.style.fontSize = '14px';
+                        notification.style.fontWeight = 'bold';
+                        notification.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)'; // Add shadow for sleek look
+                        notification.style.transition = 'opacity 0.5s ease'; // Fade effect
+                        notification.style.opacity = '0'; // Start hidden
+                        notification.innerHTML = `
+                            <p>Card already exists.</p>
+                            <p>Serial Number: ${serialNumber}</p>
+                        `;
+                        // Make sure it is always layered on top
+                        notification.style.zIndex = '9999';
+                        document.body.appendChild(notification);
+
+                        // Fade in the notification
+                        setTimeout(() => {
+                            notification.style.opacity = '1';
+                        }, 10);
+
+                        // Fade out and remove the notification after 5 seconds
+                        setTimeout(() => {
+                            notification.style.opacity = '0';
+                            setTimeout(() => {
+                                document.body.removeChild(notification);
+                            }, 500); // Wait for fade out transition
+                        }, 5000);
+
+                        foundCard = true;
+                        console.log("Found the card:", card);
+                    } else {
+                        console.log("Card not found.");
+                    }
+                });
+            }
+            FindIfCardExists();
             function ResetTaskData() {
                 GM_SuperValue.set('taskName', '');
                 GM_SuperValue.set('taskNotes', '');
@@ -6808,6 +6971,8 @@ window.addEventListener('load', function () {
                     const columnItems = columnsList.querySelectorAll('li');
                     columnItems.forEach(columnItem => {
                         const columnTitle = columnItem.querySelector('.columnTitle');
+                        if (!columnTitle) { return; }
+
                         const newBucketColumn = columnTitle.getAttribute('title') === 'Add a new bucket';
 
                         // Column title exists and there is no button already
@@ -6843,6 +7008,8 @@ window.addEventListener('load', function () {
             var hasClicked = false;
             function clickAddTaskButton(header) {
                 if(hasClicked) { return; }
+
+                stopChecking = true;
 
                 // Remove all the buttons
                 createCardButtons.forEach(button => {
@@ -6924,9 +7091,22 @@ window.addEventListener('load', function () {
 
                 const cancelButton = document.getElementById('cancelButton');
                 cancelButton.addEventListener('click', () => {
+                    // Reset the existingCard
+                    if (existingCard) {
+                        existingCard.style.transition = 'background-color 1s';
+                        existingCard.style.animation = '';
+                        existingCard.style.backgroundColor = '';
+                        existingCard.style.outline = 'none';
+                    }
+
+                    // Remove all the buttons
+                    createCardButtons.forEach(button => {
+                        button.remove();
+                    });
+
                     ResetTaskData();
                     document.body.removeChild(popup);
-                    window.close();
+                    //window.close();
                 });
             }
 
