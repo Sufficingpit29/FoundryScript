@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.4.3
+// @version      5.4.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -6659,6 +6659,18 @@ window.addEventListener('load', function () {
         // Logic for automatically adding a task to the planner
 
         function setUpAutoCardLogic() {
+
+            // find the aria-label="Filter text box" and input the serial number
+            const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
+            if (filterTextBox) {
+                filterTextBox.value = "";
+                filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+                console.log("Filter text box not found.");
+                timeout = setTimeout(setUpAutoCardLogic, 500);
+                return;
+            }
+
             console.log("Setting up Auto Card Logic");
             let taskName = GM_SuperValue.get("taskName", "");
             if (taskName === "") {
@@ -6678,6 +6690,14 @@ window.addEventListener('load', function () {
                 return;
             }
             let serialNumber = detailsData['serialNumber'];
+
+            filterTextBox.value = serialNumber;
+            filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+            console.log("Inputting serial number into filter text box:", serialNumber);
+
+            // Set background color to the filter text box
+            filterTextBox.style.transition = 'background-color 0.8s';
+            filterTextBox.style.backgroundColor = '#c3b900';
 
             /*
             // find taskFiltersButton and click it
@@ -6699,22 +6719,6 @@ window.addEventListener('load', function () {
                 return;
             }
             */
-
-            // find the aria-label="Filter text box" and input the serial number
-            const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
-            if (filterTextBox) {
-                filterTextBox.value = serialNumber;
-                filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
-                console.log("Inputting serial number into filter text box:", serialNumber);
-
-                // Set background color to the filter text box
-                filterTextBox.style.transition = 'background-color 0.8s';
-                filterTextBox.style.backgroundColor = '#c3b900';
-            } else {
-                console.log("Filter text box not found.");
-                timeout = setTimeout(setUpAutoCardLogic, 500);
-                return;
-            }
 
             // Add the shake animation effect
             const shakeKeyframes = `
