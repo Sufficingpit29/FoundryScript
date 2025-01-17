@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.4.2
+// @version      5.4.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -6679,6 +6679,27 @@ window.addEventListener('load', function () {
             }
             let serialNumber = detailsData['serialNumber'];
 
+            /*
+            // find taskFiltersButton and click it
+            const taskFilters = document.querySelector('#taskFiltersButton');
+            if (taskFilters) {
+                const taskFiltersButton = taskFilters.querySelector('button');
+                if(taskFiltersButton) {
+                    taskFiltersButton.focus();
+                    taskFiltersButton.click();
+                    console.log("Clicked taskFiltersButton");
+                } else {
+                    console.log("taskFiltersButton not found.");
+                    timeout = setTimeout(setUpAutoCardLogic, 500);
+                    return;
+                }
+            } else {
+                console.log("taskFilters not found.");
+                timeout = setTimeout(setUpAutoCardLogic, 500);
+                return;
+            }
+            */
+
             // find the aria-label="Filter text box" and input the serial number
             const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
             if (filterTextBox) {
@@ -6733,6 +6754,16 @@ window.addEventListener('load', function () {
             let curTry = 0;
             function FindIfCardExists() {
                 if (stopChecking) { return; }
+                
+                // Get all sectionToggleButton and expand them
+                const sectionToggleButtons = document.querySelectorAll('.sectionToggleButton');
+                console.log("sectionToggleButtons: ", sectionToggleButtons);
+                sectionToggleButtons.forEach(button => {
+                    if (button.getAttribute('aria-expanded') === 'false') {
+                        button.click();
+                    }
+                });
+
                 // Get all the cards and scroll to it if the same serial number is found
                 const cards = document.querySelectorAll('.taskCard');
                 curTry++;
@@ -7106,7 +7137,7 @@ window.addEventListener('load', function () {
 
                     ResetTaskData();
                     document.body.removeChild(popup);
-                    //window.close();
+                    window.close();
                 });
             }
 
