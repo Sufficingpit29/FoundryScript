@@ -1913,7 +1913,7 @@ window.addEventListener('load', function () {
                         // Add mutation observer to the minerList
                         const observer = new MutationObserver(() => {
                             getCurrentMinerList();
-
+                            /*
                             // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
                             for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
                                 const modelCell = minerData['Model'];
@@ -1955,7 +1955,7 @@ window.addEventListener('load', function () {
                                     updatePlannerLink(plannerElement);
                                 }
                             }
-
+                            */
                             // Container Temp
                             retrieveContainerTempData((containerTempData) => {
                                 for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
