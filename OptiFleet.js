@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.5.3
+// @version      5.5.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1843,7 +1843,7 @@ window.addEventListener('load', function () {
                             let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
                             let currentTime = new Date().getTime();
                             let timeDiff = (currentTime - lastCollectionTime) / 1000;
-                            const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
+                            const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60*4});
                             const retrievalInterval = plannerCardConfig.retrieveInterval*60;
                             if (timeDiff > retrievalInterval) {
                                 plannerElement.textContent = '';
@@ -1878,7 +1878,7 @@ window.addEventListener('load', function () {
                                 plannerElement.style.color = '#0078d4';
                                 plannerElement.style.textDecoration = 'underline';
                             } else {
-                                plannerElement.textContent = 'Planner Card: Not Found';
+                                plannerElement.textContent = 'No Card Found';
 
                                 // Remove the clickable link stuff
                                 plannerElement.style.cursor = 'default';
