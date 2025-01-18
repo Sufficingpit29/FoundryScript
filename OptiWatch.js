@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Watch
 // @namespace    http://tampermonkey.net/
-// @version      0.5
+// @version      0.6
 // @description  Consolidates all the sites together into a single tab.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -12,6 +12,8 @@
 // @grant        GM_xmlhttpRequest
 // @run-at       document-start
 // ==/UserScript==
+
+//https://foundryoptifleet.com/api/ScheduledShutdowns?siteId=3&start=2025-01-11T04:50:38&end=2025-01-12T04:50:38&userId=e86d021e-b084-47f8-8e6d-182d17c48a84&companyFilter=64
 
 let currentURL = window.location.href;
 let loadingStatus;
@@ -508,7 +510,7 @@ window.addEventListener('load', async function () {
 
                     // Create "Auto-Reboot Element" button
                     let autoRebootButton = doc.createElement('button');
-                    autoRebootButton.innerText = 'Enable Auto-Reboot';
+                    autoRebootButton.innerText = 'Enable Test';
                     autoRebootButton.style.padding = '5px 10px';
                     autoRebootButton.style.marginBottom = '10px';
                     autoRebootButton.style.fontSize = '14px';
@@ -535,11 +537,11 @@ window.addEventListener('load', async function () {
                         // Toggle the auto-reboot panel
                         if (autoRebootPanel.style.display === 'none') {
                             autoRebootPanel.style.display = 'block';
-                            autoRebootButton.innerText = 'Disable Auto-Reboot';
+                            autoRebootButton.innerText = 'Disable Test';
                             enabledAutoReboots[site.siteId] = true;
                         } else {
                             autoRebootPanel.style.display = 'none';
-                            autoRebootButton.innerText = 'Enable Auto-Reboot';
+                            autoRebootButton.innerText = 'Enable Test';
                             enabledAutoReboots[site.siteId] = false;
                         }
                     });
@@ -550,7 +552,7 @@ window.addEventListener('load', async function () {
                     autoRebootPanel.style.padding = '10px';
                     autoRebootPanel.style.backgroundColor = '#555';
                     autoRebootPanel.style.borderRadius = '5px';
-                    autoRebootPanel.innerText = 'Auto-Reboot Element Panel, this does not do anything yet.';
+                    autoRebootPanel.innerText = 'This does not do anything yet.';
                     autoRebootPanel.style.display = 'none'; // Initially hidden
 
                     if (enabledAutoReboots[site.siteId]) {
@@ -567,7 +569,11 @@ window.addEventListener('load', async function () {
                     //siteMetricsContainer.style.gridTemplateColumns = 'repeat(auto-fit, minmax(480px, 1fr))';
                     siteMetricsContainer.style.gridTemplateColumns = 'repeat(4, 1fr)';
 
-                    let totalAssignedSlots = site.hashingInventory.totalCount + site.hashingInventory.reservedLocationCount;
+                    const minersWithLocations = site.hashingInventory.minerCountWithLocations;
+                    const reservedLocationCount = site.hashingInventory.reservedLocationCount;
+                    const totalAssignedSlots = minersWithLocations + reservedLocationCount;
+                    const assignedPercentage = (totalAssignedSlots / site.hashingInventory.positionCount) * 100;
+                    //let totalAssignedSlots = site.hashingInventory.totalCount + site.hashingInventory.reservedLocationCount;
                     let siteUtilization = doc.createElement('m-box');
                     siteUtilization.className = 'bar-chart-card';
                     siteUtilization.innerHTML = `
@@ -577,7 +583,7 @@ window.addEventListener('load', async function () {
                                 <h4 class="bar-chart-title m-text is-size-xs is-secondary">Assigned Slots / Total Slots</h4>
                                 <div class="bar-chart-row">
                                     <div class="bar-chart-container">
-                                        <div class="bar-chart" style="background-color: #4caf50; width: ${Math.min((totalAssignedSlots / site.hashingInventory.positionCount) * 100, 100)}%; color: #fff;">
+                                        <div class="bar-chart" style="background-color: #4caf50; width: ${Math.min(assignedPercentage, 100)}%; color: #fff;">
                                             <h4 class="m-heading" style="white-space: nowrap;">${totalAssignedSlots} Assigned</h4>
                                         </div>
                                     </div>
@@ -589,7 +595,7 @@ window.addEventListener('load', async function () {
                             </div>
                             <div class="site-utilization-metrics">
                                 <div>
-                                    <span class="m-text is-size-l">${((totalAssignedSlots / site.hashingInventory.positionCount) * 100).toFixed(1)}%</span>
+                                    <span class="m-text is-size-l">${assignedPercentage.toFixed(2)}%</span>
                                     <span class="m-text is-size-s is-secondary"> Assigned</span>
                                 </div>
                                 <div class="metric-row">
@@ -620,7 +626,7 @@ window.addEventListener('load', async function () {
                             </div>
                             <div class="site-utilization-metrics">
                                 <div>
-                                    <span class="m-text is-size-l">${((site.hashingInventory.hashingCount / site.hashingInventory.totalActiveOrUnreachableCount) * 100).toFixed(1)}%</span>
+                                    <span class="m-text is-size-l">${((site.hashingInventory.hashingCount / site.hashingInventory.totalActiveOrUnreachableCount) * 100).toFixed(2)}%</span>
                                     <span class="m-text is-size-s is-secondary"> Uptime</span>
                                 </div>
                                 <div class="metric-row">
@@ -652,7 +658,7 @@ window.addEventListener('load', async function () {
                                 </div>
                             </div>
                             <div>
-                                <span class="m-text is-size-l">${((site.hashingInventory.siteHashrate / site.hashingInventory.siteExpectedHashrate) * 100).toFixed(1)}%</span>
+                                <span class="m-text is-size-l">${((site.hashingInventory.siteHashrate / site.hashingInventory.siteExpectedHashrate) * 100).toFixed(2)}%</span>
                                 <span class="m-text is-size-s is-secondary"> Efficiency</span>
                             </div>
                         </m-stack>
