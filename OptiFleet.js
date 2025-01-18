@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.5.5
+// @version      5.5.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1974,7 +1974,7 @@ window.addEventListener('load', function () {
                         }
                     }, 16000);
                 }, 200);
-                */
+                
             };
 
             tabsContainer.appendChild(quickIPGrabTab);
@@ -1990,6 +1990,8 @@ window.addEventListener('load', function () {
                     });
                 }, true);
             });
+
+            */
         }
 
         //--------------------------------------------
