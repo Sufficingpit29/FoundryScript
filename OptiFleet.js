@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.5.4
+// @version      5.5.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -550,6 +550,7 @@ window.addEventListener('load', function () {
                             minerID: miner.id,
                             slotID: miner.locationName.replace("Minden_", "")
                         };
+                        allMinersLookup[miner.id] = miner;
                     });
                     if(siteName.includes("Minden")) {
                         GM_SuperValue.set("minerSNLookup", minerSNLookup);
@@ -574,7 +575,6 @@ window.addEventListener('load', function () {
                         delete frozenMiners;
                         frozenMiners = [];
                         miners.forEach(miner => {
-                            allMinersLookup[miner.id] = miner;
                             
                             // If the miner is frozen, add it to the frozen miners list
                             const minerID = miner.id;
@@ -1724,6 +1724,272 @@ window.addEventListener('load', function () {
 
             //addCopyButtonsToElements();
             addMutationObserver();
+            /*
+            // Add "Quick IP Grab" tab
+            const tabsContainer = document.querySelector('.tabs');
+            const quickIPGrabTab = document.createElement('div');
+            quickIPGrabTab.id = 'quickIPGrabTab';
+            quickIPGrabTab.className = 'tab';
+            quickIPGrabTab.custom = true;
+            quickIPGrabTab.innerText = 'Log Errors';
+            quickIPGrabTab.style.float = 'right';
+            quickIPGrabTab.style.cssText = `
+                margin-left: auto;
+                margin-right: 0px;
+            `;
+            quickIPGrabTab.onclick = function() {
+                // Swaps to the selected tab
+                $(this).addClass("selected");
+                $(this).siblings(".tab").removeClass("selected");
+
+                // Removes the active class from the other tab content
+                let tabContent = document.querySelector('.tab-content');
+                let children = tabContent.children;
+                for (let i = 0; i < children.length; i++) {
+                    children[i].classList.remove("active");
+                }
+                
+                // Add the new data to the tab content (deletes if it already exists)
+                const customTabContainer = document.createElement('div');
+                customTabContainer.className = 'customTabContainer active';
+                customTabContainer.style.display = 'flex';
+                customTabContainer.style.flexDirection = 'column';
+                customTabContainer.style.alignItems = 'center';
+                customTabContainer.style.justifyContent = 'center';
+                customTabContainer.style.height = '100%';
+                customTabContainer.style.color = '#fff';
+
+                const loadingText = document.createElement('div');
+                loadingText.textContent = 'Retrieving data...';
+                loadingText.style.marginBottom = '10px';
+                customTabContainer.appendChild(loadingText);
+
+                const loadingSpinner = document.createElement('div');
+                loadingSpinner.style.border = '6px solid #f3f3f3';
+                loadingSpinner.style.borderTop = '6px solid #3498db';
+                loadingSpinner.style.borderRadius = '50%';
+                loadingSpinner.style.width = '40px';
+                loadingSpinner.style.height = '40px';
+                loadingSpinner.style.animation = 'spin 2s linear infinite';
+                customTabContainer.appendChild(loadingSpinner);
+
+                tabContent.appendChild(customTabContainer);
+
+                const style = document.createElement('style');
+                style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                `;
+                document.head.appendChild(style);
+
+                // Get id from url
+                const urlParams = new URLSearchParams(window.location.search);
+                const minerID = urlParams.get('id').toString();
+                console.log("Miner ID:", minerID);
+
+                let waitForMinerData = setInterval(() => {
+                    // Make sure allMinersData is loaded
+                    if (Object.keys(allMinersLookup).length > 0) {
+                        clearInterval(waitForMinerData);
+                    } else {
+                        return;
+                    }
+
+                    // Get the miner data
+                    const currentMiner = allMinersLookup[minerID];
+                    console.log(currentMiner);
+                    const minerIP = currentMiner.ipAddress;
+
+                    // Start scan logic
+                    GM_SuperValue.set('errorsFound', {});
+                    let guiLink = `http://root:root@${minerIP}/#blog`;
+                    if(currentMiner.firmwareVersion.includes('BCFMiner')) {
+                        guiLink = `http://root:root@${minerIP}/#/logs`;
+                    }
+                    GM_SuperValue.set('currentlyScanning', {[minerIP]: currentMiner});
+                    let logWindow = window.open(guiLink, '_blank', 'width=1,height=1,left=0,top=' + (window.innerHeight - 400));
+
+                    // Wait for the miner gui to load
+                    let loaded = false;
+                    let currentCheckLoadedInterval = setInterval(() => {
+                        const errorsFound = GM_SuperValue.get('errorsFound', false);
+                        if(errorsFound && errorsFound[currentMiner.id]) {
+                            loaded = true;
+                            const minerErrors = errorsFound[currentMiner.id] || [];
+                            clearInterval(currentCheckLoadedInterval);
+                            
+                            GM_SuperValue.set('currentlyScanning', {});
+
+                            // Close the log window
+                            logWindow.close();
+
+                            // Remove the loading spinner and text
+                            customTabContainer.removeChild(loadingText);
+                            customTabContainer.removeChild(loadingSpinner);
+
+                            // Create a list of errors
+                            const errorList = document.createElement('div');
+                            errorList.style.width = '100%';
+                            errorList.style.maxHeight = 'calc(100% - 50px)';
+                            errorList.style.overflowY = 'auto';
+                            errorList.style.padding = '20px';
+                            errorList.style.border = '1px solid #444';
+                            errorList.style.borderRadius = '10px';
+                            errorList.style.marginTop = '20px';
+                            errorList.style.backgroundColor = '#222';
+                            errorList.style.display = 'flex';
+                            errorList.style.flexDirection = 'column';
+                            errorList.style.alignItems = 'center';
+
+                            const errorTitle = document.createElement('h2');
+                            errorTitle.textContent = 'Errors Found';
+                            errorTitle.style.marginBottom = '20px';
+                            errorTitle.style.color = '#fff';
+                            errorList.appendChild(errorTitle);
+
+                            minerErrors.forEach(error => {
+                                const errorContainer = document.createElement('div');
+                                errorContainer.style.display = 'flex';
+                                errorContainer.style.alignItems = 'center';
+                                errorContainer.style.width = '100%';
+                                errorContainer.style.padding = '10px';
+                                errorContainer.style.marginBottom = '10px';
+                                errorContainer.style.borderBottom = '1px solid #444';
+
+                                const errorIcon = document.createElement('img');
+                                errorIcon.src = error.icon;
+                                errorIcon.style.width = '40px';
+                                errorIcon.style.height = '40px';
+                                errorIcon.style.marginRight = '20px';
+                                errorContainer.appendChild(errorIcon);
+
+                                const errorText = document.createElement('div');
+                                errorText.style.display = 'flex';
+                                errorText.style.flexDirection = 'column';
+                                errorText.style.width = '100%';
+
+                                const errorName = document.createElement('h3');
+                                errorName.textContent = error.name;
+                                errorName.style.marginBottom = '5px';
+                                errorName.style.color = '#fff';
+                                errorText.appendChild(errorName);
+
+                                const errorShort = document.createElement('p');
+                                errorShort.textContent = error.short;
+                                errorShort.style.marginBottom = '5px';
+                                errorShort.style.color = '#bbb';
+                                errorText.appendChild(errorShort);
+
+                                var questionColor = 'red';
+                                if(questionColor) {
+                                    row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;   
+                                }
+                                
+                                // Add hover event listeners to show/hide the full details
+                                const questionMark = row.querySelector('td:last-child div[style*="position: relative;"]');
+                                const tooltip = questionMark.querySelector('div[style*="display: none;"]');
+                                document.body.appendChild(tooltip);
+                                questionMark.addEventListener('mouseenter', () => {
+                                    tooltip.style.display = 'block';
+
+                                    // Position the tooltip to the left of the question mark with the added width
+                                    const questionMarkRect = questionMark.getBoundingClientRect();
+                                    const tooltipRect = tooltip.getBoundingClientRect();
+                                    tooltip.style.left = `${questionMarkRect.left - tooltipRect.width}px`;
+                                    tooltip.style.right = 'auto';
+
+                                    // Set top position to be the same as the question mark
+                                    tooltip.style.top = `${questionMarkRect.top}px`;
+                                });
+
+                                // when clicked, open the error log
+                                questionMark.addEventListener('click', () => {
+                                    const ip = currentMiner.ipAddress;
+                                    GM_SuperValue.set('quickGoToLog', {ip: ip, errorText: error.text, category: error.category});
+                                    window.open(guiLink, '_blank');
+                                });
+
+                                
+                                // Start a timer to hide the tooltip after a delay if not hovered over
+                                let hideTooltipTimer;
+                                const hideTooltipWithDelay = () => {
+                                    hideTooltipTimer = setTimeout(() => {
+                                        tooltip.style.display = 'none';
+                                    }, 100);
+                                };
+
+                                tooltip.style.display = 'none';
+
+                                // Clear the timer if the tooltip or question mark is hovered over again
+                                questionMark.addEventListener('mouseenter', () => {
+                                    clearTimeout(hideTooltipTimer);
+                                });
+
+                                tooltip.addEventListener('mouseenter', () => {
+                                    clearTimeout(hideTooltipTimer);
+                                });
+
+                                // Start the timer when the mouse leaves the tooltip or question mark
+                                questionMark.addEventListener('mouseleave', hideTooltipWithDelay);
+                                tooltip.addEventListener('mouseleave', hideTooltipWithDelay);
+
+                                // Observe for changes to the table and delete the tooltip if so
+                                const observer = new MutationObserver(() => {
+                                    tooltip.remove();
+                                    observer.disconnect();
+                                });
+
+                                observer.observe(row, { childList: true });
+
+                                errorContainer.appendChild(errorText);
+                                errorList.appendChild(errorContainer);
+                            });
+
+                            customTabContainer.appendChild(errorList);
+                        }
+                    }, 10);
+
+                    setTimeout(() => {
+                        if (!loaded && currentCheckLoadedInterval) {
+                            let failText = "Failed to load miner GUI.";
+                            if(currentMiner.firmwareVersion.includes('BCFMiner')) {
+                                failText = "Failed to load miner GUI or got stuck on Username/Password prompt.";
+                            }
+
+                            clearInterval(currentCheckLoadedInterval);
+
+                            const errorsFound = GM_SuperValue.get('errorsFound', {});
+                            errorsFound[currentMiner.id] = [{
+                                name: failText,
+                                short: "GUI Load Fail",
+                                icon: "https://img.icons8.com/?size=100&id=111057&format=png&color=FFFFFF"
+                            }];
+                            GM_SuperValue.set('errorsFound', errorsFound);
+                            GM_SuperValue.set('currentlyScanning', {});
+
+                            // Close the log window
+                            logWindow.close();
+                        }
+                    }, 16000);
+                }, 200);
+                */
+            };
+
+            tabsContainer.appendChild(quickIPGrabTab);
+
+            // Loop through all the tabs and add an extra on click event 
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function(event) {
+                    // Remove the custom tab content
+                    let tabContent = document.querySelectorAll('.customTabContainer');
+                    tabContent.forEach(content => {
+                        content.remove();
+                    });
+                }, true);
+            });
         }
 
         //--------------------------------------------
@@ -1996,7 +2262,7 @@ window.addEventListener('load', function () {
                                         } else if (containerTemp > 70) {
                                             tempSpan2.style.color = 'yellow';
                                             tempSpan2.textContent += ' ⚠️';
-                                        } else if (containerTemp <= 24) {
+                                        } else if (containerTemp <= 25) {
                                             tempSpan2.style.color = '#38a9ff';
                                             tempSpan2.textContent += ' ❄️';
                                         } else {
@@ -6058,8 +6324,13 @@ window.addEventListener('load', function () {
                             tempElement.innerText = tempValue + '°F';
                             if (tempValue > 80) {
                                 tempElement.style.color = 'red';
+                                tempElement.textContent += ' 🔥';
                             } else if (tempValue > 70) {
                                 tempElement.style.color = 'yellow';
+                                tempElement.textContent += ' ⚠️';
+                            } else if (tempValue <= 25) {
+                                tempElement.style.color = '#38a9ff';
+                                tempElement.textContent += ' ❄️';
                             } else {
                                 tempElement.style.color = 'white';
                             }
@@ -6432,11 +6703,11 @@ window.addEventListener('load', function () {
             if (Date.now() - lastGotTime > 3000) {
                 console.log("Closing window because probably at end of planner cards.");
                 GM_SuperValue.set("plannerCardsClosePage_"+plannerID, true);
+                GM_SuperValue.get("plannerCardsData_" + plannerID, newPlannerData);
                 return;
             }
 
             if (!setDate) {
-                GM_SuperValue.get("plannerCardsData_" + plannerID, {});
                 GM_SuperValue.set("plannerPageLoaded_"+plannerID, true);
                 GM_SuperValue.set('plannerCardsDataTime', Date.now());
                 setDate = true;
@@ -6493,7 +6764,7 @@ window.addEventListener('load', function () {
                 url: window.location.href.replace('grid', 'board')
             };
             newPlannerData[serialNumber] = cardData;
-            GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
+            //GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
 
             collectIndex++;
             
