@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.5.6
+// @version      5.6.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -58,6 +58,333 @@ const allowedSiteMatch = allowedSites.some(site => currentUrl.includes(site));
 if(!ipURLMatch && !allowedSiteMatch) {
     console.log("Script not for this site, exiting...");
     return false;
+}
+
+const username = 'root';
+const password = 'root';
+function fetchGUIData(url) {
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: url,
+            user: username,
+            password: password,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            onload: function(response) {
+                if (response.status >= 200 && response.status < 300) {
+                    resolve(response.responseText);
+                } else if (response.status === 401) {
+                    reject('Authentication failed. Please check your username and password.');
+                } else {
+                    reject(`HTTP error! status: ${response.status}`);
+                }
+            },
+            onerror: function(error) {
+                reject('There was a problem with the fetch operation:', error);
+            }
+        });
+    });
+}
+
+// Where we define the different error strctures to locate
+const errorsToSearch = {
+    /*
+    'Test Error': {
+        icon: "https://icons8.com/icon/35881/test-passed",
+        start: "Booting Linux on physical",
+    },
+    */
+    'Bad Hashboard Chain': {
+        icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
+        start: ["get pll config err", /Chain\[0\]: find .* asic, times/], // 0
+        end: ["stop_mining: soc init failed"],
+        conditions: (text) => {
+            return text.includes('only find');
+        }
+    },
+    'ASIC Number Error': {
+        icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
+        start: ["Chain[0]: find "],
+        end: ["stop_mining: asic number is not right"],
+        conditions: (text) => {
+            return text.includes('asic number is not right');
+        }
+    },
+    'Fan Speed Error': {
+        icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
+        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /\[WARN\] FAN \d+ Fail/],
+        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", " has failed to run at expected RPM"]
+    },
+    'SOC INIT Fail': {
+        icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
+        start: "ERROR_SOC_INIT",
+        end: ["ERROR_SOC_INIT", "stop_mining: soc init failed!"],
+        onlySeparate: true
+    },
+    'Buffer Error': {
+        icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
+        start: "nonce_read_out buffer is full!",
+    },
+    'EEPROM Error': {
+        icon: "https://img.icons8.com/?size=100&id=9040&format=png&color=FFFFFF",
+        start: "eeprom error crc 3rd region",
+        end: "eeprom error crc 3rd region",
+        onlySeparate: true
+    },
+    'Hashboard Init Fail': {
+        icon: "https://img.icons8.com/?size=100&id=35849&format=png&color=FFFFFF",
+        start: "Exit due to HASHBOARD INITIALIZATION FAILED",
+        onlySeparate: true
+    },
+    'Target Hashrate Fail': {
+        icon: "https://img.icons8.com/?size=100&id=20767&format=png&color=FFFFFF",
+        start: "Exit due to Unable to Generate Given Target Hashrate",
+        onlySeparate: true
+    },
+    'Voltage Abnormity': {
+        icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
+        start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
+        end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
+    },
+    'Temperature Sensor Error': {
+        icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
+        start: "Exit due to TEMPERATURE SENSORS FAILED",
+    },
+    'Temperature Too Low': {
+        icon: "https://img.icons8.com/?size=100&id=0Bm1Quaegs8d&format=png&color=FFFFFF",
+        start: "ERROR_TEMP_TOO_LOW",
+        end: "stop_mining"
+    },
+    'Temperature Overheat': {
+        icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
+        start: ["asic temp too high", "ERROR_TEMP_TOO_HIGH", "Exit due to SHUTDOWN TEMPERATURE LIMIT REACHED"],
+        end: ["stop_mining: asic temp too high", "stop_mining: over max temp"],
+    },
+    'Network Lost': {
+        icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
+        start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
+        end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
+    },
+    'Bad Chain ID': {
+        icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
+        start: "bad chain id",
+        end: "stop_mining: basic init failed!",
+        unimportant: true
+    },
+    'Firmware Error': {
+        icon: "https://img.icons8.com/?size=100&id=hbCljOlfk4WP&format=png&color=FFFFFF",
+        start: "Firmware registration failed",
+        unimportant: true
+    },
+    'ASIC Error': {
+        icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
+        start: "test_loop_securely_find_asic_num",
+        unimportant: true
+    },
+    'Defendkey Error': {
+        start: "defendkey: probe of defendkey failed with error",
+        unimportant: true
+    },
+    'SN File Error': {
+        start: "Open miner sn file /config/sn error",
+        unimportant: true
+    },
+    'Allocate Memory Error': {
+        start: "failed to allocate memory for node linux",
+        unimportant: true
+    },
+    'Modalias Failure': {
+        start: "modalias failure",
+        unimportant: true
+    },
+    'CLKMSR Failure': {
+        start: "clkmsr ffd18004.meson_clk_msr: failed to get msr",
+        unimportant: true
+    },
+    'Unpack Failure': {
+        start: "Initramfs unpacking failed",
+        unimportant: true
+    },
+    'I2C Device': {
+        start: "Failed to create I2C device",
+        unimportant: true
+    },
+    'No Ports': {
+        start: "hub doesn't have any ports",
+        unimportant: true
+    },
+    'Thermal Binding': {
+        start: "binding zone soc_thermal with cdev thermal",
+        unimportant: true
+    },
+    'PTP Init Failure': {
+        start: "fail to init PTP",
+        unimportant: true
+    },
+    'Ram Error': {
+        icon: "https://img.icons8.com/?size=100&id=2lS2aIm5uhCG&format=png&color=FFFFFF",
+        start: "persistent_ram: uncorrectable error in header",
+        unimportant: true
+    }
+}
+
+function runErrorScanLogic(logText) {
+    // Search through the log and locate errors
+    var errorsFound = []; // Array to store the errors found
+    for (const error in errorsToSearch) {
+        const errorData = errorsToSearch[error];
+        var lastEndIndex = 0;
+        var maxIterations = 100;
+        while(maxIterations > -1) {
+            maxIterations--;
+            if (maxIterations <= 0) {
+                console.error('Max iterations reached');
+                break;
+            }
+            var startIndex = -1;
+            if (!Array.isArray(errorData.start)) {
+                errorData.start = [errorData.start];
+            }
+
+            for (const start of errorData.start) {
+                let curIndex;
+                if (typeof start === 'string') {
+                    curIndex = logText.indexOf(start, lastEndIndex);
+                } else if (start instanceof RegExp) {
+                    const match = logText.slice(lastEndIndex).match(start);
+                    if (match) {
+                        curIndex = lastEndIndex + match.index;
+                    } else {
+                        curIndex = -1; // No match found
+                    }
+                } else {
+                    throw new Error('Unsupported type for start');
+                }
+
+                if (curIndex !== -1 && (startIndex === -1 || curIndex < startIndex)) {
+                    startIndex = curIndex;
+                }
+            }
+
+            if (startIndex !== -1) {
+                // If errorData.end isn't found, just set it to be start
+                if (!errorData.end || errorData.end === "" || errorData.end === undefined) {
+                    errorData.end = errorData.start;
+                }
+
+                var endIndex = -1;
+                if (!Array.isArray(errorData.end)) {
+                    errorData.end = [errorData.end];
+                }
+
+                const separatorTexts = ["start the http log", "****power off hashboard****"];
+                for (const end of errorData.end) {
+                    let curIndex;
+                    if (typeof end === 'string') {
+                        curIndex = logText.indexOf(end, startIndex);
+                    } else if (end instanceof RegExp) {
+                        const match = logText.slice(startIndex).match(end);
+                        if (match) {
+                            curIndex = startIndex + match.index;
+                        } else {
+                            curIndex = -1; // No match found
+                        }
+                    } else {
+                        throw new Error('Unsupported type for end');
+                    }
+                    if (curIndex !== -1 && (endIndex === -1 || curIndex > endIndex)) {
+                        // Make sure another start doesn't appear before the end & make sure a separator doesn't appear between the start and end
+                        const lineAfterStart = logText.indexOf('\n', startIndex);
+                        if (!errorData.start.some(start => logText.indexOf(start, lineAfterStart) < curIndex && logText.indexOf(start, lineAfterStart) !== -1) && !separatorTexts.some(separator => logText.indexOf(separator, startIndex) < curIndex && logText.indexOf(separator, startIndex) !== -1)) {
+                            endIndex = curIndex;
+                        }
+                    }
+                }
+                // Set the start index to be back at the start of the line
+                const lastLineBreak = logText.lastIndexOf('\n', startIndex);
+                if (lastLineBreak !== -1) {
+                    startIndex = lastLineBreak + 1;
+                }
+
+                // Set the end index to be at the end of the line
+                const nextLineBreak = logText.indexOf('\n', endIndex);
+                if (nextLineBreak !== -1) {
+                    endIndex = nextLineBreak + 1;
+                }
+
+                // If the start index is after the end index, just do the one start line
+                if(startIndex > endIndex) {
+                    endIndex = logText.indexOf('\n', startIndex) + 1;
+                }
+
+                var setEndIndexAfter;
+                if (endIndex !== -1) {
+                    const errorText = logText.substring(startIndex, endIndex);
+
+                    // if onlySeparate is true, only add the error if it doesn't appear in another start/end as another error
+                    var errorTextAlreadyFound = false;
+                    if(errorData.onlySeparate) {
+                        if(errorsFound.some(err => err.text.includes(errorText))) {
+                            errorTextAlreadyFound = true;
+                        }
+                    }
+
+                    // Check if the error text meets the conditions
+                    if (typeof errorData.conditions === 'function' ? errorData.conditions(errorText) : true && !errorTextAlreadyFound) {
+                        errorsFound.push({
+                            name: error,
+                            icon: errorData.icon,
+                            text: errorText.trimEnd(),
+                            start: startIndex,
+                            end: endIndex,
+                            unimportant: errorData.unimportant || false
+                        });
+                        setEndIndexAfter = endIndex;
+                    } else {
+                        console.log('Error text did not meet conditions');
+                        setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
+                    }
+                } else {
+                    setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
+                }
+            }
+
+            if (startIndex === -1 || endIndex === -1 || lastEndIndex === endIndex) {
+                console.log('No more errors found');
+                break;
+            }
+
+            lastEndIndex = setEndIndexAfter;
+        }
+    }
+
+    // Find all the times 'error' or 'fail' is mentioned in the log if it isn't already found in the defined errors, mark is as an Unknown Error
+    const errorRegex = /error/gi;
+    const failRegex = /fail/gi;
+    const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
+    for (const match of errorMatches) {
+        // Check if the error is already found
+        const matchIndex = match.index;
+        if (!errorsFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
+            // Find the start and end of the line
+            const start = logText.lastIndexOf('\n', matchIndex) + 1;
+            const end = logText.indexOf('\n', matchIndex) + 1;
+            const errorText = logText.substring(start, end);
+
+            // Add the error to the list of errors
+            errorsFound.push({
+                name: 'Unknown Error',
+                text: errorText.trimEnd(),
+                start: start,
+                end: end,
+                unimportant: true
+            });
+        }
+    }
+    
+    return errorsFound;
 }
 
 window.addEventListener('load', function () {
@@ -1724,14 +2051,14 @@ window.addEventListener('load', function () {
 
             //addCopyButtonsToElements();
             addMutationObserver();
-            /*
-            // Add "Quick IP Grab" tab
+            
+            // Add "Log" Tab
             const tabsContainer = document.querySelector('.tabs');
             const quickIPGrabTab = document.createElement('div');
             quickIPGrabTab.id = 'quickIPGrabTab';
             quickIPGrabTab.className = 'tab';
             quickIPGrabTab.custom = true;
-            quickIPGrabTab.innerText = 'Log Errors';
+            quickIPGrabTab.innerText = 'Current Log';
             quickIPGrabTab.style.float = 'right';
             quickIPGrabTab.style.cssText = `
                 margin-left: auto;
@@ -1784,6 +2111,262 @@ window.addEventListener('load', function () {
                 `;
                 document.head.appendChild(style);
 
+                // Get IP Address from m-link is-size-xs href
+                const waitForIpElement = setInterval(() => {
+                    const ipElement = document.querySelector('.m-link.is-size-xs');
+                    if (ipElement && ipElement.href && ipElement.href.includes('http')) {
+                        clearInterval(waitForIpElement);
+
+                        // Get status from the miner
+                        const status = getMinerDetails()[1].status;
+                        
+                        if(status !== "Online") {
+                            // Remove the loading text and spinner
+                            customTabContainer.removeChild(loadingText);
+                            customTabContainer.removeChild(loadingSpinner);
+
+                            // Add a clean nice message saying the miner is offline
+                            const offlineMessage = document.createElement('div');
+                            offlineMessage.textContent = 'Miner is currently offline.';
+                            customTabContainer.appendChild(offlineMessage);
+                            return;
+                        }
+                        
+                        const ipHref = ipElement.href.replace('root:root@', '') + '/cgi-bin/log.cgi';
+                        fetchGUIData(ipHref)
+                            .then(responseText => {
+                                // Remove the loading text and spinner
+                                customTabContainer.removeChild(loadingText);
+                                customTabContainer.removeChild(loadingSpinner);
+
+                                // Create a sleek log element
+                                const logElement = document.createElement('div');
+                                logElement.style.cssText = `
+                                    background-color: #18181b;
+                                    color: #fff;
+                                    padding: 20px;
+                                    border-radius: 10px;
+                                    max-height: 400px;
+                                    overflow-y: auto;
+                                    overflow-x: auto;
+                                    font-family: 'Courier New', Courier, monospace;
+                                    white-space: pre;
+                                    width: 100%;
+                                    scrollbar-width: thin;
+                                    scrollbar-color: #888 #333;
+                                `;
+                                let orignalLogText = responseText.trim();
+                                logElement.textContent = orignalLogText;
+                                customTabContainer.appendChild(logElement);
+
+                                // Add custom scrollbar styles
+                                const style = document.createElement('style');
+                                style.textContent = `
+                                    ::-webkit-scrollbar {
+                                        width: 8px;
+                                        height: 8px;
+                                    }
+                                    ::-webkit-scrollbar-track {
+                                        background: #333;
+                                        border-radius: 10px;
+                                    }
+                                    ::-webkit-scrollbar-thumb {
+                                        background-color: #888;
+                                        border-radius: 10px;
+                                        border: 2px solid #333;
+                                    }
+                                    ::-webkit-scrollbar-thumb:hover {
+                                        background-color: #555;
+                                    }
+                                `;
+                                document.head.appendChild(style);
+
+                                // Scroll to bottom of log
+                                logElement.scrollTop = logElement.scrollHeight;
+
+                                // Create the error tabs
+                                const logText = logElement.innerText;
+                                var errorsFound = runErrorScanLogic(logText);
+                                if(errorsFound.length === 0) {
+                                    return;
+                                }
+
+                                // Add divider to m-nav
+                                const mnav = document.querySelector('.m-nav');
+                                const divider = document.createElement('div');
+                                divider.className = 'm-divider has-space-m';
+                                mnav.appendChild(divider);
+            
+                                function createErrorTab(title, errors, defaultOpen = false) {
+                                    const errorTab = document.createElement('div');
+                                    errorTab.className = 'm-nav-group';
+                                    
+                                    // Create the header with the dynamic title
+                                    const header = `
+                                        <div class="m-nav-group-header">
+                                            <div class="m-nav-group-label">
+                                                <m-icon name="error" size="l" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                                                ${title}
+                                            </div>
+                                            <m-icon name="chevron-down" data-dashlane-shadowhost="true" data-dashlane-observed="true" class="flip"></m-icon>
+                                        </div>
+                                    `;
+                                
+                                    // Create the group items with icons dynamically
+                                    const items = errors.map((error, index) => `
+                                        <div class="m-nav-group-item" style="display: flex; align-items: center;">
+                                            <img src="${error.icon}" width="16" height="16" style="margin-right: 8px;" />
+                                            <a href="#" class="m-nav-item" data-error-index="${index}">${error.name}</a>
+                                        </div>
+                                    `).join('');
+                                    
+                                    // Combine all parts into the final HTML
+                                    errorTab.innerHTML = `
+                                        ${header}
+                                        <div class="m-nav-group-section" style="display: none;">
+                                            <div class="m-nav-group-items">
+                                                ${items}
+                                            </div>
+                                        </div>
+                                    `;
+                                
+                                    // Add collapse and open logic
+                                    const headerElement = errorTab.querySelector('.m-nav-group-header');
+                                    const sectionElement = errorTab.querySelector('.m-nav-group-section');
+                                    const chevronIcon = errorTab.querySelector('.m-nav-group-header m-icon');
+                                
+                                    headerElement.addEventListener('click', () => {
+                                        const isOpen = sectionElement.style.display === 'block';
+                                        sectionElement.style.display = isOpen ? 'none' : 'block';
+                                        chevronIcon.classList.toggle('flip', !isOpen);
+                                    });
+
+                                    if (defaultOpen) {
+                                        sectionElement.style.display = 'block';
+                                        chevronIcon.classList.add('flip');
+                                    }
+                                
+                                    // Add click event listener to each error item
+                                    const errorItems = errorTab.querySelectorAll('.m-nav-item');
+                                    errorItems.forEach(item => {
+                                        item.addEventListener('click', (event) => {
+                                            event.preventDefault();
+                                            const errorIndex = event.target.getAttribute('data-error-index');
+                                            const error = errors[errorIndex];
+                                            handleErrorClick(error, orignalLogText);
+                                        });
+                                    });
+                                
+                                    mnav.appendChild(errorTab);
+                                }
+                                
+                                function handleErrorClick(error, orignalLogText) {
+                                    // Reset log text
+                                    while (logElement.firstChild) {
+                                        logElement.removeChild(logElement.firstChild);
+                                    }
+                                    logElement.textContent = orignalLogText;
+                                
+                                    // Create a new element to highlight the error
+                                    const errorElement = document.createElement('span');
+                                    errorElement.style.backgroundColor = '#FF2323';
+                                    
+                                    const errorTextNode = document.createElement('span');
+                                    errorTextNode.style.fontWeight = 'bolder';
+                                    errorTextNode.style.textShadow = '1px 1px 2px black';
+                                    errorTextNode.style.color = 'white';
+                                    errorTextNode.textContent = error.text;
+                                    errorElement.appendChild(errorTextNode);
+                                    errorElement.style.width = '100%';
+                                    errorElement.style.display = 'block';
+                                
+                                    // Create a copy button
+                                    const copyButton = document.createElement('button');
+                                    copyButton.textContent = 'Copy';
+                                    copyButton.style.position = 'absolute';
+                                    copyButton.style.bottom = '0';
+                                    copyButton.style.right = '0';
+                                    copyButton.style.backgroundColor = 'transparent';
+                                    copyButton.style.border = 'none';
+                                    copyButton.style.color = 'black';
+                                    copyButton.style.cursor = 'pointer';
+                                    copyButton.style.padding = '5px';
+                                    copyButton.style.fontSize = '12px';
+                                    copyButton.style.fontWeight = 'bold';
+                                    copyButton.style.zIndex = '1';
+                                    copyButton.addEventListener('click', () => {
+                                        // disable default behavior
+                                        event.preventDefault();
+
+                                        // copy text to clipboard
+                                        if (navigator.clipboard) {
+                                            navigator.clipboard.writeText(error.text).then(() => {
+                                                console.log('Text copied to clipboard');
+                                            }).catch(err => {
+                                                console.error('Failed to copy text: ', err);
+                                            });
+                                        } else {
+                                            const textArea = document.createElement('textarea');
+                                            textArea.value = error.text;
+                                            document.body.appendChild(textArea);
+                                            textArea.select();
+                                            try {
+                                                document.execCommand('copy');
+                                                console.log('Text copied to clipboard');
+                                            } catch (err) {
+                                                console.error('Failed to copy text: ', err);
+                                            }
+                                            document.body.removeChild(textArea);
+                                        }
+                                        copyButton.textContent = 'Copied!';
+                                        setTimeout(() => {
+                                            copyButton.textContent = 'Copy';
+                                        }, 1000);
+                                    });
+                                
+                                    errorElement.style.position = 'relative';
+                                    errorElement.appendChild(copyButton);
+                                
+                                    errorElement.addEventListener('mouseover', () => {
+                                        copyButton.style.display = 'block';
+                                    });
+                                
+                                    errorElement.addEventListener('mouseout', () => {
+                                        copyButton.style.display = 'none';
+                                    });
+                                
+                                    copyButton.addEventListener('mouseover', () => {
+                                        copyButton.style.color = 'green';
+                                    });
+                                
+                                    copyButton.addEventListener('mouseout', () => {
+                                        copyButton.style.color = 'black';
+                                    });
+                                
+                                    // Replace the error text in the log with the highlighted version
+                                    const logTextNode = logElement.childNodes[0];
+                                    const beforeErrorText = logTextNode.textContent.substring(0, error.start);
+                                    const afterErrorText = logTextNode.textContent.substring(error.end);
+
+                                    logTextNode.textContent = beforeErrorText;
+                                    
+                                    logElement.insertBefore(errorElement, logTextNode.nextSibling);
+                                    logElement.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
+                                    errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                                
+
+                                createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant), true);
+                                createErrorTab("Other Errors", errorsFound.filter(error => error.unimportant));
+                            })
+                            .catch(error => {
+                                console.error(error);
+                            });
+                    }
+                }, 500);
+
+
+                /*
                 // Get id from url
                 const urlParams = new URLSearchParams(window.location.search);
                 const minerID = urlParams.get('id').toString();
@@ -1975,8 +2558,9 @@ window.addEventListener('load', function () {
                     }, 16000);
                 }, 200);
                 
+                */
             };
-
+            
             tabsContainer.appendChild(quickIPGrabTab);
 
             // Loop through all the tabs and add an extra on click event 
@@ -1990,8 +2574,6 @@ window.addEventListener('load', function () {
                     });
                 }, true);
             });
-
-            */
         }
 
         //--------------------------------------------
@@ -7552,7 +8134,7 @@ window.addEventListener('load', function () {
         let clickedAutoRefresh = false;
         let changingLog = false;
         let lastTextLog = "";
-        function setUpErrorLog() {
+        function setUpErrorLog() { //(logContent, ) {
             // Locate the log content element
             const logContent = document.querySelector('.log-content') || document.querySelector('.logBox-pre');
 
@@ -7622,302 +8204,9 @@ window.addEventListener('load', function () {
                 // If we didn't already add the error tab, add it
                 const oldErrorTab = document.querySelector('[data-id="errors"]');
                 if (!oldErrorTab) {
-                    const errorsToSearch = {
-                        /*
-                        'Test Error': {
-                            icon: "https://icons8.com/icon/35881/test-passed",
-                            start: "Booting Linux on physical",
-                        },
-                        */
-                        'Bad Hashboard Chain': {
-                            icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
-                            start: ["get pll config err", /Chain\[0\]: find .* asic, times/], // 0
-                            end: ["stop_mining: soc init failed"],
-                            conditions: (text) => {
-                                return text.includes('only find');
-                            }
-                        },
-                        'ASIC Number Error': {
-                            icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
-                            start: ["Chain[0]: find "],
-                            end: ["stop_mining: asic number is not right"],
-                            conditions: (text) => {
-                                return text.includes('asic number is not right');
-                            }
-                        },
-                        'Fan Speed Error': {
-                            icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
-                            start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /\[WARN\] FAN \d+ Fail/],
-                            end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", " has failed to run at expected RPM"]
-                        },
-                        'SOC INIT Fail': {
-                            icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
-                            start: "ERROR_SOC_INIT",
-                            end: ["ERROR_SOC_INIT", "stop_mining: soc init failed!"],
-                            onlySeparate: true
-                        },
-                        'Buffer Error': {
-                            icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
-                            start: "nonce_read_out buffer is full!",
-                        },
-                        'EEPROM Error': {
-                            icon: "https://img.icons8.com/?size=100&id=9040&format=png&color=FFFFFF",
-                            start: "eeprom error crc 3rd region",
-                            end: "eeprom error crc 3rd region",
-                            onlySeparate: true
-                        },
-                        'Hashboard Init Fail': {
-                            icon: "https://img.icons8.com/?size=100&id=35849&format=png&color=FFFFFF",
-                            start: "Exit due to HASHBOARD INITIALIZATION FAILED",
-                            onlySeparate: true
-                        },
-                        'Target Hashrate Fail': {
-                            icon: "https://img.icons8.com/?size=100&id=20767&format=png&color=FFFFFF",
-                            start: "Exit due to Unable to Generate Given Target Hashrate",
-                            onlySeparate: true
-                        },
-                        'Voltage Abnormity': {
-                            icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
-                            start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
-                            end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
-                        },
-                        'Temperature Sensor Error': {
-                            icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
-                            start: "Exit due to TEMPERATURE SENSORS FAILED",
-                        },
-                        'Temperature Too Low': {
-                            icon: "https://img.icons8.com/?size=100&id=0Bm1Quaegs8d&format=png&color=FFFFFF",
-                            start: "ERROR_TEMP_TOO_LOW",
-                            end: "stop_mining"
-                        },
-                        'Temperature Overheat': {
-                            icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
-                            start: ["asic temp too high", "ERROR_TEMP_TOO_HIGH", "Exit due to SHUTDOWN TEMPERATURE LIMIT REACHED"],
-                            end: ["stop_mining: asic temp too high", "stop_mining: over max temp"],
-                        },
-                        'Network Lost': {
-                            icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
-                            start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
-                            end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
-                        },
-                        'Bad Chain ID': {
-                            icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
-                            start: "bad chain id",
-                            end: "stop_mining: basic init failed!",
-                            unimportant: true
-                        },
-                        'Firmware Error': {
-                            icon: "https://img.icons8.com/?size=100&id=hbCljOlfk4WP&format=png&color=FFFFFF",
-                            start: "Firmware registration failed",
-                            unimportant: true
-                        },
-                        'ASIC Error': {
-                            icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
-                            start: "test_loop_securely_find_asic_num",
-                            unimportant: true
-                        },
-                        'Defendkey Error': {
-                            start: "defendkey: probe of defendkey failed with error",
-                            unimportant: true
-                        },
-                        'SN File Error': {
-                            start: "Open miner sn file /config/sn error",
-                            unimportant: true
-                        },
-                        'Allocate Memory Error': {
-                            start: "failed to allocate memory for node linux",
-                            unimportant: true
-                        },
-                        'Modalias Failure': {
-                            start: "modalias failure",
-                            unimportant: true
-                        },
-                        'CLKMSR Failure': {
-                            start: "clkmsr ffd18004.meson_clk_msr: failed to get msr",
-                            unimportant: true
-                        },
-                        'Unpack Failure': {
-                            start: "Initramfs unpacking failed",
-                            unimportant: true
-                        },
-                        'I2C Device': {
-                            start: "Failed to create I2C device",
-                            unimportant: true
-                        },
-                        'No Ports': {
-                            start: "hub doesn't have any ports",
-                            unimportant: true
-                        },
-                        'Thermal Binding': {
-                            start: "binding zone soc_thermal with cdev thermal",
-                            unimportant: true
-                        },
-                        'PTP Init Failure': {
-                            start: "fail to init PTP",
-                            unimportant: true
-                        },
-                        'Ram Error': {
-                            icon: "https://img.icons8.com/?size=100&id=2lS2aIm5uhCG&format=png&color=FFFFFF",
-                            start: "persistent_ram: uncorrectable error in header",
-                            unimportant: true
-                        }
-                    }
-
                     // Search through the log and locate errors
                     const logText = logContent.innerText;
-                    var errorsFound = []; // Array to store the errors found
-                    for (const error in errorsToSearch) {
-                        const errorData = errorsToSearch[error];
-                        var lastEndIndex = 0;
-                        var maxIterations = 100;
-                        while(maxIterations > -1) {
-                            maxIterations--;
-                            if (maxIterations <= 0) {
-                                console.error('Max iterations reached');
-                                break;
-                            }
-                            var startIndex = -1;
-                            if (!Array.isArray(errorData.start)) {
-                                errorData.start = [errorData.start];
-                            }
-
-                            for (const start of errorData.start) {
-                                let curIndex;
-                                if (typeof start === 'string') {
-                                    curIndex = logText.indexOf(start, lastEndIndex);
-                                } else if (start instanceof RegExp) {
-                                    const match = logText.slice(lastEndIndex).match(start);
-                                    if (match) {
-                                        curIndex = lastEndIndex + match.index;
-                                    } else {
-                                        curIndex = -1; // No match found
-                                    }
-                                } else {
-                                    throw new Error('Unsupported type for start');
-                                }
-
-                                if (curIndex !== -1 && (startIndex === -1 || curIndex < startIndex)) {
-                                    startIndex = curIndex;
-                                }
-                            }
-
-                            if (startIndex !== -1) {
-
-                                // If errorData.end isn't found, just set it to be start
-                                if (!errorData.end || errorData.end === "" || errorData.end === undefined) {
-                                    errorData.end = errorData.start;
-                                }
-
-                                var endIndex = -1;
-                                if (!Array.isArray(errorData.end)) {
-                                    errorData.end = [errorData.end];
-                                }
-
-                                const separatorTexts = ["start the http log", "****power off hashboard****"];
-                                for (const end of errorData.end) {
-                                    let curIndex;
-                                    if (typeof end === 'string') {
-                                        curIndex = logText.indexOf(end, startIndex);
-                                    } else if (end instanceof RegExp) {
-                                        const match = logText.slice(startIndex).match(end);
-                                        if (match) {
-                                            curIndex = startIndex + match.index;
-                                        } else {
-                                            curIndex = -1; // No match found
-                                        }
-                                    } else {
-                                        throw new Error('Unsupported type for end');
-                                    }
-                                    if (curIndex !== -1 && (endIndex === -1 || curIndex > endIndex)) {
-                                        // Make sure another start doesn't appear before the end & make sure a separator doesn't appear between the start and end
-                                        const lineAfterStart = logText.indexOf('\n', startIndex);
-                                        if (!errorData.start.some(start => logText.indexOf(start, lineAfterStart) < curIndex && logText.indexOf(start, lineAfterStart) !== -1) && !separatorTexts.some(separator => logText.indexOf(separator, startIndex) < curIndex && logText.indexOf(separator, startIndex) !== -1)) {
-                                            endIndex = curIndex;
-                                        }
-                                    }
-                                }
-                                // Set the start index to be back at the start of the line
-                                const lastLineBreak = logText.lastIndexOf('\n', startIndex);
-                                if (lastLineBreak !== -1) {
-                                    startIndex = lastLineBreak + 1;
-                                }
-
-                                // Set the end index to be at the end of the line
-                                const nextLineBreak = logText.indexOf('\n', endIndex);
-                                if (nextLineBreak !== -1) {
-                                    endIndex = nextLineBreak + 1;
-                                }
-
-                                // If the start index is after the end index, just do the one start line
-                                if(startIndex > endIndex) {
-                                    endIndex = logText.indexOf('\n', startIndex) + 1;
-                                }
-
-                                var setEndIndexAfter;
-                                if (endIndex !== -1) {
-                                    const errorText = logText.substring(startIndex, endIndex);
-
-                                    // if onlySeparate is true, only add the error if it doesn't appear in another start/end as another error
-                                    var errorTextAlreadyFound = false;
-                                    if(errorData.onlySeparate) {
-                                        if(errorsFound.some(err => err.text.includes(errorText))) {
-                                            errorTextAlreadyFound = true;
-                                        }
-                                    }
-
-                                    // Check if the error text meets the conditions
-                                    if (typeof errorData.conditions === 'function' ? errorData.conditions(errorText) : true && !errorTextAlreadyFound) {
-                                        errorsFound.push({
-                                            name: error,
-                                            icon: errorData.icon,
-                                            text: errorText.trimEnd(),
-                                            start: startIndex,
-                                            end: endIndex,
-                                            unimportant: errorData.unimportant || false
-                                        });
-                                        setEndIndexAfter = endIndex;
-                                    } else {
-                                        console.log('Error text did not meet conditions');
-                                        setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
-                                    }
-                                } else {
-                                    setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
-                                }
-                            }
-
-                            if (startIndex === -1 || endIndex === -1 || lastEndIndex === endIndex) {
-                                console.log('No more errors found');
-                                break;
-                            }
-
-                            lastEndIndex = setEndIndexAfter;
-                        }
-                    }
-
-                    // Find all the times 'error' or 'fail' is mentioned in the log if it isn't already found in the defined errors, mark is as an Unknown Error
-                    const errorRegex = /error/gi;
-                    const failRegex = /fail/gi;
-                    const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
-                    for (const match of errorMatches) {
-                        
-                        // Check if the error is already found
-                        const matchIndex = match.index;
-                        if (!errorsFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
-                            // Find the start and end of the line
-                            const start = logText.lastIndexOf('\n', matchIndex) + 1;
-                            const end = logText.indexOf('\n', matchIndex) + 1;
-                            const errorText = logText.substring(start, end);
-
-                            // Add the error to the list of errors
-                            errorsFound.push({
-                                name: 'Unknown Error',
-                                text: errorText.trimEnd(),
-                                start: start,
-                                end: end,
-                                unimportant: true
-                            });
-                        }
-                    }
+                    var errorsFound = runErrorScanLogic(logText);
 
                     function createErrorTab(title, errors) {
                         // Create a new element to display the errors
