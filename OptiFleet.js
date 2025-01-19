@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.6.4
+// @version      5.6.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2203,6 +2203,7 @@ window.addEventListener('load', function () {
                                 const mnav = document.querySelector('.m-nav');
                                 const divider = document.createElement('div');
                                 divider.className = 'm-divider has-space-m';
+                                divider.classList.add('error-divider');
                                 mnav.appendChild(divider);
             
                                 function createErrorTab(title, errors, defaultOpen = false) {
@@ -2214,7 +2215,8 @@ window.addEventListener('load', function () {
 
                                     const errorTab = document.createElement('div');
                                     errorTab.className = 'm-nav-group';
-                                    
+                                    errorTab.classList.add('error-tab');
+
                                     // Create the header with the dynamic title
                                     const header = `
                                         <div class="m-nav-group-header">
@@ -2585,6 +2587,17 @@ window.addEventListener('load', function () {
                     let tabContent = document.querySelectorAll('.customTabContainer');
                     tabContent.forEach(content => {
                         content.remove();
+                    });
+
+                    // find all error-divider & error-tab
+                    let errorDividers = document.querySelectorAll('.error-divider');
+                    errorDividers.forEach(divider => {
+                        divider.remove();
+                    });
+
+                    let errorTabs = document.querySelectorAll('.error-tab');
+                    errorTabs.forEach(tab => {
+                        tab.remove();
                     });
                 }, true);
             });
