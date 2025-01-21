@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Demo Script
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Replaces various elements to not display sensative information.
 // @author       Matthew Axtell
 // @run-at       document-start
@@ -101,6 +101,27 @@ function overrideAxios() {
             'Weather': (data) => {
                 data.siteName = `Demo Site`;
             },
+            'Users?userId': (data) => {
+                data.users.forEach((user, index) => {
+                    user.firstName = `First_${index + 1}`;
+                    user.lastName = `Last_${index + 1}`;
+                });
+            },
+            'Users/Pending': (data) => {
+                data.users.forEach((user, index) => {
+                    user.email = `email_${index + 1}@demo.com`;
+                });
+            },
+            'Agents': (data) => {
+                data.agents.forEach((agent, index) => {
+                    agent.agentName = `DemoAgent_${index + 1}`;
+                });
+            },
+            'agents': (data) => {
+                data.agents.forEach((agent, index) => {
+                    agent.agentName = `DemoAgent_${index + 1}`;
+                });
+            }
         };
 
 
@@ -134,7 +155,11 @@ function waitForElement(selector, time, callback) {
     let element = document.querySelector(selector);
     if(element) {
         // Run the callback function
-        callback(element);
+        if(callback(element) === false) {
+            setTimeout(function() {
+                waitForElement(selector, time, callback);
+            }, time);
+        }
         return;
     }
     else {
@@ -151,5 +176,24 @@ waitForElement('.user-wrapper', 0, function(element) {
             textElement.textContent = 'Welcome User';
         }
     });
-    
 });
+
+// Fix for the companies list in the users page
+const currentUrl = window.location.href;
+if (currentUrl.includes('Users')) {
+    waitForElement('#companySelect', 0, function(selectElement) {
+        const options = selectElement.querySelectorAll('option');
+        
+        // if it is empty, then the companies have not been loaded yet
+        if (options.length === 0) {
+            return false;
+        }
+
+        // Replace the company names with Demo Company
+        options.forEach((option, index) => {
+            if (index > 0) { // Skip the first option (All)
+                option.textContent = `Demo Company ${index}`;
+            }
+        });
+    });
+}
