@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         OptiFleet Demo Script
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  Replaces various elements to not display sensative information.
 // @author       Matthew Axtell
 // @run-at       document-start
 // @match        https://foundryoptifleet.com/*
 // @icon         https://foundryoptifleet.com/img/favicon-32x32.png
+// @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/refs/heads/main/OptiDemo
+// @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/refs/heads/main/OptiDemo
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
