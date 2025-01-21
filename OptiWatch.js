@@ -7,6 +7,8 @@
 // @match        https://foundryoptifleet.com/Content/*
 // @match        https://foundryoptifleet.com/Content/Dashboard/SiteOverview?OptiWatch
 // @icon         https://foundryoptifleet.com/img/favicon-32x32.png
+// @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/refs/heads/main/OptiWatch.js
+// @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/refs/heads/main/OptiWatch.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
@@ -166,7 +168,7 @@ window.addEventListener('load', async function () {
         }
 
         createOptiWatchButton();
-        
+
     } else if(currentURL.includes("OptiWatch")) {
         console.log('Opti-Watch popout window');
 
@@ -435,7 +437,7 @@ window.addEventListener('load', async function () {
                     statusIcon.appendChild(tooltip);
                 });
 
-               
+
 
                 // Add event listeners for tooltips after appending to the DOM
                 setTimeout(() => {
@@ -481,7 +483,7 @@ window.addEventListener('load', async function () {
                     // Change the + to a - when expanded
                     const expandIcon = companyTitle.querySelector('.expand-icon');
                     expandIcon.innerText = isExpanded ? '+' : '-';
-                  
+
                 });
 
                 for (const site of company.sites) {
@@ -880,7 +882,7 @@ window.addEventListener('load', async function () {
                 });
 
                 scrollPanel.scrollTop = scrollPos;
-                
+
                 // Wait a tick then set the opened expandables and scroll position
                 setTimeout(() => {
                     openedExpandables.forEach(index => {
