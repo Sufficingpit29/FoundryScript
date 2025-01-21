@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Demo Script
 // @namespace    http://tampermonkey.net/
-// @version      0.5
+// @version      0.6
 // @description  Replaces various elements to not display sensative information.
 // @author       Matthew Axtell
 // @run-at       document-start
@@ -87,6 +87,25 @@ function overrideAxios() {
                     data.individualMiner.companyName = `Demo Company`;
                     data.individualMiner.subcustomerName = `Owner Name`;
                 }
+            },
+            'Layout': (data) => {
+                console.log('Layout Data:', data);
+                data.zones.forEach((zone, index) => {
+                    zone.zoneName = zone.zoneName.replace(/^[^_]+/, 'Demo');
+                    zone.agentName = zone.agentName.replace(/^[^_]+/, 'Demo');
+                    zone.racks.forEach((rack, index) => {
+                        console.log('Rack:', rack);
+                        rack.agents.forEach((agent, index) => {
+                            //agent = agent.replace(/^[^_]+/, 'Demo');
+                        });
+                        rack.rows.forEach((row, index) => {
+                            console.log('Row:', row);
+                            row.slotData.forEach((slot, index) => {
+                                slot.standardizedLocationId = slot.standardizedLocationId.replace(/^[^_]+/, 'Demo');
+                            });
+                        });
+                    });
+                });
             },
             'MinerActivity': (data) => {
                 data.activities.forEach((activity, index) => {
