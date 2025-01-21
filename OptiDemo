@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Demo Script
 // @namespace    http://tampermonkey.net/
-// @version      0.8
+// @version      0.9
 // @description  Replaces various elements to not display sensative information.
 // @author       Matthew Axtell
 // @run-at       document-start
@@ -147,6 +147,45 @@ function overrideAxios() {
                     ticket.minerAccount = "Demo_Account";
                     ticket.zoneName = ticket.zoneName.replace(/^[^_]+/, 'Demo');
                 });
+            },
+            '/KeyMetrics': (data) => {
+                data.forEach((metric, index) => {
+                    metric.siteName = `Demo Site`;
+                });
+            },
+            '/HashratePerformanceReport': (data) => {
+                data.forEach((miner, index) => {
+                    miner.account1 = `Demo Account 1_`;
+                    miner.account2 = `Demo Account 2_`;
+                    miner.account3 = `Demo Account 3_`;
+                    miner.locationName = miner.locationName.replace(/^[^_]+/, 'Demo');
+                    miner.subcustomerName = `Owner Name`;
+                });
+            },
+            '/FirmwareReport': (data) => {
+                data.forEach((miner, index) => {
+                    miner.account1 = `Demo Account 1_`;
+                    miner.account2 = `Demo Account 2_`;
+                    miner.account3 = `Demo Account 3_`;
+                    miner.locationName = miner.locationName.replace(/^[^_]+/, 'Demo');
+                    miner.subcustomerName = `Owner Name`;
+                });
+            },
+            '/MinerPools': (data) => {
+                data.miners.forEach((miner, index) => {
+                    miner.siteName = miner.siteName.replace(/^[^_]+/, 'Demo');
+                    miner.subcustomerName = `Owner Name`;
+                });
+            },
+            '/energyreport': (data) => {
+                data.egaugeData.data.result.forEach((result, index) => {
+                    result.metric.facility = result.metric.facility.replace(/^[^_]+/, 'Demo');
+                });
+            },
+            '/sensors': (data) => {
+                data.sensors.forEach((sensor, index) => {
+                    sensor.facility = sensor.facility.replace(/^[^_]+/, 'Demo');
+                });
             }
         };
 
@@ -168,6 +207,8 @@ function overrideAxios() {
                 });
             }
         }
+
+        
 
         // If the URL does not match, call the original axios get method
         return originalGet.apply(this, arguments);
