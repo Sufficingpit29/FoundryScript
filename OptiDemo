@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Demo Script
 // @namespace    http://tampermonkey.net/
-// @version      0.2
+// @version      0.3
 // @description  Replaces various elements to not display sensative information.
 // @author       Matthew Axtell
 // @run-at       document-start
@@ -44,6 +44,11 @@ function overrideAxios() {
                 data.sites.forEach((site, index) => {
                     site.siteName = `Demo Site ${index + 1}`;
                 });
+
+                // So we don't save the modified companies in local storage
+                setTimeout(() => {
+                    localStorage.removeItem("storedCompanies");
+                }, 1000);
             },
             'Companies': (data) => {
                 data.companies.forEach((company, index) => {
@@ -64,7 +69,6 @@ function overrideAxios() {
                 });
             },
             'MinerInfo': (data) => {
-                console.log('MinerInfo:', data);
                 data.miners = data.miners || [];
                 data.miners.forEach((miner, index) => {
                     miner.account1 = `Demo Account 1_`;
@@ -83,28 +87,30 @@ function overrideAxios() {
                     data.individualMiner.companyName = `Demo Company`;
                     data.individualMiner.subcustomerName = `Owner Name`;
                 }
+            },
+            'MinerActivity': (data) => {
+                data.activities.forEach((activity, index) => {
+                    activity.username = `username@foundrydigital.com`;
+                });
             }
         };
+
 
         // Check if the URL matches any of the patterns
         for (const pattern in urlPatterns) {
             if (url.includes(pattern)) {
-            // Call the original axios get method
-            return originalGet.apply(this, arguments).then(response => {
-                // Modify the response data using the corresponding function
-                urlPatterns[pattern](response.data);
 
-                // Clear the stored companies if the pattern is 'SiteList'
-                if (pattern === 'SiteList') {
-                setTimeout(() => {
-                    localStorage.removeItem("storedCompanies");
-                }, 1000);
-                }
+                console.log('Intercepted axios response for URL:', url);
 
-                // Return the modified response
-                console.log('Modified axios response:', response);
-                return response;
-            });
+                // Call the original axios get method
+                return originalGet.apply(this, arguments).then(response => {
+                    // Modify the response data using the corresponding function
+                    urlPatterns[pattern](response.data);
+
+                    // Return the modified response
+                    console.log('Modified axios response:', response);
+                    return response;
+                });
             }
         }
 
