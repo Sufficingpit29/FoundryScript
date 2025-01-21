@@ -1,0 +1,140 @@
+// ==UserScript==
+// @name         OptiFleet Demo Script
+// @namespace    http://tampermonkey.net/
+// @version      0.1
+// @description  Replaces various elements to not display sensative information.
+// @author       Matthew Axtell
+// @run-at       document-start
+// @match        https://foundryoptifleet.com/*
+// @icon         https://foundryoptifleet.com/img/favicon-32x32.png
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
+// @grant        none
+// ==/UserScript==
+
+
+// Remove all local storage items for this domain
+//localStorage.clear();
+
+// Print all local storage items for this domain
+//console.log('Local Storage Items:', localStorage);
+
+// clear the stored companies so the page attempts to request the companies again
+localStorage.removeItem("storedCompanies");
+
+
+// Override the axios get method so we can intercept the response and modify it
+function overrideAxios() {
+    // Keep trying until axios is defined so we can override it as soon as possible
+    if (typeof axios === 'undefined') { 
+        setTimeout(overrideAxios, 0);
+        return; 
+    }
+
+    // Save the original axios get method
+    const originalGet = axios.get;
+
+    // Override the axios get method
+    axios.get = function(url, config) {
+        // Define a mapping of URL patterns to their respective modification functions
+        const urlPatterns = {
+            'SiteList': (data) => {
+                data.sites.forEach((site, index) => {
+                    site.siteName = `Demo Site ${index + 1}`;
+                });
+            },
+            'Companies': (data) => {
+                data.companies.forEach((company, index) => {
+                    company.name = `Demo Company ${index + 1}`;
+                });
+            },
+            'zonePerformance': (data) => {
+                data.zonePerformances.forEach((zone, index) => {
+                    zone.zoneName = `Demo Zone ${index + 1}`;
+                });
+            },
+            'Issues': (data) => {
+                data.miners.forEach((miner, index) => {
+                    miner.account1 = `Demo Account 1_`;
+                    miner.account2 = `Demo Account 2_`;
+                    miner.account3 = `Demo Account 3_`;
+                    miner.locationName = `Demo Location ${index + 1}`;
+                });
+            },
+            'MinerInfo': (data) => {
+                console.log('MinerInfo:', data);
+                data.miners = data.miners || [];
+                data.miners.forEach((miner, index) => {
+                    miner.account1 = `Demo Account 1_`;
+                    miner.account2 = `Demo Account 2_`;
+                    miner.account3 = `Demo Account 3_`;
+                    miner.locationName = miner.locationName.replace(/^[^_]+/, 'Demo');
+                    miner.subcustomerName = `Owner Name`;
+                });
+
+                if(data.individualMiner) {
+                    data.individualMiner.account1 = `Demo Account 1_`;
+                    data.individualMiner.account2 = `Demo Account 2_`;
+                    data.individualMiner.account3 = `Demo Account 3_`;
+                    data.individualMiner.locationName = data.individualMiner.locationName.replace(/^[^_]+/, 'Demo');
+                    data.individualMiner.zoneName = `Zone`;
+                    data.individualMiner.companyName = `Demo Company`;
+                    data.individualMiner.subcustomerName = `Owner Name`;
+                }
+            }
+        };
+
+        // Check if the URL matches any of the patterns
+        for (const pattern in urlPatterns) {
+            if (url.includes(pattern)) {
+            // Call the original axios get method
+            return originalGet.apply(this, arguments).then(response => {
+                // Modify the response data using the corresponding function
+                urlPatterns[pattern](response.data);
+
+                // Clear the stored companies if the pattern is 'SiteList'
+                if (pattern === 'SiteList') {
+                setTimeout(() => {
+                    localStorage.removeItem("storedCompanies");
+                }, 1000);
+                }
+
+                // Return the modified response
+                console.log('Modified axios response:', response);
+                return response;
+            });
+            }
+        }
+
+        // If the URL does not match, call the original axios get method
+        return originalGet.apply(this, arguments);
+    };
+}
+overrideAxios();
+
+
+// Wait until user-wrapper class element exists and then grab it
+function waitForElement(selector, time, callback) {
+    let element = document.querySelector(selector);
+    if(element) {
+        // Run the callback function
+        callback(element);
+        return;
+    }
+    else {
+        setTimeout(function() {
+            waitForElement(selector, time, callback);
+        }, time);
+    }
+}
+waitForElement('.user-wrapper', 0, function(element) {
+    // Gets all m-text elements and replaces the text content of the element that contains 'Welcome'
+    const textElements = element.querySelectorAll('m-text');
+    textElements.forEach(textElement => {
+        if (textElement.textContent.includes('Welcome')) {
+            textElement.textContent = 'Welcome User';
+        }
+    });
+    
+});
