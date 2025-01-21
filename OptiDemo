@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Demo Script
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.7
 // @description  Replaces various elements to not display sensative information.
 // @author       Matthew Axtell
 // @run-at       document-start
@@ -40,7 +40,7 @@ function overrideAxios() {
     axios.get = function(url, config) {
         // Define a mapping of URL patterns to their respective modification functions
         const urlPatterns = {
-            'SiteList': (data) => {
+            '/SiteList': (data) => {
                 data.sites.forEach((site, index) => {
                     site.siteName = `Demo Site ${index + 1}`;
                 });
@@ -50,17 +50,17 @@ function overrideAxios() {
                     localStorage.removeItem("storedCompanies");
                 }, 1000);
             },
-            'Companies': (data) => {
+            '/Companies': (data) => {
                 data.companies.forEach((company, index) => {
                     company.name = `Demo Company ${index + 1}`;
                 });
             },
-            'zonePerformance': (data) => {
+            '/zonePerformance': (data) => {
                 data.zonePerformances.forEach((zone, index) => {
                     zone.zoneName = `Demo Zone ${index + 1}`;
                 });
             },
-            'Issues': (data) => {
+            '/Issues': (data) => {
                 data.miners.forEach((miner, index) => {
                     miner.account1 = `Demo Account 1_`;
                     miner.account2 = `Demo Account 2_`;
@@ -68,7 +68,7 @@ function overrideAxios() {
                     miner.locationName = `Demo Location ${index + 1}`;
                 });
             },
-            'MinerInfo': (data) => {
+            '/MinerInfo': (data) => {
                 data.miners = data.miners || [];
                 data.miners.forEach((miner, index) => {
                     miner.account1 = `Demo Account 1_`;
@@ -88,7 +88,7 @@ function overrideAxios() {
                     data.individualMiner.subcustomerName = `Owner Name`;
                 }
             },
-            'Layout': (data) => {
+            '/Layout': (data) => {
                 console.log('Layout Data:', data);
                 data.zones.forEach((zone, index) => {
                     zone.zoneName = zone.zoneName.replace(/^[^_]+/, 'Demo');
@@ -107,36 +107,36 @@ function overrideAxios() {
                     });
                 });
             },
-            'MinerActivity': (data) => {
+            '/MinerActivity': (data) => {
                 data.activities.forEach((activity, index) => {
                     activity.username = `username@foundrydigital.com`;
                 });
             },
-            'sites': (data) => {
+            '/sites': (data) => {
                 data.sites.forEach((site, index) => {
                     site.siteName = `Demo Site ${index + 1}`;
                 });
             },
-            'Weather': (data) => {
+            '/Weather': (data) => {
                 data.siteName = `Demo Site`;
             },
-            'Users?userId': (data) => {
+            '/Users?userId': (data) => {
                 data.users.forEach((user, index) => {
                     user.firstName = `First_${index + 1}`;
                     user.lastName = `Last_${index + 1}`;
                 });
             },
-            'Users/Pending': (data) => {
+            '/Users/Pending': (data) => {
                 data.users.forEach((user, index) => {
                     user.email = `email_${index + 1}@demo.com`;
                 });
             },
-            'Agents': (data) => {
+            '/Agents': (data) => {
                 data.agents.forEach((agent, index) => {
                     agent.agentName = `DemoAgent_${index + 1}`;
                 });
             },
-            'agents': (data) => {
+            '/agents': (data) => {
                 data.agents.forEach((agent, index) => {
                     agent.agentName = `DemoAgent_${index + 1}`;
                 });
