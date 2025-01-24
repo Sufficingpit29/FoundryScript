@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Demo Script
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Replaces various elements to not display sensative information.
 // @author       Matthew Axtell
 // @run-at       document-start
@@ -18,11 +18,12 @@
 // Remove all local storage items for this domain
 //localStorage.clear();
 
-// Print all local storage items for this domain
-//console.log('Local Storage Items:', localStorage);
-
-// clear the stored companies so the page attempts to request the companies again
 localStorage.removeItem("storedCompanies");
+localStorage.removeItem("selectedCompanyName");
+localStorage.removeItem("selectedSiteName");
+
+// Print all local storage items for this domain
+console.log('Local Storage Items:', localStorage);
 
 
 // Override the axios get method so we can intercept the response and modify it
@@ -48,7 +49,9 @@ function overrideAxios() {
                 // So we don't save the modified companies in local storage
                 setInterval(() => {
                     localStorage.removeItem("storedCompanies");
-                }, 1000);
+                    localStorage.removeItem("selectedCompanyName");
+                    localStorage.removeItem("selectedSiteName");
+                }, 100);
             },
             '/Companies': (data) => {
                 data.companies.forEach((company, index) => {
