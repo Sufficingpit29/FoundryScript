@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.6.5
+// @version      5.6.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -459,6 +459,7 @@ window.addEventListener('load', function () {
                 serviceInstance.get(`/Issues?siteId=${siteId}&zoneId=-1`).then(res => {
                     res.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
                     if (callback) {
+                        console.log("Retrieved issue miners", res.miners);
                         callback(res.miners);
                     }
                 });
@@ -1702,6 +1703,7 @@ window.addEventListener('load', function () {
                 let modelLite = model.replace('Antminer ', '');
                 let modelLiteSplit = modelLite.split(' (');
                 modelLite = modelLiteSplit[0];
+                modelLiteSplit[1] = modelLiteSplit[1] || '';
                 const hashRate = modelLiteSplit[1].replace(')', '');
                 let modelWithoutParens = model.replace('(', '').replace(')', '');
 
@@ -2832,56 +2834,58 @@ window.addEventListener('load', function () {
                                 }
                             }
                             
-                            // Container Temp
-                            retrieveContainerTempData((containerTempData) => {
-                                for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
-                                    const slotID = minerData['Slot ID'].textContent;
-                                    var containerText = slotID.split("_")[1].split("-")[0].replace(/\D/g, '');
-                                    var containerNum = containerText.replace(/^0+/, '');
-        
-                                    // Check if slotID has minden in it
-                                    if (!slotID.includes('Minden')) {
-                                        continue;
-                                    }
-                                    // This is very broken and messed up now
-                                    const containerTemp = containerTempData[containerNum].temp.toFixed(2);
-                                    let statsElement = minerData['Stats'].querySelector('.miner-stats');
-                                    if(!statsElement) {
-                                        statsElement = minerData['Stats'];
-                                    }
-                                    let curTextContent = "";
-                                    if(statsElement.children.length > 0) {
-                                        curTextContent = statsElement.children[0].textContent;
-                                    }
-                                    // random test number between 0 and 100
-                                    if (containerTemp && !curTextContent.includes('C')) { // doesn't contain added text already
-                                     
-                                        //statsElement.children[0].textContent = "Boards: " + curTextContent;
+                            if(siteName.includes("Minden")) {
+                                // Container Temp
+                                retrieveContainerTempData((containerTempData) => {
+                                    for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
+                                        const slotID = minerData['Slot ID'].textContent;
+                                        var containerText = slotID.split("_")[1].split("-")[0].replace(/\D/g, '');
+                                        var containerNum = containerText.replace(/^0+/, '');
+            
+                                        // Check if slotID has minden in it
+                                        if (!slotID.includes('Minden')) {
+                                            continue;
+                                        }
+                                        // This is very broken and messed up now
+                                        const containerTemp = containerTempData[containerNum].temp.toFixed(2);
+                                        let statsElement = minerData['Stats'].querySelector('.miner-stats');
+                                        if(!statsElement) {
+                                            statsElement = minerData['Stats'];
+                                        }
+                                        let curTextContent = "";
+                                        if(statsElement.children.length > 0) {
+                                            curTextContent = statsElement.children[0].textContent;
+                                        }
+                                        // random test number between 0 and 100
+                                        if (containerTemp && !curTextContent.includes('C')) { // doesn't contain added text already
+                                        
+                                            //statsElement.children[0].textContent = "Boards: " + curTextContent;
 
-                                        var newElement = document.createElement('div');
-                                        newElement.innerHTML = `<span>C${containerText}:</span> <span>${containerTemp}F</span>`;
-                                        statsElement.prepend(newElement);
+                                            var newElement = document.createElement('div');
+                                            newElement.innerHTML = `<span>C${containerText}:</span> <span>${containerTemp}F</span>`;
+                                            statsElement.prepend(newElement);
 
-                                        // Set the text color of the temp based on the container temp
-                                        const tempSpans = newElement.querySelectorAll('span');
-                                        const tempSpan1 = tempSpans[0];
-                                        const tempSpan2 = tempSpans[1];
-                                        tempSpan1.style.color = '#B2B2B8';
-                                        if (containerTemp > 80) {
-                                            tempSpan2.style.color = 'red';
-                                            tempSpan2.textContent += ' 🔥';
-                                        } else if (containerTemp > 70) {
-                                            tempSpan2.style.color = 'yellow';
-                                            tempSpan2.textContent += ' ⚠️';
-                                        } else if (containerTemp <= 25) {
-                                            tempSpan2.style.color = '#38a9ff';
-                                            tempSpan2.textContent += ' ❄️';
-                                        } else {
-                                            tempSpan2.style.color = 'white';
+                                            // Set the text color of the temp based on the container temp
+                                            const tempSpans = newElement.querySelectorAll('span');
+                                            const tempSpan1 = tempSpans[0];
+                                            const tempSpan2 = tempSpans[1];
+                                            tempSpan1.style.color = '#B2B2B8';
+                                            if (containerTemp > 80) {
+                                                tempSpan2.style.color = 'red';
+                                                tempSpan2.textContent += ' 🔥';
+                                            } else if (containerTemp > 70) {
+                                                tempSpan2.style.color = 'yellow';
+                                                tempSpan2.textContent += ' ⚠️';
+                                            } else if (containerTemp <= 25) {
+                                                tempSpan2.style.color = '#38a9ff';
+                                                tempSpan2.textContent += ' ❄️';
+                                            } else {
+                                                tempSpan2.style.color = 'white';
+                                            }
                                         }
                                     }
-                                }
-                            });  
+                                }); 
+                            }
                         });
                         observer.observe(minerList, { childList: true, subtree: true });
                     }
