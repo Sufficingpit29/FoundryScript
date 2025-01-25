@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.6.6
+// @version      5.6.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -7693,26 +7693,29 @@ window.addEventListener('load', function () {
                 const cards = document.querySelectorAll('.taskCard');
                 curTry++;
                 console.log("Checking for card with serial number:", serialNumber);
+                
+                if (curTry >= maxTries) {
+                    console.log("Max tries reached, card not found.");
+
+                    // Reset the search bar
+                    filterTextBox.value = '';
+                    filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    
+                    // Set search bar color
+                    filterTextBox.style.backgroundColor = 'red';
+                    timeout = setTimeout(() => {
+                        filterTextBox.style.backgroundColor = '';
+                    }, 1000);
+                    return;
+                }
+
                 if (cards.length === 0) {
                     setTimeout(() => {
                         FindIfCardExists();
                     }, 100);
                     return;
                 }
-                
-                if (curTry >= maxTries) {
-                    // Reset the search bar
-                    filterTextBox.value = '';
-                    filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
-                    console.log("Max tries reached, card not found.");
 
-                    // Set search bar color
-                    filterTextBox.style.backgroundColor = 'orange';
-                    timeout = setTimeout(() => {
-                        filterTextBox.style.backgroundColor = '';
-                    }, 1000);
-                    return;
-                }
                 cards.forEach(card => {
                     const taskName = card.getAttribute('aria-label');
                     const container = card.querySelector('.container');
@@ -7731,7 +7734,7 @@ window.addEventListener('load', function () {
 
                         // heightlight the card red and shake it
                         container.style.transition = 'background-color 0.8s';
-                        container.style.backgroundColor = 'red';
+                        container.style.backgroundColor = 'orange';
                         container.style.animation = 'shake 1s';
                         setTimeout(() => {
                             container.style.transition = 'background-color 1s';
