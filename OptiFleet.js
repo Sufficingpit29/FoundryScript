@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.6.7
+// @version      5.7.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -436,6 +436,8 @@ window.addEventListener('load', function () {
         let gotFrozenDataFor = {};
         let activeMiners = 0;
         let foundActiveMiners = false;
+
+        let averagedContainerMinerTemps = {};
 
         let OptiFleetService2 = Object.getPrototypeOf(unsafeWindow.ms);
         var serviceInstance = Object.getPrototypeOf(unsafeWindow.ms);
@@ -874,7 +876,6 @@ window.addEventListener('load', function () {
 
                     // Populate the minerSNLookup
                     let minerSNLookup = {};
-                    //let scuffedTMIPs = "";
                     resp.miners.forEach(miner => {
                         minerSNLookup[miner.serialNumber] = {
                             minerID: miner.id,
@@ -882,12 +883,25 @@ window.addEventListener('load', function () {
                         };
                         allMinersLookup[miner.id] = miner;
 
-                        // Get the ipAddress
-                        if(miner.ipAddress != null) {
-                            //scuffedTMIPs += "@connect " + miner.ipAddress + "\n";
-                        }
+
+                        /*
+                        if(miner.avgBoardTemperature > 0) {
+                            let minerContainer = miner.locationName;
+                            minerContainer = minerContainer.replace("Minden_", "");
+                            minerContainer = minerContainer.split("-")[0];
+                            averagedContainerMinerTemps[minerContainer] = averagedContainerMinerTemps[minerContainer] || { total: 0, count: 0 };
+                            averagedContainerMinerTemps[minerContainer].total += miner.avgBoardTemperature;
+                            averagedContainerMinerTemps[minerContainer].count++;
+                        }*/
                     });
-                    //console.log(scuffedTMIPs);
+
+                    /*
+                    averagedContainerMinerTemps = Object.keys(averagedContainerMinerTemps).reduce((acc, key) => {
+                        acc[key] = acc[key].total / acc[key].count;
+                        return acc;
+                    }, averagedContainerMinerTemps);
+                    console.log("Averaged Container Miner Temps:", averagedContainerMinerTemps);*/
+
                     if(siteName.includes("Minden")) {
                         GM_SuperValue.set("minerSNLookup", minerSNLookup);
                     }
@@ -1285,38 +1299,38 @@ window.addEventListener('load', function () {
                 if (i + 1 < minerDetailsText.length && key.length > 2 && key != lastKey) {
 
                     let value = minerDetailsText[i + 1];
-                    if (key === 'Rack / Row / Position') {
+                    if (key === 'Zone / Rack / Row / Position') {
                         value = value.replace(/ \/ /g, '-');
+
+                        // Split the first part of the value to get the zone
+                        const zone = value.split('-')[0];
+                        details['Facility'] = zone.split('_')[0];
+
+                        // Set the value to the rest of the value
+                        //value = value.replace(zone + '-', '');
                     }
                     details[key] = value;
                 }
             }
-
             return details;
         }
 
         function getMinerDetails() {
-            const container = document.querySelector('.miner-details-section.m-stack');
-            if (!container) return;
-
-            const clone = container.cloneNode(true);
-            const buttons = clone.querySelectorAll('.copyBtn');
-            buttons.forEach(btn => btn.remove());
-
-            let cleanedText = cleanText(clone.innerText);
+            let cleanedText = getCleanMinerDetails();
             var minerDetailsCrude = parseMinerDetails(cleanedText);
 
             const minerDetails = {
                 model: minerDetailsCrude['Model'],
-                serialNumber: minerDetailsCrude['Serial Number'],
+                serialNumber: minerDetailsCrude[minerDetailsCrude['Model']],
                 facility: minerDetailsCrude['Facility'],
-                ipAddress: minerDetailsCrude['IpAddress'],
+                ipAddress: minerDetailsCrude['Network'],
                 locationID: minerDetailsCrude['Zone / Rack / Row / Position'].replace(/ \/ /g, "-"),
                 activePool: minerDetailsCrude['Active Pool'],
                 status: minerDetailsCrude['Status'],
                 owner: minerDetailsCrude['Owner'],
             };
 
+            console.log("Miner Details:", minerDetails);
             return [cleanedText, minerDetails];
         }
 
@@ -1666,33 +1680,42 @@ window.addEventListener('load', function () {
                 document.body.removeChild(tempTextArea);
             }
 
-            // Clean Text fuction
-            function cleanText(text) {
-                console.log("Cleaning Text");
-                console.log(text);
-                return text
-                .replace(/Copy\s*$/gm, '') // Remove 'Copy' button text
-                .replace(/All details copied!/, '') // Remove 'All details copied!' message
-                .replace(/Text copied!/, '') // Remove 'Text copied!' message
-                .replace(/                /g, '') // Remove whitespacing
-                .replace(/\n            \n            AutoPool Enabled\n/, '') // Remove the autopool text
-                .replace(/\n+$/, '') // Remove trailing newlines
-                .replace(/\n            \n            /g, '\n') // Removes extra new lines  )
-                .trim();
+            function getCleanMinerDetails() {
+                const container = document.querySelector('.miner-details');
+                if (!container) return;
+
+                let textToCopy = '';
+                const formControls = container.querySelectorAll('.m-form-control');
+                formControls.forEach(control => {
+                    const label = control.querySelector('.m-label.is-secondary');
+                    const info = control.querySelector('.miner-detail-info');
+                    if (label && info) {
+                        textToCopy += `${label.textContent.trim()}\n`;
+                        const primaryText = info.querySelector('.m-text:not(.is-secondary), .m-link');
+                        const secondaryText = info.querySelector('.m-text.is-secondary, span.is-secondary');
+                        
+                        if (primaryText) {
+                            textToCopy += `${primaryText.textContent.trim()}\n`;
+                        }
+                        if (secondaryText) {
+                            textToCopy += `${secondaryText.textContent.trim()}\n`;
+                        }
+                        if (!primaryText && !secondaryText) {
+                            textToCopy += `${info.textContent.trim()}\n`;
+                        }
+                        textToCopy += '\n';
+                    }
+                });
+                
+                // Remove Copy/Copied text
+                textToCopy = textToCopy.replace(/Copy/g, '');
+                textToCopy = textToCopy.replace(/Copied/g, '');
+
+                return textToCopy;
             }
 
             function copyAllDetails() {
-                const container = document.querySelector('.miner-details-section.m-stack');
-                if (!container) return;
-
-                const clone = container.cloneNode(true);
-                const buttons = clone.querySelectorAll('.copyBtn');
-                buttons.forEach(btn => btn.remove());
-
-                let textToCopy = cleanText(clone.innerText);
-
-
-
+                let textToCopy = getCleanMinerDetails();
                 copyTextToClipboard(textToCopy);
             }
 
@@ -1950,6 +1973,8 @@ window.addEventListener('load', function () {
                 const copyButton = document.createElement('button');
                 copyButton.innerText = 'Copy';
                 copyButton.className = 'copyBtn';
+                copyButton.style.float = 'right'; // Align to the right
+                copyButton.style.marginLeft = '10px'; // Add some space to the left
                 copyButton.onclick = function (event) {
                     event.preventDefault();
                     copyTextToClipboard(textToCopy);
@@ -1958,7 +1983,14 @@ window.addEventListener('load', function () {
                         copyButton.innerText = 'Copy';
                     }, 2000);
                 };
-                element.appendChild(copyButton);
+
+                // Check if there is a secondary text element
+                const secondaryText = element.querySelector('.is-secondary');
+                if (secondaryText) {
+                    secondaryText.appendChild(copyButton);
+                } else {
+                    element.appendChild(copyButton);
+                }
             }
 
             function fixAccountWorkerFormatting() {
@@ -1996,19 +2028,35 @@ window.addEventListener('load', function () {
             }
 
             function addCopyButtonsToElements() {
-                const detailSections = document.querySelectorAll('.miner-details-section .info-row-value');
+                const detailSections = document.querySelectorAll('.miner-detail-info');
 
                 detailSections.forEach(section => {
-                    const textToCopy = section.textContent.trim();
+                    let textToCopy = section.textContent.trim();
+                    
+                    // Split the text by new lines, loop and trim each line
+                    const textLines = textToCopy.split('\n');
+                    if (textLines.length > 1) {
+                        textToCopy = textLines.map(line => line.trim()).join('\n');
+                    }
+
                     addCopyButton(section, textToCopy);
                 });
 
-                const container = document.querySelector('.miner-details-section.m-stack');
+                const container = document.querySelector('.miner-details');
                 if (container) {
+                    // Add spacer div
+                    if (!container.querySelector('.spacer')) {
+                        const spacer = document.createElement('div');
+                        spacer.className = 'spacer';
+                        spacer.style.height = '10px';
+                        container.insertBefore(spacer, container.firstChild);
+                    }
+
                     if (!container.querySelector('.copyAllBtn')) {
                         const copyAllButton = document.createElement('button');
                         copyAllButton.innerText = 'Copy All';
                         copyAllButton.className = 'copyBtn copyAllBtn';
+                        copyAllButton.style.width = '100%';
                         copyAllButton.onclick = function (event) {
                             event.preventDefault();
                             copyAllDetails();
@@ -2027,6 +2075,7 @@ window.addEventListener('load', function () {
                         const sharepointPasteButton = document.createElement('button');
                         sharepointPasteButton.innerText = 'Quick Sharepoint & Planner';
                         sharepointPasteButton.className = 'copyBtn sharepointPasteBtn';
+                        sharepointPasteButton.style.width = '100%';
                         sharepointPasteButton.onclick = function (event) {
                             event.preventDefault();
                             createDataInputPopup();
@@ -2035,24 +2084,10 @@ window.addEventListener('load', function () {
                     }
                 }
             }
-
-            function showSuccessMessage(element, message) {
-                let successMsg = document.createElement('div');
-                successMsg.className = 'copySuccess';
-                successMsg.innerHTML = message;
-                element.appendChild(successMsg);
-                setTimeout(() => {
-                    successMsg.classList.add('show');
-                    setTimeout(() => {
-                        successMsg.classList.remove('show');
-                        element.removeChild(successMsg);
-                    }, 2000);
-                }, 10);
-            }
-
+            
             function addMutationObserver() {
                 const observer = new MutationObserver(() => {
-                    fixAccountWorkerFormatting();
+                    //fixAccountWorkerFormatting();
                     addCopyButtonsToElements();
                 });
 
