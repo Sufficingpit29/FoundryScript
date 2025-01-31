@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.7.8
+// @version      5.7.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -8967,13 +8967,10 @@ window.addEventListener('load', function () {
         // Call the function to start updating the estimated time
         updateEstimatedTime();
 
-        let cleaned = false;
         // Run the check on mutation
         const observer = new MutationObserver((mutations) => {
             let logContent = document.querySelector('.log-content') || document.querySelector('.logBox-pre');
-            if(logContent && logContent.textContent.includes("\n") && !cleaned) {
-                console.log('Cleaning log');
-                cleaned = true;
+            if(logContent && logContent.textContent.includes("\n") && !logContent.textContent.includes("(x")) {
                 logContent.textContent = cleanRegCrcErrors(logContent.textContent);
             }
 
