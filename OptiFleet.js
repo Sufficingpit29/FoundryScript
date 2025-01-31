@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.7.1
+// @version      5.7.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -167,6 +167,10 @@ const errorsToSearch = {
         icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
         start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
         end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
+    },
+    'Reg CRC Error': {
+        icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
+        start: "reg crc error"
     },
     'Bad Chain ID': {
         icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
@@ -386,6 +390,33 @@ function runErrorScanLogic(logText) {
     }
     
     return errorsFound;
+}
+
+// Loop through the log text and find '!!! reg crc error' occurrences, count them up until a line isn't '!!! reg crc error', then replace those counted up lines with a single line that says '!!! reg crc error (xN)'
+function cleanRegCrcErrors(logText) {
+    let logLines = logText.split('\n');
+    let errorCount = 0;
+    let startLine = -1;
+    for (let i = 0; i < logLines.length; i++) {
+        if (logLines[i].includes('!!! reg crc error')) {
+            errorCount++;
+            if (startLine === -1) {
+                startLine = i;
+            } else {
+                logLines.splice(i, 1);
+                i--;
+            }
+        } else {
+            if (errorCount > 1) {
+                logLines[startLine] = `!!! reg crc error (x${errorCount})`;
+            }
+            errorCount = 0;
+            startLine = -1;
+        }
+    }
+
+    logText = logLines.join('\n');
+    return logText;
 }
 
 window.addEventListener('load', function () {
@@ -2200,7 +2231,9 @@ window.addEventListener('load', function () {
                                     scrollbar-width: thin;
                                     scrollbar-color: #888 #333;
                                 `;
+                                
                                 let orignalLogText = responseText.trim();
+                                orginalLogText = cleanRegCrcErrors(orignalLogText);
                                 logElement.textContent = orignalLogText;
                                 customTabContainer.appendChild(logElement);
 
@@ -8263,6 +8296,7 @@ window.addEventListener('load', function () {
 
             // If the log content exists, run the error tab setup
             if(logContent && logContent.textContent.includes("\n")) {
+                
                 // Scroll to bottom of the log content
                 logContent.scrollTop = logContent.scrollHeight;
 
@@ -8717,7 +8751,6 @@ window.addEventListener('load', function () {
                                         
                                         if(date !== todayString) {
                                             errorsFoundSave[minerID] = [];
-                                            //alert('No errors found today\n\n' + error.text + '\n\n Date: ' + date + '\n\n todayString: ' + todayString);
                                         }
                                     });
                                 }
@@ -8931,15 +8964,22 @@ window.addEventListener('load', function () {
         // Call the function to start updating the estimated time
         updateEstimatedTime();
 
+        let cleaned = false;
         // Run the check on mutation
         const observer = new MutationObserver((mutations) => {
-            const logContent = document.querySelector('.logBox-pre');
+            let logContent = document.querySelector('.log-content') || document.querySelector('.logBox-pre');
+            if(logContent && logContent.textContent.includes("\n") && !cleaned) {
+                console.log('Cleaning log');
+                cleaned = true;
+                logContent.textContent = cleanRegCrcErrors(logContent.textContent);
+            }
+
             if (!logContent) {
                 adjustLayout();
                 updateEstimatedTime();
                 runAntMinerGUIAdjustments();
             }
-            
+
             setUpErrorLog();
         });
 
