@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.7.5
+// @version      5.7.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -236,6 +236,8 @@ const errorsToSearch = {
 }
 
 function runErrorScanLogic(logText) {
+    console.log('Running error scan logic');
+    console.log('Log text:', logText);
     // Search through the log and locate errors
     var errorsFound = []; // Array to store the errors found
     for (const error in errorsToSearch) {
@@ -2232,8 +2234,9 @@ window.addEventListener('load', function () {
                                     scrollbar-color: #888 #333;
                                 `;
                                 
-                                let orignalLogText = responseText.trim();
-                                orginalLogText = cleanRegCrcErrors(orignalLogText);
+                                responseText = responseText.trim();
+                                responseText = cleanRegCrcErrors(responseText);
+                                let orignalLogText = responseText;
                                 logElement.textContent = orignalLogText;
                                 customTabContainer.appendChild(logElement);
 
