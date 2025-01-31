@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.7.6
+// @version      5.7.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2847,6 +2847,8 @@ window.addEventListener('load', function () {
                                 // combine into plannerCardsData
                                 plannerCardsDataAll = {...plannerCardsDataAll, ...data};
                             }
+
+                            console.log("Planner Cards Data", plannerCardsDataAll);
 
                             // Loop through all planner-elements and update the text
                             const plannerElements = document.querySelectorAll('.planner-element');
@@ -6067,7 +6069,7 @@ window.addEventListener('load', function () {
 
                         // Add the full auto reboot button to the right of the dropdown
                         //actionsDropdown.before(fullAutoRebootButton);
-                        
+                        /*
                         // Create a 'getPlannerCardData' button to the right of the dropdown
                         const updatePlannerCardsDropdown = document.createElement('div');
                         updatePlannerCardsDropdown.classList.add('op-dropdown');
@@ -6091,7 +6093,7 @@ window.addEventListener('load', function () {
 
                         // Add the update planner cards button to the right of the dropdown
                         actionsDropdown.before(updatePlannerCardsDropdown);
-
+*/
                         let plannerCardRefreshInterval;
                         let firstLoad = true;
                         function setUpPlannerCardRefresh() {
