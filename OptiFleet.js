@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      5.7.9
+// @version      5.8.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1351,10 +1351,11 @@ window.addEventListener('load', function () {
         function getMinerDetails() {
             let cleanedText = getCleanMinerDetails();
             var minerDetailsCrude = parseMinerDetails(cleanedText);
-
+            let model = minerDetailsCrude['Model'] || "";
+            let serialNumber = minerDetailsCrude[model] || "";
             const minerDetails = {
                 model: minerDetailsCrude['Model'],
-                serialNumber: minerDetailsCrude[minerDetailsCrude['Model']],
+                serialNumber: serialNumber,
                 facility: minerDetailsCrude['Facility'],
                 ipAddress: minerDetailsCrude['Network'],
                 locationID: minerDetailsCrude['Zone / Rack / Row / Position'].replace(/ \/ /g, "-"),
@@ -2001,13 +2002,15 @@ window.addEventListener('load', function () {
             }
 
             function addCopyButton(element, textToCopy) {
-                if (element.querySelector('.copyBtn')) return;
+                if (element.querySelector('.copyBtn')) {return};
 
                 const copyButton = document.createElement('button');
                 copyButton.innerText = 'Copy';
                 copyButton.className = 'copyBtn';
+                copyButton.style.fontSize = '9px';
                 copyButton.style.float = 'right'; // Align to the right
                 copyButton.style.marginLeft = '10px'; // Add some space to the left
+                copyButton.style.padding = '2px 5px';
                 copyButton.onclick = function (event) {
                     event.preventDefault();
                     copyTextToClipboard(textToCopy);
@@ -2026,95 +2029,68 @@ window.addEventListener('load', function () {
                 }
             }
 
-            function fixAccountWorkerFormatting() {
-                const infoRows = document.querySelectorAll('.info-row');
-                infoRows.forEach(row => {
-                    const label = row.querySelector('.info-row-label');
-                    const activeAccountLabel = row.querySelector('#activeAccount');
-                    const activeWorkerLabel = row.querySelector('#activeWorker');
-                    if (label && label.textContent.trim() === 'Account / Worker' && activeAccountLabel && activeWorkerLabel && activeAccountLabel.textContent && activeWorkerLabel.textContent) {
-
-                        // print parent node
-                        console.log(row.parentNode);
-
-                        // Create new label
-                        const newLabel = document.createElement('div');
-                        newLabel.className = 'info-row-label';
-                        newLabel.textContent = '\nAccount / Worker\n';
-
-                        // Create new value div
-                        const newValue = document.createElement('div');
-                        newValue.className = 'info-row-value';
-                        newValue.id = 'accountWorker';
-                        newValue.textContent = activeAccountLabel.textContent + ' / ' + activeWorkerLabel.textContent;
-
-                        // Create new info-row div
-                        const newInfoRow = document.createElement('div');
-                        newInfoRow.className = 'info-row';
-                        newInfoRow.appendChild(newLabel);
-                        newInfoRow.appendChild(newValue);
-
-                        // Replace the old row with the new row
-                        row.parentNode.replaceChild(newInfoRow, row);
-                    }
-                });
-            }
-
             function addCopyButtonsToElements() {
                 const detailSections = document.querySelectorAll('.miner-detail-info');
 
                 detailSections.forEach(section => {
-                    let textToCopy = section.textContent.trim();
-                    
-                    // Split the text by new lines, loop and trim each line
-                    const textLines = textToCopy.split('\n');
-                    if (textLines.length > 1) {
-                        textToCopy = textLines.map(line => line.trim()).join('\n');
-                    }
+                    const primaryText = section.querySelector('.m-text:not(.is-secondary), .m-link');
+                    const secondaryText = section.querySelector('.m-text.is-secondary, span.is-secondary');
 
-                    addCopyButton(section, textToCopy);
+                    if (primaryText) {
+                        let textToCopy = primaryText.textContent.trim();
+                        addCopyButton(primaryText, textToCopy);
+                    }
+                    if (secondaryText) {
+                        let textToCopy = secondaryText.textContent.trim();
+                        console.log("Secondary Text:", secondaryText);
+                        addCopyButton(secondaryText, textToCopy);
+                    }
+                    if (!primaryText && !secondaryText) {
+                        let textToCopy = section.textContent.trim();
+                        addCopyButton(section, textToCopy);
+                    }
                 });
+            }
 
-                const container = document.querySelector('.miner-details');
-                if (container) {
-                    // Add spacer div
-                    if (!container.querySelector('.spacer')) {
-                        const spacer = document.createElement('div');
-                        spacer.className = 'spacer';
-                        spacer.style.height = '10px';
-                        container.insertBefore(spacer, container.firstChild);
-                    }
+            const container = document.querySelector('.miner-details');
+            if (container) {
+                // Add spacer div
+                if (!container.querySelector('.spacer')) {
+                    const spacer = document.createElement('div');
+                    spacer.className = 'spacer';
+                    spacer.style.height = '10px';
+                    container.insertBefore(spacer, container.firstChild);
+                }
 
-                    if (!container.querySelector('.copyAllBtn')) {
-                        const copyAllButton = document.createElement('button');
-                        copyAllButton.innerText = 'Copy All';
-                        copyAllButton.className = 'copyBtn copyAllBtn';
-                        copyAllButton.style.width = '100%';
-                        copyAllButton.onclick = function (event) {
-                            event.preventDefault();
-                            copyAllDetails();
-                            //showSuccessMessage(container, "All details copied!");
+                if (!container.querySelector('.copyAllBtn')) {
+                    const copyAllButton = document.createElement('button');
+                    copyAllButton.innerText = 'Copy All';
+                    copyAllButton.className = 'copyBtn copyAllBtn';
+                    copyAllButton.style.width = '100%';
+                    copyAllButton.onclick = function (event) {
+                        event.preventDefault();
+                        copyAllDetails();
+                        //showSuccessMessage(container, "All details copied!");
 
-                            // Change the button text to 'All details copied!' for 2 seconds
-                            copyAllButton.innerText = 'All details copied!';
-                            setTimeout(() => {
-                                copyAllButton.innerText = 'Copy All';
-                            }, 2000);
-                        };
-                        container.insertBefore(copyAllButton, container.firstChild);
-                    }
+                        // Change the button text to 'All details copied!' for 2 seconds
+                        copyAllButton.innerText = 'All details copied!';
+                        setTimeout(() => {
+                            copyAllButton.innerText = 'Copy All';
+                        }, 2000);
+                    };
+                    container.insertBefore(copyAllButton, container.firstChild);
+                }
 
-                    if (!container.querySelector('.sharepointPasteBtn') && siteName.includes("Minden")) {
-                        const sharepointPasteButton = document.createElement('button');
-                        sharepointPasteButton.innerText = 'Quick Sharepoint & Planner';
-                        sharepointPasteButton.className = 'copyBtn sharepointPasteBtn';
-                        sharepointPasteButton.style.width = '100%';
-                        sharepointPasteButton.onclick = function (event) {
-                            event.preventDefault();
-                            createDataInputPopup();
-                        };
-                        container.insertBefore(sharepointPasteButton, container.firstChild);
-                    }
+                if (!container.querySelector('.sharepointPasteBtn') && siteName.includes("Minden")) {
+                    const sharepointPasteButton = document.createElement('button');
+                    sharepointPasteButton.innerText = 'Quick Sharepoint & Planner';
+                    sharepointPasteButton.className = 'copyBtn sharepointPasteBtn';
+                    sharepointPasteButton.style.width = '100%';
+                    sharepointPasteButton.onclick = function (event) {
+                        event.preventDefault();
+                        createDataInputPopup();
+                    };
+                    container.insertBefore(sharepointPasteButton, container.firstChild);
                 }
             }
             
@@ -7257,129 +7233,151 @@ window.addEventListener('load', function () {
         }
 
     } else if (currentUrl.includes("planner.cloud.microsoft")) {
+        let stopChecking = false;
+        let existingCard = false;
+        let maxTries = 30;
+        let curTry = 0;
+        function FindIfCardExists(serialNumber, findCallback) {
+            if (stopChecking) { return; }
 
-        // Logic for going to and highling the locatePlannerCard GM_SuperValue
-        const locatingText = ` [Locating...]`;
-        let columnTitleTextElement = null;
-        let foundCard = false;
-        let notLookingTimes = 0;
-        function locatePlannerCard() {
-            if (window !== window.top) {
-                return;
-            }
+            const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
 
-            if (foundCard || notLookingTimes > 20) {
-                return;
-            }
-
-            const locatePlannerCardData = GM_SuperValue.get("locatePlannerCard", false);
-            if (!locatePlannerCardData) {
-                //console.log("No locatePlannerCard Data found.");
-                notLookingTimes++;
+            if (!filterTextBox) {
                 setTimeout(() => {
-                    locatePlannerCard();
+                    FindIfCardExists(serialNumber, findCallback);
                 }, 100);
                 return;
             }
+            
+            // Get all sectionToggleButton and expand them
+            const sectionToggleButtons = document.querySelectorAll('.sectionToggleButton');
+            console.log("sectionToggleButtons: ", sectionToggleButtons);
+            sectionToggleButtons.forEach(button => {
+                if (button.getAttribute('aria-expanded') === 'false') {
+                    button.click();
+                }
+            });
 
-            let serialNumber = locatePlannerCardData.serialNumber;
-            let columnTitle = locatePlannerCardData.columnTitle;
-            let cardCreateCheck = locatePlannerCardData.cardCreateCheck;
+            filterTextBox.value = serialNumber;
+            filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+            console.log("Inputting serial number into filter text box:", serialNumber);
 
-            // Find the card with the serial number
+            // Set background color to the filter text box
+            filterTextBox.style.transition = 'background-color 0.8s';
+            filterTextBox.style.backgroundColor = '#c3b900';
+
+            // Get all the cards and scroll to it if the same serial number is found
             const cards = document.querySelectorAll('.taskCard');
+            curTry++;
+            console.log("Checking for card with serial number:", serialNumber);
+            
+            if (curTry >= maxTries) {
+                console.log("Max tries reached, card not found.");
+
+                // Reset the search bar
+                filterTextBox.value = '';
+                filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+                
+                // Set search bar color
+                filterTextBox.style.backgroundColor = 'red';
+                timeout = setTimeout(() => {
+                    filterTextBox.style.backgroundColor = '';
+                }, 1000);
+                return;
+            }
+
             if (cards.length === 0) {
                 setTimeout(() => {
-                    locatePlannerCard();
+                    FindIfCardExists(serialNumber, findCallback);
                 }, 100);
                 return;
             }
 
             cards.forEach(card => {
                 const taskName = card.getAttribute('aria-label');
+                const container = card.querySelector('.container');
                 if (taskName.includes(serialNumber)) {
-                    console.log("Found the card: ", card);
-
-                    // Highlight the card
-                    const container = card.querySelector('.container');
-                    if (container) {
-                        console.log("Found the container: ", container);
-                        foundCard = true;
-
-                        // Reset all scrollable elements to the top/left
-                        const scrollableElements = document.querySelectorAll('.scrollable');
-                        scrollableElements.forEach(element => {
-                            element.scrollTop = 0;
-                            element.scrollLeft = 0;
-                        });
-
-                        // Scroll to the card
-                        container.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-                        // Remove the locating text if it exists
-                        if (columnTitleTextElement && columnTitleTextElement.textContent.includes(locatingText)) {
-                            columnTitleTextElement.textContent = columnTitleTextElement.textContent.replace(locatingText, '');
-                        }
-
-                        // Make the container grey, but then slowly fade it back to the original color
-                        container.style.transition = 'background-color 0.8s';
-                        container.style.backgroundColor = 'grey';
-                        setTimeout(() => {
-                            container.style.transition = 'background-color 3s';
-                            container.style.backgroundColor = '';
-                        }, 2000);
-
-                        // Reset the GM_SuperValue
-                        GM_SuperValue.set("locatePlannerCard", false);
-                    } else {
-                        setTimeout(() => {
-                            console.log("Retrying locatePlannerCard");
-                            locatePlannerCard();
-                        }, 100);
-                    }
-                } else {
-
-                    if(foundCard) {
-                        return;
-                    }
-
-                    // Find all scrollable elements and scroll to bottom if it is the right column
-                    let foundColumn = false;
-                    const scrollableElements = document.querySelectorAll('.scrollable');
-                    scrollableElements.forEach(element => {
-                        // Get parent and see if columnTitle is contained in aria-label
-                        const parent = element.parentElement;
-                        const columnTitleElement = parent.querySelector('.columnTitle');
-                        if(columnTitleElement) {
-                            let columnTitleTextElementTemp = columnTitleElement.querySelector('h3');
-                            if (columnTitleTextElementTemp && columnTitleTextElementTemp.textContent.includes(columnTitle)) {
-                                columnTitleTextElement = columnTitleTextElementTemp;
-
-                                // Then scroll to the bottom of the element
-                                element.scrollTop = element.scrollTop + 10;
-                                console.log("Scrolling to bottom of column: ", element);
-                                foundColumn = true;
-
-                                // Set the text to be its name with " [Locating...]" added onto it, so long as it doesn't already have it
-                                if (!columnTitleTextElementTemp.textContent.includes(locatingText)) {
-                                    columnTitleTextElementTemp.textContent = `${columnTitleTextElementTemp.textContent}${locatingText}`;
-                                }
-                            }
-                        }
-                    });
+                    existingCard = container;
+                    let columnTitle = container.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.querySelector('.columnTitle h3').textContent;
                     
-                    if (!foundColumn) {
-                        // Scroll horizontally all the way to the right on columnsList 
-                        const columnsList = document.querySelector('.columnsList');
-                        columnsList.scrollLeft = columnsList.scrollLeft + 10;
-                    }
+                    // Set search bar color
+                    filterTextBox.style.backgroundColor = '#1797ff';
+                    timeout = setTimeout(() => {
+                        filterTextBox.style.backgroundColor = '';
+                    }, 1000);
 
-                    setTimeout(locatePlannerCard, 100);
-                    return;
+                    // Scroll to the card
+                    container.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                    let textContent = container.querySelector('.textContent');
+                    findCallback(card, textContent, columnTitle);
+
+                    foundCard = true;
+                    console.log("Found the card:", card);
+                } else {
+                    console.log("Card not found.");
                 }
             });
         }
-        setTimeout(locatePlannerCard, 800);
+
+        setTimeout(() => {
+            const locatePlannerCardData = GM_SuperValue.get("locatePlannerCard", false);
+            let serialNumber = locatePlannerCardData.serialNumber;
+            if (serialNumber) {
+                FindIfCardExists(serialNumber, (container, textContent, columnTitle) => {
+                    /*
+                    // Highlight the card with a brief grey background
+                    textContent.style.transition = 'background-color 2s';
+                    textContent.style.backgroundColor = 'grey';
+
+                    // Set color back to normal after 1 second
+                    setTimeout(() => {
+                        textContent.style.backgroundColor = '';
+                    }, 3000);
+                    */
+                    // Give a slightly animated border, where a glow effect pulses around the card
+                    const border = document.createElement('div');
+                    border.style.position = 'absolute';
+                    border.style.top = '0';
+                    border.style.left = '0';
+                    border.style.width = '100%';
+                    border.style.height = '100%';
+                    border.style.border = '2px solid #0078d4';
+                    border.style.borderRadius = '5px';
+                    border.style.pointerEvents = 'none';
+                    border.style.boxShadow = '0 0 10px #0078d4';
+                    border.style.animation = 'glow 1.5s alternate';
+                    container.appendChild(border);
+
+                    // Add keyframes for the glow effect
+                    const style = document.createElement('style');
+                    style.textContent = `
+                        @keyframes glow {
+                            from {
+                                box-shadow: 0 0 5px #0078d4;
+                            }
+                            to {
+                                box-shadow: 0 0 20px #0078d4;
+                            }
+                        }
+                    `;
+                    document.head.appendChild(style);
+
+                    // Fade out the border after the glow animation
+                    setTimeout(() => {
+                        border.style.transition = 'opacity 1s';
+                        border.style.opacity = '0';
+                        setTimeout(() => {
+                            border.remove();
+                        }, 1000);
+                    }, 1500);
+                    
+                });
+
+                // clear the locatePlannerCard data
+                GM_SuperValue.set("locatePlannerCard", false);
+            }
+        }, 500);
 
         // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
         let lastGotTime = Date.now();
@@ -7651,9 +7649,9 @@ window.addEventListener('load', function () {
         // Logic for automatically adding a task to the planner
 
         function setUpAutoCardLogic() {
+            const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
 
             // find the aria-label="Filter text box" and input the serial number
-            const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
             if (filterTextBox) {
                 filterTextBox.value = "";
                 filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
@@ -7682,35 +7680,7 @@ window.addEventListener('load', function () {
                 return;
             }
             let serialNumber = detailsData['serialNumber'];
-
-            filterTextBox.value = serialNumber;
-            filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
-            console.log("Inputting serial number into filter text box:", serialNumber);
-
-            // Set background color to the filter text box
-            filterTextBox.style.transition = 'background-color 0.8s';
-            filterTextBox.style.backgroundColor = '#c3b900';
-
-            /*
-            // find taskFiltersButton and click it
-            const taskFilters = document.querySelector('#taskFiltersButton');
-            if (taskFilters) {
-                const taskFiltersButton = taskFilters.querySelector('button');
-                if(taskFiltersButton) {
-                    taskFiltersButton.focus();
-                    taskFiltersButton.click();
-                    console.log("Clicked taskFiltersButton");
-                } else {
-                    console.log("taskFiltersButton not found.");
-                    timeout = setTimeout(setUpAutoCardLogic, 500);
-                    return;
-                }
-            } else {
-                console.log("taskFilters not found.");
-                timeout = setTimeout(setUpAutoCardLogic, 500);
-                return;
-            }
-            */
+            console.log("Serial Number: ", serialNumber);
 
             // Add the shake animation effect
             const shakeKeyframes = `
@@ -7744,123 +7714,57 @@ window.addEventListener('load', function () {
             style2.innerHTML = pulseKeyframes;
             document.head.appendChild(style2);
 
-            let stopChecking = false;
-            let existingCard = false;
-            let maxTries = 30;
-            let curTry = 0;
-            function FindIfCardExists() {
-                if (stopChecking) { return; }
-                
-                // Get all sectionToggleButton and expand them
-                const sectionToggleButtons = document.querySelectorAll('.sectionToggleButton');
-                console.log("sectionToggleButtons: ", sectionToggleButtons);
-                sectionToggleButtons.forEach(button => {
-                    if (button.getAttribute('aria-expanded') === 'false') {
-                        button.click();
-                    }
-                });
+            FindIfCardExists(serialNumber, (container, textContent, columnTitle) => {
+                 // heightlight the card red and shake it
+                 textContent.style.transition = 'background-color 0.8s';
+                 textContent.style.backgroundColor = 'orange';
+                 textContent.style.animation = 'shake 1s';
+                 setTimeout(() => {
+                     textContent.style.transition = 'background-color 1s';
+                     textContent.style.animation = '';
+                     textContent.style.backgroundColor = '';
+                     // set to 'pulse' animation
+                     textContent.style.animation = 'pulse 1s infinite';
 
-                // Get all the cards and scroll to it if the same serial number is found
-                const cards = document.querySelectorAll('.taskCard');
-                curTry++;
-                console.log("Checking for card with serial number:", serialNumber);
-                
-                if (curTry >= maxTries) {
-                    console.log("Max tries reached, card not found.");
+                     // red outline
+                     textContent.style.outline = '2px solid red';
+                 }, 1000);
 
-                    // Reset the search bar
-                    filterTextBox.value = '';
-                    filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
-                    
-                    // Set search bar color
-                    filterTextBox.style.backgroundColor = 'red';
-                    timeout = setTimeout(() => {
-                        filterTextBox.style.backgroundColor = '';
-                    }, 1000);
-                    return;
-                }
+                 // Create a notification that the card already exists
+                 const notification = document.createElement('div');
+                 notification.style.position = 'fixed';
+                 notification.style.top = '20px';
+                 notification.style.left = '20px';
+                 notification.style.backgroundColor = '#ff4d4d'; // Red background
+                 notification.style.padding = '10px 20px';
+                 notification.style.borderRadius = '5px';
+                 notification.style.color = '#fff'; // White text for readability
+                 notification.style.fontSize = '14px';
+                 notification.style.fontWeight = 'bold';
+                 notification.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)'; // Add shadow for sleek look
+                 notification.style.transition = 'opacity 0.5s ease'; // Fade effect
+                 notification.style.opacity = '0'; // Start hidden
+                 notification.innerHTML = `
+                     <p>Card already exists.</p>
+                     <p>Serial Number: ${serialNumber}</p>
+                 `;
+                 // Make sure it is always layered on top
+                 notification.style.zIndex = '9999';
+                 document.body.appendChild(notification);
 
-                if (cards.length === 0) {
-                    setTimeout(() => {
-                        FindIfCardExists();
-                    }, 100);
-                    return;
-                }
+                 // Fade in the notification
+                 setTimeout(() => {
+                     notification.style.opacity = '1';
+                 }, 10);
 
-                cards.forEach(card => {
-                    const taskName = card.getAttribute('aria-label');
-                    const container = card.querySelector('.container');
-                    if (taskName.includes(serialNumber)) {
-                        existingCard = container;
-                        let columnTitle = container.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.querySelector('.columnTitle h3').textContent;
-                        
-                        // Set search bar color
-                        filterTextBox.style.backgroundColor = '#1797ff';
-                        timeout = setTimeout(() => {
-                            filterTextBox.style.backgroundColor = '';
-                        }, 1000);
-
-                        // Scroll to the card
-                        container.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-                        // heightlight the card red and shake it
-                        container.style.transition = 'background-color 0.8s';
-                        container.style.backgroundColor = 'orange';
-                        container.style.animation = 'shake 1s';
-                        setTimeout(() => {
-                            container.style.transition = 'background-color 1s';
-                            container.style.animation = '';
-                            container.style.backgroundColor = '';
-                            // set to 'pulse' animation
-                            container.style.animation = 'pulse 1s infinite';
-
-                            // red outline
-                            container.style.outline = '2px solid red';
-                        }, 1000);
-
-                        // Create a notification that the card already exists
-                        const notification = document.createElement('div');
-                        notification.style.position = 'fixed';
-                        notification.style.top = '20px';
-                        notification.style.left = '20px';
-                        notification.style.backgroundColor = '#ff4d4d'; // Red background
-                        notification.style.padding = '10px 20px';
-                        notification.style.borderRadius = '5px';
-                        notification.style.color = '#fff'; // White text for readability
-                        notification.style.fontSize = '14px';
-                        notification.style.fontWeight = 'bold';
-                        notification.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)'; // Add shadow for sleek look
-                        notification.style.transition = 'opacity 0.5s ease'; // Fade effect
-                        notification.style.opacity = '0'; // Start hidden
-                        notification.innerHTML = `
-                            <p>Card already exists.</p>
-                            <p>Serial Number: ${serialNumber}</p>
-                        `;
-                        // Make sure it is always layered on top
-                        notification.style.zIndex = '9999';
-                        document.body.appendChild(notification);
-
-                        // Fade in the notification
-                        setTimeout(() => {
-                            notification.style.opacity = '1';
-                        }, 10);
-
-                        // Fade out and remove the notification after 5 seconds
-                        setTimeout(() => {
-                            notification.style.opacity = '0';
-                            setTimeout(() => {
-                                document.body.removeChild(notification);
-                            }, 500); // Wait for fade out transition
-                        }, 5000);
-
-                        foundCard = true;
-                        console.log("Found the card:", card);
-                    } else {
-                        console.log("Card not found.");
-                    }
-                });
-            }
-            FindIfCardExists();
+                 // Fade out and remove the notification after 5 seconds
+                 setTimeout(() => {
+                     notification.style.opacity = '0';
+                     setTimeout(() => {
+                         document.body.removeChild(notification);
+                     }, 500); // Wait for fade out transition
+                 }, 5000);
+            });
             function ResetTaskData() {
                 GM_SuperValue.set('taskName', '');
                 GM_SuperValue.set('taskNotes', '');
