@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.0.0
+// @version      6.0.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -168,6 +168,16 @@ const errorsToSearch = {
         start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
         end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
     },
+    'TSensor Error': {
+        icon: "https://img.icons8.com/?size=100&id=123900&format=png&color=FFFFFF",
+        start: "fail to read tsensor by iic",
+        unimportant: true
+    },
+    'PIC Temp Error': {
+        icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
+        start: "fail to read pic temp",
+        unimportant: true
+    },
     'Reg CRC Error': {
         icon: "https://img.icons8.com/?size=100&id=IzwgH77KrB9L&format=png&color=FFFFFF",
         start: "reg crc error",
@@ -181,6 +191,12 @@ const errorsToSearch = {
     'Hash2_32 Error': {
         icon: "https://img.icons8.com/?size=100&id=0OqFiOxbTdXT&format=png&color=FFFFFF",
         start: "hash2_32 error",
+        unimportant: true
+    },
+    'Read SDA Error': {
+        icon: "https://img.icons8.com/?size=100&id=47752&format=png&color=FFFFFF",
+        start: "error! read SDA return 0",
+        end: "i2c_check_ack:290 ack error",
         unimportant: true
     },
     'Bad Chain ID': {
