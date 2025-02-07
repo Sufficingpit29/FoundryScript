@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.0.2
+// @version      6.1.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1165,131 +1165,25 @@ window.addEventListener('load', function () {
         }
 
         let updatePlannerCardsData = function() {}; // Placeholder function for the actual function that will be created later
-        
-        getPlannerCardData = function() {
-            // Open a pop out blank window
-            const plannerCardWindow = window.open('', '_blank', 'width=800,height=600');
-            plannerCardWindow.document.title = 'Planner Cards Data';
-        
-            // Create a nice looking dark theme for saying it's loading
-            const style = `
-                body {
-                    background-color: #333;
-                    color: #fff;
-                    font-family: Arial, sans-serif;
-                    font-size: 16px;
-                    padding: 20px;
-                    margin: 0;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background-color: #333;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                }
-                .spinner {
-                    border: 6px solid #f3f3f3;
-                    border-top: 6px solid #3498db;
-                    border-radius: 50%;
-                    width: 40px;
-                    height: 40px;
-                    animation: spin 2s linear infinite;
-                    margin-top: 20px;
-                }
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                .log {
-                    position: relative;
-                    width: 100%;
-                    padding: 10px;
-                    background-color: #333;
-                    color: #fff;
-                    font-family: Arial, sans-serif;
-                    font-size: 16px;
-                    z-index: 999999;
-                    white-space: pre-wrap;
-                    margin-top: 20px;
-                }
-                .finished {
-                    position: relative;
-                    width: 100%;
-                    padding: 10px;
-                    background-color: #4CAF50;
-                    color: #fff;
-                    font-family: Arial, sans-serif;
-                    font-size: 24px;
-                    text-align: center;
-                    margin-top: 20px;
-                }
-            `;
-            const styleElement = plannerCardWindow.document.createElement('style');
-            styleElement.textContent = style;
-            plannerCardWindow.document.head.appendChild(styleElement);
-        
-            // Create overlay with loading text and spinner
-            const overlay = plannerCardWindow.document.createElement('div');
-            overlay.className = 'overlay';
-            const loadingText = plannerCardWindow.document.createElement('div');
-            loadingText.textContent = 'Getting Planner Cards Data...';
-            loadingText.style.zIndex = '999999';
-            const loadingSpinner = plannerCardWindow.document.createElement('div');
-            loadingSpinner.className = 'spinner';
-            
-            // Add a sleek dark background to the overlay
-            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-            plannerCardWindow.document.body.appendChild(overlay);
-            plannerCardWindow.document.body.appendChild(loadingText);
-            plannerCardWindow.document.body.appendChild(loadingSpinner);
-        
-            // Check if the iframes already exist
-            if (plannerCardWindow.document.querySelectorAll('.planner-iframe').length > 0) {
-                return;
-            }
-        
-            // Create the iframes for the planner boards
-            let iframes = [];
-            for (const key in urlLookupPlannerGrid) {
-                const plannerID = getPlannerID(urlLookupPlanner[key]);
-                GM_SuperValue.set("plannerPageLoaded_"+plannerID, false);
-                GM_SuperValue.set("plannerCardsClosePage_"+plannerID, false);
 
-                const iframe = plannerCardWindow.document.createElement('iframe');
-                iframe.className = 'planner-iframe';
-                iframes[plannerID] = iframe;
-                iframe.src = urlLookupPlannerGrid[key];
-                iframe.style.cssText = `
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    z-index: -1;
-                `;
-                plannerCardWindow.document.body.appendChild(iframe);
+        getPlannerCardData = function() { 
+            // Create the iframes for the planner boards
+            let plannerKeys = [`Bitmain`, `Fortitude`, `RAMM`];
+            let plannerPages = [];
+            for (const key of plannerKeys) {
+                const url = urlLookupPlannerGrid[key];
+                plannerPages.push(url);
             }
-        
-            // Log element showing what planner cards have been located
-            const logElement = plannerCardWindow.document.createElement('div');
-            logElement.className = 'log';
-            logElement.textContent = '';
-            plannerCardWindow.document.body.appendChild(logElement);
-        
+            let key = plannerKeys[0];
+            const plannerID = getPlannerID(urlLookupPlanner[key]);
+            GM_SuperValue.set("plannerPageLoaded_"+plannerID, false);
+            GM_SuperValue.set("plannerCardsClosePage_"+plannerID, "searching");
+            GM_SuperValue.set("plannerCardsData_Pages", plannerPages);
+
+            const newWindow = window.open(urlLookupPlannerGrid[key], '_blank', 'width=800,height=600');
+            newWindow.document.title = 'Planner Cards Data';
+
             // Interval to check the data loaded
-            let foundPlannerCards = [];
-            let lastLength = 0;
-            let lastLengthSameCount = 0;
             let collectionStarted = false;
             const checkDataInterval = setInterval(() => {
                 const lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
@@ -1311,51 +1205,17 @@ window.addEventListener('load', function () {
                     plannerCardsDataAll = { ...plannerCardsDataAll, ...data };
 
                     // if plannerCardsClosePage_ is true, close the page
-                    if(GM_SuperValue.get("plannerCardsClosePage_"+plannerID, false)) {
+                    if(GM_SuperValue.get("plannerCardsClosePage_"+plannerID, false) == true) {
                         GM_SuperValue.set("plannerCardsClosePage_"+plannerID, false);
-                        const iframe = iframes[plannerID];
-                        iframe.remove();
                         return;
                     }
                 }
-        
-                // Loop through the planner cards and add them to the log if they haven't been added yet
-                for (const key in plannerCardsDataAll) {
-                    if (!foundPlannerCards.includes(key)) {
-                        foundPlannerCards.push(key);
-                        //logElement.textContent = `Miner: ${key} card located. \n   -In column: ${plannerCardsDataAll[key].columnTitle}\n${logElement.textContent}`;
-                    }
-                }
 
-                // Scroll to top of the page
-                //plannerCardWindow.scrollTo(0, 0);
-        
-                // if all the iframes are closed
-                if (plannerCardWindow.document.querySelectorAll('.planner-iframe').length === 0) {
+                // if all the windows are closed
+                if (!GM_SuperValue.get("plannerCardsData_Pages", false)) {
                     clearInterval(checkDataInterval);
-                    logElement.textContent = 'All planner cards located. Data collection complete.\n\n' + logElement.textContent;
-                    // Remove the loading spinner and text
-                    overlay.remove();
-
-                    // Remove all the iframes
-                    const iframes = plannerCardWindow.document.querySelectorAll('.planner-iframe');
-                    iframes.forEach(iframe => iframe.remove());
-        
-                    // Put a 'Finished' in big green letters at top
-                    const finishedText = plannerCardWindow.document.createElement('div');
-                    finishedText.className = 'finished';
-                    finishedText.textContent = 'Finished';
-                    logElement.before(finishedText);
-
-                    // Remove spinner and loading text
-                    loadingText.remove();
-                    loadingSpinner.remove();
-
-                    
-        
                     // Time out to close the window
                     setTimeout(() => {
-                        plannerCardWindow.close();
                         updatePlannerCardsData();
                     }, 100);
                 }
@@ -7400,16 +7260,38 @@ window.addEventListener('load', function () {
             let newPlannerData = {};
             let collectIndex = 1;
             function collectPlannerCardData() {
-                // Check if this window is actually a iframe
-                if (window === window.top) {
-                    return;
+                // Check if this window is actually one we should scan
+                let pages = GM_SuperValue.get("plannerCardsData_Pages", []);
+                // if the plannerID is contained in the pages, then we should scan
+                let isSearching = false;
+                for (let i = 0; i < pages.length; i++) {
+                    if (pages[i].includes(plannerID)) {
+                        isSearching = true;
+                        break;
+                    }
                 }
 
-                // If last gottime is more than 3 seconds, close the window
-                if (Date.now() - lastGotTime > 3000) {
+                if (!isSearching) {
+                    return;
+                }
+ 
+                // If last gottime is more than 1 seconds and we have collected data, then close the window
+                // or if it been 8 seconds, close the window anyway
+                let newPlannerDataCount = Object.keys(newPlannerData).length;
+                if ((Date.now() - lastGotTime > 1000 && newPlannerDataCount > 0) || Date.now() - lastGotTime > 8000) {
                     console.log("Closing window because probably at end of planner cards.");
                     GM_SuperValue.set("plannerCardsClosePage_"+plannerID, true);
                     GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
+                    let pages = GM_SuperValue.get("plannerCardsData_Pages", []);
+                    pages.shift();
+                    GM_SuperValue.set("plannerCardsData_Pages", pages);
+                    let nextURL = pages[0];
+                    if (nextURL) {
+                        window.location.href = nextURL;
+                    } else {
+                        GM_SuperValue.set("plannerCardsData_Pages", false);
+                        window.close();
+                    }
                     return;
                 }
 
