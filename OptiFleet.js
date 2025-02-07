@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.0.1
+// @version      6.0.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -439,46 +439,36 @@ const errorsToCondense = [
     'hash2_32 error'
 ];
 
-// Loop through the log text and find occurrences of the defined errors, count them up until a line isn't one of the errors, then replace those counted up lines with a single line that says 'error (xN)'
+// Loop through the log text and find occurrences of the defined errors, count them up and condense to the very last one
 function cleanErrors(logText) {
     let logLines = logText.split('\n');
-    let errorCount = 0;
-    let startLine = -1;
-    let currentError = '';
+    let errorCounts = {};
+    let lastErrorLine = {};
 
+    // Count occurrences of each error and track the last line it appears on
     for (let i = 0; i < logLines.length; i++) {
         let foundError = errorsToCondense.find(error => logLines[i].includes(error));
         if (foundError) {
-            if (currentError === '' || currentError === foundError) {
-                errorCount++;
-                currentError = foundError;
-                if (startLine === -1) {
-                    startLine = i;
-                } else {
-                    logLines.splice(i, 1);
-                    i--;
-                }
-            } else {
-                if (errorCount > 1) {
-                    logLines[startLine] = `${currentError} (x${errorCount})`;
-                }
-                errorCount = 1;
-                startLine = i;
-                currentError = foundError;
+            if (!errorCounts[foundError]) {
+                errorCounts[foundError] = 0;
             }
-        } else {
-            if (errorCount > 1) {
-                logLines[startLine] = `${currentError} (x${errorCount})`;
-            }
-            errorCount = 0;
-            startLine = -1;
-            currentError = '';
+            errorCounts[foundError]++;
+            lastErrorLine[foundError] = i;
         }
     }
 
-    if (errorCount > 1) {
-        logLines[startLine] = `${currentError} (x${errorCount})`;
+    // Replace the last occurrence of each error with the condensed version
+    for (const error in errorCounts) {
+        if (errorCounts[error] > 1) {
+            logLines[lastErrorLine[error]] = `${error} (x${errorCounts[error]})`;
+        }
     }
+
+    // Remove all other occurrences of the errors
+    logLines = logLines.filter((line, index) => {
+        let foundError = errorsToCondense.find(error => line.includes(error));
+        return !foundError || lastErrorLine[foundError] === index;
+    });
 
     logText = logLines.join('\n');
     return logText;
