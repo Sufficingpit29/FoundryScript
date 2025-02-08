@@ -1,26 +1,22 @@
-// To do:
-// - Auto select owner for creating a card
-// - Somehow integrate my error grab system into the card creation?
-
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.1.0
+// @version      6.2.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
-// @exclude      https://webshell.suite.office.com/*
 // @icon         https://foundryoptifleet.com/img/favicon-32x32.png
 // @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
 // @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiFleet.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @connect      *
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
-// @require      https://foundryoptifleet.com/scripts/axios.min.js
 // @require      https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/HackyWorkAround.js
+// @require      https://foundryoptifleet.com/scripts/axios.min.js
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
 // @require      https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js
 // @require      https://cdn.datatables.net/colreorder/1.6.2/js/dataTables.colReorder.min.js
@@ -33,11 +29,11 @@
 // @run-at       document-start
 // ==/UserScript==
 
-
 const currentUrl = window.location.href;
 if(currentUrl.includes("OptiWatch")) {
     return;
 }
+
 
 const allowedSites = [
     "foundryoptifleet.com",
@@ -60,6 +56,52 @@ if(!ipURLMatch && !allowedSiteMatch) {
     console.log("Script not for this site, exiting...");
     return false;
 }
+
+function getPlannerID(string) {
+    try {
+        const plannerID = string.match(/plan\/([^?]+)/)[1].split('/')[0];
+        return plannerID;
+    } catch (error) {
+        console.log('Error extracting planner ID:', error);
+        return null;
+    }
+}
+
+// Get Task board data
+let plannerBuckets = false;
+let plannerTasks = false;
+const originalFetch = unsafeWindow.fetch;
+
+let planID = false;
+// if url has planner in it, like https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad
+// extract the TbJIxx_byEKhuMp-C4tXLGUAD3Tb
+if(currentUrl.includes('planner')) {
+    planID = getPlannerID(currentUrl);
+}
+
+// Intercept fetch requests
+unsafeWindow.fetch = async function(...args) {
+    const url = args[0];
+    if (typeof url === 'string' && url.includes(planID) && (url.includes('tasks?') || url.includes('buckets'))) {
+        console.log('[Tampermonkey] Intercepting fetch request:', url);
+
+        const response = await originalFetch(...args);
+        const clone = response.clone();
+
+        clone.json().then(data => {
+            if(url.includes('tasks') && data.value) {
+                plannerTasks = data.value;
+            } else if(url.includes('buckets') && data.value) {
+                plannerBuckets = data.value;
+            }
+        }).catch(err => {
+        });
+
+        return response;
+    }
+
+    return originalFetch(...args);
+};
 
 const username = 'root';
 const password = 'root';
@@ -487,11 +529,6 @@ window.addEventListener('load', function () {
         "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
         "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz?tid=6681433f-a30d-43cd-8881-8e964fa723ad"
     };
-
-    function getPlannerID(string) {
-        const plannerID = string.match(/plan\/([^?]+)/)[1].split('/')[0];
-        return plannerID;
-    }
 
     const urlLookupPlannerGrid = {
         "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
@@ -1687,6 +1724,9 @@ window.addEventListener('load', function () {
 
                 console.log("Task Comment:", log);
 
+                // reset this just in case
+                GM_SuperValue.set("locatePlannerCard", false);
+
                 GM_SuperValue.set("taskName", `${serialNumber}_${modelLite}_${hashRate}_${issue}`);
                 GM_SuperValue.set("taskNotes", cleanedText);
                 GM_SuperValue.set("taskComment", log);
@@ -2698,12 +2738,22 @@ window.addEventListener('load', function () {
                             let serialNumber = plannerElement.getAttribute('data-serial-number');
                             let cardData = plannerCardsDataAll[serialNumber];
                             if (cardData) {
-                                let columnTitle = cardData.columnTitle;
+                                let issue = (cardData.issue || "");
+                                if(issue) {
+                                    issue = " - (" + issue + ")";
+                                }
+                                let columnTitle = cardData.columnTitle  + issue;
                                 plannerElement.textContent = columnTitle;
 
                                 // Make it a clickable link
                                 plannerElement.style.cursor = 'pointer';
                                 plannerElement.onclick = function() {
+                                    // Reset these so they don't screw up stuff just in case
+                                    GM_SuperValue.set("taskName", "");
+                                    GM_SuperValue.set("taskNotes", "");
+                                    GM_SuperValue.set("taskComment", "");
+                                    GM_SuperValue.set("detailsData", {});
+
                                     GM_SuperValue.set("locatePlannerCard", {
                                         serialNumber: serialNumber,
                                         columnTitle: columnTitle
@@ -6666,11 +6716,22 @@ window.addEventListener('load', function () {
 
                     let cardData = plannerCardsDataAll[serialNumber];
                     if(cardData) {
-                        p.textContent = cardData.columnTitle;
+                        let issue = (cardData.issue || "");
+                        if(issue) {
+                            issue = " - (" + issue + ")";
+                        }
+                        let columnTitle = cardData.columnTitle  + issue;
+                        p.textContent = columnTitle;
 
                         // Make it a clickable link
                         p.style.cursor = 'pointer';
                         p.onclick = function() {
+                            // Reset these so they don't screw up stuff just in case
+                            GM_SuperValue.set("taskName", "");
+                            GM_SuperValue.set("taskNotes", "");
+                            GM_SuperValue.set("taskComment", "");
+                            GM_SuperValue.set("detailsData", {});
+
                             GM_SuperValue.set("locatePlannerCard", {
                                 serialNumber: serialNumber,
                                 columnTitle: p.textContent
@@ -7120,8 +7181,13 @@ window.addEventListener('load', function () {
             let existingCard = false;
             let maxTries = 30;
             let curTry = 0;
+            
+            let foundCards = [];
             function FindIfCardExists(serialNumber, findCallback) {
-                if (stopChecking) { return; }
+                if (stopChecking) { 
+                    console.log("Stop checking is true, exiting.");
+                    return; 
+                }
                 
                 // Get all sectionToggleButton and expand them
                 const sectionToggleButtons = document.querySelectorAll('.sectionToggleButton');
@@ -7132,9 +7198,11 @@ window.addEventListener('load', function () {
                     }
                 });
 
-                filterTextBox.value = serialNumber;
-                filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
-                console.log("Inputting serial number into filter text box:", serialNumber);
+                if( filterTextBox.value !== serialNumber) {
+                    filterTextBox.value = serialNumber;
+                    filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    console.log("Inputting serial number into filter text box:", serialNumber);
+                }
 
                 // Set background color to the filter text box
                 filterTextBox.style.transition = 'background-color 0.8s';
@@ -7166,12 +7234,15 @@ window.addEventListener('load', function () {
                     }, 100);
                     return;
                 }
-
                 cards.forEach(card => {
                     const taskName = card.getAttribute('aria-label');
                     const container = card.querySelector('.container');
                     if (taskName.includes(serialNumber)) {
+                        if(foundCards.includes(container)) {
+                            return;
+                        }
                         existingCard = container;
+                        foundCards.push(container);
                         let columnTitle = container.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.querySelector('.columnTitle h3').textContent;
                         
                         // Set search bar color
@@ -7186,29 +7257,29 @@ window.addEventListener('load', function () {
                         let textContent = container.querySelector('.textContent');
                         findCallback(card, textContent, columnTitle);
 
-                        foundCard = true;
                         console.log("Found the card:", card);
                     } else {
                         console.log("Card not found.");
                     }
                 });
+                if(foundCards.length === 0) {
+                    setTimeout(() => {
+                        FindIfCardExists(serialNumber, findCallback);
+                    }, 100);
+                }
             }
 
             setTimeout(() => {
                 const locatePlannerCardData = GM_SuperValue.get("locatePlannerCard", false);
                 let serialNumber = locatePlannerCardData.serialNumber;
+                let columnTitle = locatePlannerCardData.columnTitle;
+                console.log("Locate Planner Card Data: ", locatePlannerCardData);
                 if (serialNumber) {
-                    FindIfCardExists(serialNumber, (container, textContent, columnTitle) => {
-                        /*
-                        // Highlight the card with a brief grey background
-                        textContent.style.transition = 'background-color 2s';
-                        textContent.style.backgroundColor = 'grey';
+                    FindIfCardExists(serialNumber, (container, textContent, columnTitle_Card) => {
 
-                        // Set color back to normal after 1 second
-                        setTimeout(() => {
-                            textContent.style.backgroundColor = '';
-                        }, 3000);
-                        */
+                        if(columnTitle_Card !== columnTitle) {
+                            return;
+                        }
                         // Give a slightly animated border, where a glow effect pulses around the card
                         const border = document.createElement('div');
                         border.style.position = 'absolute';
@@ -7254,11 +7325,10 @@ window.addEventListener('load', function () {
             }, 500);
 
             // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
-            let lastGotTime = Date.now();
             let setDate = false;
             let plannerID = getPlannerID(currentUrl); //.match(/plan\/([^?]+)/)[1].split('/')[0];
             let newPlannerData = {};
-            let collectIndex = 1;
+            let createdOverlay = false;
             function collectPlannerCardData() {
                 // Check if this window is actually one we should scan
                 let pages = GM_SuperValue.get("plannerCardsData_Pages", []);
@@ -7274,89 +7344,114 @@ window.addEventListener('load', function () {
                 if (!isSearching) {
                     return;
                 }
- 
-                // If last gottime is more than 1 seconds and we have collected data, then close the window
-                // or if it been 8 seconds, close the window anyway
-                let newPlannerDataCount = Object.keys(newPlannerData).length;
-                if ((Date.now() - lastGotTime > 1000 && newPlannerDataCount > 0) || Date.now() - lastGotTime > 8000) {
-                    console.log("Closing window because probably at end of planner cards.");
-                    GM_SuperValue.set("plannerCardsClosePage_"+plannerID, true);
-                    GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
-                    let pages = GM_SuperValue.get("plannerCardsData_Pages", []);
-                    pages.shift();
-                    GM_SuperValue.set("plannerCardsData_Pages", pages);
-                    let nextURL = pages[0];
-                    if (nextURL) {
-                        window.location.href = nextURL;
-                    } else {
-                        GM_SuperValue.set("plannerCardsData_Pages", false);
-                        window.close();
-                    }
+
+                if(!plannerTasks || !plannerBuckets) {
+                    setTimeout(collectPlannerCardData, 100);
                     return;
                 }
 
+                if(!createdOverlay) {
+                    // Create a dark overlay saying we're collecting data
+                    const overlay = document.createElement('div');
+                    overlay.style.position = 'fixed';
+                    overlay.style.top = '0';
+                    overlay.style.left = '0';
+                    overlay.style.width = '100%';
+                    overlay.style.height = '100%';
+                    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                    overlay.style.color = 'white';
+                    overlay.style.display = 'flex';
+                    overlay.style.alignItems = 'center';
+                    overlay.style.justifyContent = 'center';
+                    overlay.style.zIndex = '9999';
+                    
+                    // Add text saying we're collecting data and a spinner
+                    overlay.innerHTML = `
+                        <div style="text-align: center;">
+                            <h1 style="margin-bottom: 20px;">Collecting Planner Card Data</h1>
+                            <div class="spinner" style="margin-bottom: 20px;"></div>
+                        </div>
+                    `;
+                    document.body.appendChild(overlay);
+
+                    // Add spinner animation
+                    const spinnerStyle = document.createElement('style');
+                    spinnerStyle.innerHTML = `
+                        .spinner {
+                            border: 8px solid #f3f3f3;
+                            border-top: 8px solid #0078d4;
+                            border-radius: 50%;
+                            width: 50px;
+                            height: 50px;
+                            animation: spin 1s linear infinite;
+                        }
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    `;
+                    document.head.appendChild(spinnerStyle);
+                    createdOverlay = true;
+                }
+                        
+ 
                 if (!setDate) {
                     GM_SuperValue.set("plannerPageLoaded_"+plannerID, true);
                     GM_SuperValue.set('plannerCardsDataTime', Date.now());
                     setDate = true;
                 }
 
-                // Get the grid-body element
-                const gridBody = document.querySelector('.grid-body');
-                if (!gridBody) {
-                    setTimeout(collectPlannerCardData, 10);
-                    return;
+                //console.log("Planner Tasks: ", plannerTasks);
+                //console.log("Planner Buckets: ", plannerBuckets);
+
+                let bucketNameLookup = {};
+                plannerBuckets.forEach(bucket => {
+                    bucketNameLookup[bucket.id] = bucket.name;
+                });
+
+                // Loop through plannerTasks array
+                plannerTasks.forEach(task => {
+                    const completedDateTime = task.completedDateTime;
+                    if (completedDateTime) {
+                        return;
+                    }
+                    const taskName = task.title;
+                    const taskSplit = taskName.split('_');
+                    const serialNumber = taskSplit[0];
+                    const issue = taskName.split('_')[taskSplit.length - 1];
+                    const bucketID = task.bucketId;
+                    const columnTitle = bucketNameLookup[bucketID];
+                    const lastModifiedDateTime = task.lastModifiedDateTime;
+                    let cardExists = newPlannerData[serialNumber];
+                    if (cardExists) {
+                        let lastModified = new Date(lastModifiedDateTime);
+                        let lastModifiedCard = new Date(cardExists.lastModified);
+                        // If the last modified date is older than our already stored date, then skip
+                        if (lastModified < lastModifiedCard) {
+                            return;
+                        }
+                    }
+                            
+                    let cardData = {
+                        columnTitle: columnTitle,
+                        issue: issue,
+                        lastModified: lastModifiedDateTime,
+                        url: window.location.href.replace('grid', 'board')
+                    };
+                    newPlannerData[serialNumber] = cardData;
+                });
+
+                GM_SuperValue.set("plannerCardsClosePage_"+plannerID, true);
+                GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
+                pages.shift();
+                GM_SuperValue.set("plannerCardsData_Pages", pages);
+                let nextURL = pages[0];
+                if (nextURL) {
+                    window.location.href = nextURL;
+                } else {
+                    GM_SuperValue.set("plannerCardsData_Pages", false);
+                    window.close();
                 }
-
-                // Get the aria-rowindex element of whatever index we are on
-                const ariaRowIndex = gridBody.querySelector(`[aria-rowindex="${collectIndex}"]`);
-                if (!ariaRowIndex) {
-                    setTimeout(collectPlannerCardData, 10);
-                    return;
-                }
-                ariaRowIndex.scrollIntoView({ behavior: 'auto', block: 'center' });
-
-                const taskNameElement = ariaRowIndex.querySelector('[aria-colindex="2"]');
-                if (!taskNameElement) {
-                    setTimeout(collectPlannerCardData, 10);
-                    return;
-                }
-                taskNameElement.scrollIntoView({ behavior: 'auto', block: 'center' });
-
-                const columnTitleElement = ariaRowIndex.querySelector('[aria-colindex="6"]');
-                if (!columnTitleElement) {
-                    setTimeout(collectPlannerCardData, 10);
-                    return;
-                }
-                columnTitleElement.scrollIntoView({ behavior: 'auto', block: 'center' });
-
-                // Get the name of the card
-                const taskName = taskNameElement.textContent.trim();
-                const columnTitle = columnTitleElement.textContent.replace('', '').trim();
-
-                if (taskName === "" || columnTitle === "") {
-                    setTimeout(collectPlannerCardData, 10);
-                    return;
-                }
-
-                lastGotTime = Date.now();
-
-                // Highlight the row
-                ariaRowIndex.style.backgroundColor = 'grey';
-
-                const serialNumber = taskName.split('_')[0];
-                console.log("Miner Serial Number: ", serialNumber);
-                console.log("Column Title: [" + columnTitle + "]");
-                let cardData = {
-                    columnTitle: columnTitle,
-                    url: window.location.href.replace('grid', 'board')
-                };
-                newPlannerData[serialNumber] = cardData;
-                //GM_SuperValue.set("plannerCardsData_" + plannerID, newPlannerData);
-
-                collectIndex++;
-                
-                setTimeout(collectPlannerCardData, 1); // Retry every 100ms
             }
             collectPlannerCardData();
 
