@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.2.7
+// @version      6.2.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2742,8 +2742,8 @@ window.addEventListener('load', function () {
                                 if(issue) {
                                     issue = " - (" + issue + ")";
                                 }
-                                let columnTitle = cardData.columnTitle  + issue;
-                                plannerElement.textContent = columnTitle;
+                                let columnTitle = cardData.columnTitle;
+                                plannerElement.textContent = columnTitle + issue;
 
                                 // Make it a clickable link
                                 plannerElement.style.cursor = 'pointer';
@@ -6720,8 +6720,8 @@ window.addEventListener('load', function () {
                         if(issue) {
                             issue = " - (" + issue + ")";
                         }
-                        let columnTitle = cardData.columnTitle  + issue;
-                        p.textContent = columnTitle;
+                        let columnTitle = cardData.columnTitle;
+                        p.textContent = columnTitle + issue;
 
                         // Make it a clickable link
                         p.style.cursor = 'pointer';
