@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.2.6
+// @version      6.2.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -6885,7 +6885,7 @@ window.addEventListener('load', function () {
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview") && siteName.includes("Minden")) {
             let lastRan = 0;
             function addTemperatureData() {
-                const containers = document.querySelectorAll('.stat-panel.good');
+                const containers = document.querySelectorAll('.stat-panel');
                 if (containers.length === 0) {
                     setTimeout(addTemperatureData, 10);
                     return;
@@ -6897,6 +6897,7 @@ window.addEventListener('load', function () {
                         const tempElement = document.createElement('div');
                         tempElement.className = 'temp-text-title';
                         tempElement.innerText = 'Temperature:';
+                        tempElement.style.marginTop = '10px';
                         // set the color to a light orange
                         tempElement.style.color = '#ff7f50';
                         container.appendChild(tempElement);
