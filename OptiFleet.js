@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.2.8
+// @version      6.3.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -166,14 +166,9 @@ const errorsToSearch = {
         end: ["ERROR_SOC_INIT", "stop_mining: soc init failed!"],
         onlySeparate: true
     },
-    'Buffer Error': {
-        icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
-        start: "nonce_read_out buffer is full!",
-    },
     'EEPROM Error': {
         icon: "https://img.icons8.com/?size=100&id=9040&format=png&color=FFFFFF",
-        start: "eeprom error crc 3rd region",
-        end: "eeprom error crc 3rd region",
+        start: ["eeprom error crc 3rd region", "EEPROM error"],
         onlySeparate: true
     },
     'Hashboard Init Fail': {
@@ -188,7 +183,7 @@ const errorsToSearch = {
     },
     'Voltage Abnormity': {
         icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
-        start: ["chain avg vol drop from", "ERROR_POWER_LOST"],
+        start: ["chain avg vol drop from", "ERROR_POWER_LOST", "failed to scale voltage up"],
         end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
     },
     'Temperature Sensor Error': {
@@ -220,6 +215,16 @@ const errorsToSearch = {
         start: "fail to read pic temp",
         unimportant: true
     },
+    'Nonce Buffer Full': {
+        icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
+        start: "nonce_read_out buffer is full!",
+        unimportant: true
+    },
+    'Reg Buffer Full': {
+        icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
+        start: "reg_value_buf buffer is full!",
+        unimportant: true
+    },
     'Reg CRC Error': {
         icon: "https://img.icons8.com/?size=100&id=IzwgH77KrB9L&format=png&color=FFFFFF",
         start: "reg crc error",
@@ -233,6 +238,11 @@ const errorsToSearch = {
     'Hash2_32 Error': {
         icon: "https://img.icons8.com/?size=100&id=0OqFiOxbTdXT&format=png&color=FFFFFF",
         start: "hash2_32 error",
+        unimportant: true
+    },
+    'I2C Error': {
+        icon: "https://img.icons8.com/?size=100&id=47752&format=png&color=FFFFFF",
+        start: "IIC_SendData checkack",
         unimportant: true
     },
     'Read SDA Error': {
@@ -311,7 +321,27 @@ const errorsToSearch = {
         icon: "https://img.icons8.com/?size=100&id=2lS2aIm5uhCG&format=png&color=FFFFFF",
         start: "persistent_ram: uncorrectable error in header",
         unimportant: true
-    }
+    },
+    'Pins Error': {
+        icon: "https://img.icons8.com/?size=100&id=110969&format=png&color=FFFFFF",
+        start: "did not get pins for",
+        unimportant: true
+    },
+    'Bone Capemgr': {
+        icon: "https://img.icons8.com/?size=100&id=7WuWQLicqKdy&format=png&color=FFFFFF",
+        start: "bone-capemgr bone_capemgr",
+        unimportant: true
+    },
+    'OMAP HSMMC Error': {
+        icon: "https://img.icons8.com/?size=100&id=5k62AODVrDXf&format=png&color=FFFFFF",
+        start: "omap_hsmmc mmc",
+        unimportant: true
+    },
+    'Dummy Regulator': {
+        icon: "https://img.icons8.com/?size=100&id=byEdLu15HrqW&format=png&color=FFFFFF",
+        start: "using dummy regulator",
+        unimportant: true
+    },
 }
 
 function runErrorScanLogic(logText) {
@@ -446,9 +476,10 @@ function runErrorScanLogic(logText) {
         }
     }
 
-    // Find all the times 'error' or 'fail' is mentioned in the log if it isn't already found in the defined errors, mark is as an Unknown Error
+    // Find all the times 'error' or 'fail' or 'not found' is mentioned in the log if it isn't already found in the defined errors, mark is as an Unknown Error
     const errorRegex = /error/gi;
     const failRegex = /fail/gi;
+    const notFoundRegex = /not found/gi; // disabled for now
     const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
     for (const match of errorMatches) {
         // Check if the error is already found
@@ -478,7 +509,10 @@ function runErrorScanLogic(logText) {
 const errorsToCondense = [
     '!!! reg crc error',
     'nonce crc error',
-    'hash2_32 error'
+    'hash2_32 error',
+    'reg_value_buf buffer is full!',
+    'fail to read tsensor by iic, chain',
+    'fail to read pic temp for chain'
 ];
 
 // Loop through the log text and find occurrences of the defined errors, count them up and condense to the very last one
@@ -573,6 +607,8 @@ window.addEventListener('load', function () {
         var lastCompanyId = companyId;
         var lastMinerDataUpdate = 0;
         var reloadCards = false;
+        
+        let minerSNLookup = GM_SuperValue.get("minerSNLookup_"+siteName, {});
 
         let lastUpTime = {}; //GM_SuperValue.get("lastUpTime_"+siteName, {});
 
@@ -998,7 +1034,7 @@ window.addEventListener('load', function () {
                     .then((resp) => {
 
                     // Populate the minerSNLookup
-                    let minerSNLookup = {};
+                    minerSNLookup = {};
                     resp.miners.forEach(miner => {
                         minerSNLookup[miner.serialNumber] = {
                             minerID: miner.id,
@@ -1025,10 +1061,7 @@ window.addEventListener('load', function () {
                     }, averagedContainerMinerTemps);
                     console.log("Averaged Container Miner Temps:", averagedContainerMinerTemps);*/
 
-                    if(siteName.includes("Minden")) {
-                        GM_SuperValue.set("minerSNLookup", minerSNLookup);
-                    }
-                    delete minerSNLookup;
+                    GM_SuperValue.set("minerSNLookup_"+siteName, minerSNLookup);
 
                     // Set the IP Address to "Lease Expired" if it's null
                     resp.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
@@ -1502,6 +1535,29 @@ window.addEventListener('load', function () {
         // SN Scanner Logic
         if(currentUrl.includes("https://foundryoptifleet.com/")) {
 
+            function createNotification(text) {
+                const notification = document.createElement('div');
+                notification.className = 'notification';
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    background-color: #dc3545;
+                    color: #fff;
+                    padding: 10px;
+                    border-radius: 5px;
+                    z-index: 999999;
+                    transition: opacity 0.5s ease;
+                    opacity: 1;
+                `;
+                notification.textContent = text;
+                document.body.appendChild(notification);
+
+                setTimeout(function() {
+                    notification.style.opacity = '0';
+                }, 8000);
+            }
+
             // Check is the user ever inputs something
             var serialInputted = "";
             var lastInputTime = 0;
@@ -1543,12 +1599,6 @@ window.addEventListener('load', function () {
                         const serialInputtedNoNumbers = serialInputted.replace(/\d/g, '');
                         const shiftMatchCount = shiftCount === serialInputtedNoNumbers.length && shiftCount > 6;
 
-                        //console.log("No Numbers:", serialInputtedNoNumbers);
-                        //console.log("Original Serial Inputted:", originalSerialInputted);
-                        //console.log("Shift Count:", shiftCount);
-                        //console.log("Shift Match Count:", shiftMatchCount);
-
-
                         // Checks to see if there is Shift and Enter in the string, if not, stop
                         if ( !shiftMatchCount ) {
                             //console.log("No Enter/Shift or Low Length", serialInputted);
@@ -1556,47 +1606,18 @@ window.addEventListener('load', function () {
                             return;
                         }
 
-                        function createNotification(text) {
-                            const notification = document.createElement('div');
-                            notification.className = 'notification';
-                            notification.style.cssText = `
-                                position: fixed;
-                                top: 10px;
-                                right: 10px;
-                                background-color: #dc3545;
-                                color: #fff;
-                                padding: 10px;
-                                border-radius: 5px;
-                                z-index: 999999;
-                                transition: opacity 0.5s ease;
-                                opacity: 1;
-                            `;
-                            notification.textContent = text;
-                            document.body.appendChild(notification);
-
-                            setTimeout(function() {
-                                notification.style.opacity = '0';
-                            }, 8000);
-                        }
-
                         // if allMinersData is empty, notify the user that the data is still loading
-                        if (Object.keys(allMinersData).length === 0) {
+                        if (Object.keys(minerSNLookup).length === 0) {
                             createNotification("Miner data is still loading, please wait a moment.");
                             return;
                         }
 
-                        // Find the miner with the serial number
-                        var minerID = false;
-                        for (const [index, minerData] of Object.entries(allMinersData)) {
-                            if(minerData.serialNumber === serialInputted) {
-                                minerID = minerData.id;
-                                break;
-                            }
-                        }
+                        // Look up the miner serial number
+                        let lookUpMiner = minerSNLookup[serialInputted];
 
                         // If we found the miner, open the miner page
-                        if(minerID) {
-                            window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`).focus();
+                        if(lookUpMiner) {
+                            window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${lookUpMiner.minerID}`).focus();
                         } else {
                             createNotification("Miner with serial number " + serialInputted + " not found.");
 
@@ -1605,6 +1626,27 @@ window.addEventListener('load', function () {
                     }, 500);
                 }
                 lastInputTime = Date.now();
+            });
+
+            document.addEventListener('paste', function(event) {
+                console.log('Paste event detected!');
+                
+                let clipboardData = event.clipboardData || window.clipboardData || unsafeWindow.clipboardData;
+                let pastedData = clipboardData.getData('text');
+                
+                console.log('Pasted data:', `[${pastedData}]`);
+                // If that wasn't pasted in an actual input, then we open the miner page
+                let hasSpaces = pastedData.includes(' ');
+                let activeElement = document.activeElement;
+                if(activeElement.tagName !== 'INPUT' && activeElement.tagName !== 'TEXTAREA' && !hasSpaces) {
+                    // If the pasted data is a serial number, open the miner page
+                    let lookUpMiner = minerSNLookup[pastedData];
+                    if(lookUpMiner) {
+                        window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${lookUpMiner.minerID}`).focus();
+                    } else if(pastedData.length === 17) {
+                        createNotification("Miner with serial number " + pastedData + " not found.");
+                    }
+                }    
             });
         }
 
@@ -2276,6 +2318,7 @@ window.addEventListener('load', function () {
                                     });
                                 
                                     mnav.appendChild(errorTab);
+                                    return errorTab;
                                 }
                                 
                                 function handleErrorClick(error, orignalLogText) {
@@ -2295,7 +2338,7 @@ window.addEventListener('load', function () {
                                     errorTextNode.style.color = 'white';
                                     errorTextNode.textContent = error.text;
                                     errorElement.appendChild(errorTextNode);
-                                    errorElement.style.width = '100%';
+                                    errorElement.style.width = logElement.scrollWidth + 'px';
                                     errorElement.style.display = 'block';
                                 
                                     // Create a copy button
@@ -2374,8 +2417,14 @@ window.addEventListener('load', function () {
                                 }
                                 
 
-                                createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant), true);
-                                createErrorTab("Other Errors", errorsFound.filter(error => error.unimportant));
+                                const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant), true);
+                                const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.unimportant));
+
+                                // Scroll to show new tabs
+                                otherTab.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+                                // Scroll to show console log
+                                logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
                             })
                             .catch(error => {
                                 console.error(error);
@@ -4867,6 +4916,57 @@ window.addEventListener('load', function () {
                                         // Create a popup element for showing the results
                                         const cols = ['IP', 'Miner', 'Offline Count', 'Overall Hash Efficiency', 'Online Hash Efficiency', 'Slot ID', 'Serial Number'];
                                         createPopUpTable(`Offline Count List (${scanTimeFrameText})`, cols, false, (popupResultElement) => {
+                                            
+                                            const firstDiv = popupResultElement.querySelector('div');
+
+                                            // Download as CSV
+                                            const downloadButton = document.createElement('button');
+                                            downloadButton.id = 'downloadButton';
+                                            downloadButton.style.cssText = `
+                                                padding: 10px 20px;
+                                                background-color: #0078d4;
+                                                color: white;  
+                                                border: none;
+                                                cursor: pointer;
+                                                margin-top: 10px;
+                                                border-radius: 5px;
+                                                transition: background-color 0.3s;
+                                                align-self: flex-end;
+                                                display: block;
+                                            `;
+                                            downloadButton.textContent = 'Download as CSV';
+                                            firstDiv.appendChild(downloadButton);
+                                            
+                                            const downloadCSV = popupResultElement.querySelector('#downloadButton');
+                                            downloadCSV.addEventListener('mouseenter', function() {
+                                                this.style.backgroundColor = '#005a9e';
+                                            });
+
+                                            downloadCSV.addEventListener('mouseleave', function() {
+                                                this.style.backgroundColor = '#0078d4';
+                                            });
+
+                                            downloadCSV.onclick = function() {
+                                                // Logic to convert the table data to a CSV
+                                                const tableRows = popupResultElement.querySelectorAll('tbody tr');
+                                                const csvData = Array.from(tableRows).map(row => {
+                                                    const cells = row.querySelectorAll('td');
+                                                    return Array.from(cells).map(cell => cell.textContent.trim());
+                                                });
+
+                                                const csvHeader = ['IP', 'Miner', 'Offline Count', 'Overall Hash Efficiency', 'Online Hash Efficiency', 'Slot ID', 'Serial Number'];
+                                                const csvContent = csvHeader.join(',') + '\n' + csvData.map(row => row.join(',')).join('\n');
+                                                const csvBlob = new Blob([csvContent], { type: 'text/csv' });
+                                                const csvURL = URL.createObjectURL(csvBlob);
+                                                const downloadLink = document.createElement('a');
+                                                downloadLink.href =
+                                                    csvURL;
+                                                downloadLink.download = `OfflineCountList_${scanTimeFrameText}.csv`;
+                                                downloadLink.click();
+
+                                                // Remove the download link
+                                                downloadLink.remove();
+                                            };
 
                                             // Add the close button
                                             const closeButton = document.createElement('button');
@@ -4884,7 +4984,6 @@ window.addEventListener('load', function () {
                                                 display: block; /* Ensure the button is displayed as a block element */
                                             `;
                                             closeButton.textContent = 'Close';
-                                            const firstDiv = popupResultElement.querySelector('div');
                                             firstDiv.appendChild(closeButton);
 
                                             // Now the popup is appended, we can attach event listeners
@@ -6734,7 +6833,7 @@ window.addEventListener('load', function () {
 
                             GM_SuperValue.set("locatePlannerCard", {
                                 serialNumber: serialNumber,
-                                columnTitle: p.textContent
+                                columnTitle: columnTitle
                             });
 
                             var url = cardData.url;
@@ -7209,6 +7308,11 @@ window.addEventListener('load', function () {
                 filterTextBox.style.transition = 'background-color 0.8s';
                 filterTextBox.style.backgroundColor = '#c3b900';
 
+                // Set horizontal scroll to a bit more each time
+                if(curTry >= 4) {
+                    document.querySelector('.columnsList').scrollBy({ left: 100, behavior: 'smooth' });
+                }
+
                 // Get all the cards and scroll to it if the same serial number is found
                 const cards = document.querySelectorAll('.taskCard');
                 curTry++;
@@ -7277,7 +7381,6 @@ window.addEventListener('load', function () {
                 console.log("Locate Planner Card Data: ", locatePlannerCardData);
                 if (serialNumber) {
                     FindIfCardExists(serialNumber, (container, textContent, columnTitle_Card) => {
-
                         if(columnTitle_Card !== columnTitle) {
                             return;
                         }
@@ -7458,7 +7561,7 @@ window.addEventListener('load', function () {
 
 
             
-            let minerSNLookup = GM_SuperValue.get("minerSNLookup", {});
+            let minerSNLookup = GM_SuperValue.get("minerSNLookup_Minden", {});
 
             // Logic for adding button on planner card that will open the miner page
             let previousMinerID = "";
