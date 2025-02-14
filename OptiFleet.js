@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.3.5
+// @version      6.3.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -196,7 +196,7 @@ const errorsToSearch = {
         end: "stop_mining",
     },
     'Temp ≤ 0°C|32°F': {
-        icon: "https://img.icons8.com/?size=100&id=0Bm1Quaegs8d&format=png&color=FFFFFF",
+        icon: "https://img.icons8.com/?size=100&id=-uAldka8Jgn4&format=png&color=FFFFFF",
         start: "temp:",
         conditions: (text) => {
             // Extract the temp number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
@@ -215,8 +215,9 @@ const errorsToSearch = {
         start: ["asic temp too high", "ERROR_TEMP_TOO_HIGH", "Exit due to SHUTDOWN TEMPERATURE LIMIT REACHED"],
         end: ["stop_mining: asic temp too high", "stop_mining: over max temp"],
     },
-    'Temp ≥ 40°C|104°F': {
-        icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
+    /*
+    'Temp ≥ 50°C|122°F': {
+        icon: "https://img.icons8.com/?size=100&id=6444&format=png&color=FFFFFF",
         start: "temp:",
         conditions: (text) => {
             // Extract the temp number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
@@ -224,12 +225,12 @@ const errorsToSearch = {
             if (parts.length > 1) {
                 const tempPart = parts[1].split(",")[0];
                 const temperature = parseInt(tempPart, 10);
-                return temperature >= 40;
+                return temperature >= 50;
             }
             return false;
         },
         showOnce: "last",
-    },
+    },*/
     'Network Lost': {
         icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
         start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
