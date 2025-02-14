@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.3.3
+// @version      6.3.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -190,15 +190,45 @@ const errorsToSearch = {
         icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
         start: "Exit due to TEMPERATURE SENSORS FAILED",
     },
-    'Temperature Too Low': {
+    'Temperature Too Low Error': {
         icon: "https://img.icons8.com/?size=100&id=0Bm1Quaegs8d&format=png&color=FFFFFF",
         start: "ERROR_TEMP_TOO_LOW",
-        end: "stop_mining"
+        end: "stop_mining",
+    },
+    'Temp ≤ 0°C|32°F': {
+        icon: "https://img.icons8.com/?size=100&id=0Bm1Quaegs8d&format=png&color=FFFFFF",
+        start: "temp:",
+        conditions: (text) => {
+            // Extract the temp number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
+            const parts = text.split("temp:");
+            if (parts.length > 1) {
+                const tempPart = parts[1].split(",")[0];
+                const temperature = parseInt(tempPart, 10);
+                return temperature <= 0;
+            }
+            return false;
+        },
+        showOnce: "last",
     },
     'Temperature Overheat': {
         icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
         start: ["asic temp too high", "ERROR_TEMP_TOO_HIGH", "Exit due to SHUTDOWN TEMPERATURE LIMIT REACHED"],
         end: ["stop_mining: asic temp too high", "stop_mining: over max temp"],
+    },
+    'Temp ≥ 40°C|104°F': {
+        icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
+        start: "temp:",
+        conditions: (text) => {
+            // Extract the temp number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
+            const parts = text.split("temp:");
+            if (parts.length > 1) {
+                const tempPart = parts[1].split(",")[0];
+                const temperature = parseInt(tempPart, 10);
+                return temperature >= 40;
+            }
+            return false;
+        },
+        showOnce: "last",
     },
     'Network Lost': {
         icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
@@ -348,6 +378,7 @@ function runErrorScanLogic(logText) {
     console.log('Running error scan logic');
     console.log('Log text:', logText);
     // Search through the log and locate errors
+    var showOnceErrors = {};
     var errorsFound = []; // Array to store the errors found
     for (const error in errorsToSearch) {
         const errorData = errorsToSearch[error];
@@ -447,6 +478,16 @@ function runErrorScanLogic(logText) {
                         }
                     }
 
+                    // Remove the error from the showOnceErrors object if it's already been found
+                    if (errorData.showOnce === "last") {
+                        const previousErrorIndex = showOnceErrors[error];
+                        if (previousErrorIndex) {
+                            errorsFound.splice(previousErrorIndex - 1, 1);
+                            showOnceErrors[error] = null;
+                        }
+                    }
+                        
+
                     // Check if the error text meets the conditions
                     if (typeof errorData.conditions === 'function' ? errorData.conditions(errorText) : true && !errorTextAlreadyFound) {
                         errorsFound.push({
@@ -458,6 +499,11 @@ function runErrorScanLogic(logText) {
                             unimportant: errorData.unimportant || false
                         });
                         setEndIndexAfter = endIndex;
+
+                        // So we know the previous error to remove it if it's found again
+                        if (errorData.showOnce) {
+                            showOnceErrors[error] = errorsFound.length;
+                        }
                     } else {
                         console.log('Error text did not meet conditions');
                         setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
