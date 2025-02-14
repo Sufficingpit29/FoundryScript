@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.3.2
+// @version      6.3.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -3429,6 +3429,7 @@ window.addEventListener('load', function () {
                                         const upTime = currentMiner.uptimeValue;
                                         const container = location.split("_")[1].split("-")[0].replace(/\D/g, '').replace(/^0+/, '');
                                         const maxTemp = 78;
+                                        const minTemp = 25;
                                         const containerTemp = containerTempData[container].temp;
                                         const powerMode = currentMiner.powerModeName;
                                         let hashRateEfficiency = currentMiner.hashRatePercent;
@@ -3439,6 +3440,7 @@ window.addEventListener('load', function () {
                                         const isOnline = currentMiner.statusName === 'Online';
                                         let moreThanOneHour = upTime > minSoftRebootUpTime;
                                         const belowMaxTemp = containerTemp <= maxTemp;
+                                        const aboveMinTemp = containerTemp >= minTemp;
 
                                         const minerRebootTimesData = lastRebootTimes[minerID] || {};
                                         const softRebootTimes = minerRebootTimesData.softRebootsTimes || [];
@@ -3450,7 +3452,6 @@ window.addEventListener('load', function () {
                                         }
 
                                         rebootData[minerID] = rebootData[minerID] || {};
-                                        rebootData[minerID].belowMaxTemp = belowMaxTemp;
                                         rebootData[minerID].moreThanOneHour = moreThanOneHour;
                                         rebootData[minerID].isOnline = isOnline;
                                         rebootData[minerID].details = [];
@@ -3463,7 +3464,7 @@ window.addEventListener('load', function () {
 
                                         // If the miner has a lastRebootTime and it is at or more than 15 minutes and still has a 0 hash rate, then we can flag it to be hard rebooted, or if the miner last uptime is the same as the current uptime
                                         const minTime = 15*60*1000; // 15 minutes
-                                        const forgetTime = 60*60*1000; // 1 hours
+                                        const forgetTime = 6*60*60*1000; // 6 hours (Might maybe go back to 1 hour?)
 
                                         const isPastMinTime = timeSinceLastSoftReboot >= minTime;
                                         const notPastForgetTime = timeSinceLastSoftReboot < forgetTime;
@@ -3488,7 +3489,7 @@ window.addEventListener('load', function () {
                                         let hardRebootRecommendedBool = !hardRebootAttempted && ((isPastMinTime && notPastForgetTime) || moreThan3SoftReboots || !isOnline || manualHardReboot);
 
                                         if(isOnline && !hardRebootRecommendedBool && !hardRebootAttempted) {
-                                            if(moreThanOneHour && belowMaxTemp && (!hashRateEfficiency || hashRateEfficiency > 0)) { // If the miner passed the conditions, then we can reboot it
+                                            if(moreThanOneHour && belowMaxTemp && aboveMinTemp && (!hashRateEfficiency || hashRateEfficiency > 0)) { // If the miner passed the conditions, then we can reboot it
 
                                                 // Loop through lastRebootTimes, and get the last reboot time for each miner, if it has been less than 15 minutes, we will count that as activly rebooting
                                                 var rebootCount = getTotalRebootCount()[0];
@@ -3627,8 +3628,13 @@ window.addEventListener('load', function () {
                                         }
 
                                         if(!belowMaxTemp) {
-                                            rebootData[minerID].details.main = "Container Over Temp";
+                                            rebootData[minerID].details.main = "Container Too Hot (78°F)";
                                             rebootData[minerID].details.sub.push("Container is above 78°F.");
+                                        }
+                                        
+                                        if(!aboveMinTemp) {
+                                            rebootData[minerID].details.main = "Container Too Cold (25°F)";
+                                            rebootData[minerID].details.sub.push("Container is below 25°F.");
                                         }
 
                                         if(hashRateEfficiency) {
