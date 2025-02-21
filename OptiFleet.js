@@ -1,7 +1,14 @@
+// To do:
+// Total up offline time for down scan
+// Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
+// Maybe full site scan for bad/abnormal fans?
+
+// Entire site scan through history logs to try and get every possible error for examples, taking in account the same type of error between miner models so we catelog it all correctly.
+
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.3.6
+// @version      6.3.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -186,6 +193,10 @@ const errorsToSearch = {
         start: ["chain avg vol drop from", "ERROR_POWER_LOST", "failed to scale voltage up"],
         end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
     },
+    "Error Status": {
+        icon: "https://img.icons8.com/?size=100&id=6SQJcUEPQTXf&format=png&color=FFFFFF",
+        start: "err status:",
+    },
     'Temperature Sensor Error': {
         icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
         start: "Exit due to TEMPERATURE SENSORS FAILED",
@@ -195,6 +206,23 @@ const errorsToSearch = {
         start: "ERROR_TEMP_TOO_LOW",
         end: "stop_mining",
     },
+    /*
+    'Voltage over 13.20 V': {
+        icon: "https://img.icons8.com/?size=100&id=MWJoGGglMjH8&format=png&color=FFFFFF",
+        start: "temp:",
+        conditions: (text) => {
+            // Extract the voltage number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
+            const parts = text.split("vol:");
+            if (parts.length > 1) {
+                const volPart = parts[1].split(",")[0];
+                const voltage = parseFloat(volPart);
+                return voltage >= 13.20;
+            }
+            return false;
+        },
+        showOnce: "last",
+    },
+    */
     'Temp ≤ 0°C|32°F': {
         icon: "https://img.icons8.com/?size=100&id=-uAldka8Jgn4&format=png&color=FFFFFF",
         start: "temp:",
@@ -1821,7 +1849,27 @@ window.addEventListener('load', function () {
                 GM_SuperValue.set("taskComment", log);
                 GM_SuperValue.set("detailsData", JSON.stringify(minerDetails));
 
-                const currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD format
+                /*
+                new Date().getTime():
+
+                This gets the current time in milliseconds since the Unix epoch (January 1, 1970).
+                new Date().getTimezoneOffset():
+
+                This returns the difference, in minutes, between UTC and the local time. For example, if your local time is UTC+2, this will return -120.
+                new Date().getTimezoneOffset() * 60000:
+
+                This converts the timezone offset from minutes to milliseconds (60000 milliseconds = 1 minute).
+                new Date().getTime() - new Date().getTimezoneOffset() * 60000:
+
+                This adjusts the current time to UTC by subtracting the timezone offset in milliseconds.
+                new Date(...).toISOString():
+
+                This converts the adjusted time to an ISO 8601 string in UTC (e.g., 2023-10-05T00:00:00.000Z).
+                .slice(0, 10):
+
+                This extracts the date part (YYYY-MM-DD) from the ISO string.
+                */
+                const currentDate = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10); // YYYY-MM-DD format
                 let textToCopy = `${serialNumber}\t${modelLite}\t${hashRate}\t${issue}\t${status}\t${currentDate}`;
 
                 if(type === "Fortitude") {
@@ -3476,7 +3524,7 @@ window.addEventListener('load', function () {
                                         const upTime = currentMiner.uptimeValue;
                                         const container = location.split("_")[1].split("-")[0].replace(/\D/g, '').replace(/^0+/, '');
                                         const maxTemp = 78;
-                                        const minTemp = 25;
+                                        const minTemp = 10;
                                         const containerTemp = containerTempData[container].temp;
                                         const powerMode = currentMiner.powerModeName;
                                         let hashRateEfficiency = currentMiner.hashRatePercent;
@@ -4967,7 +5015,7 @@ window.addEventListener('load', function () {
                                         clearInterval(scanningInterval);
 
                                         // Create a popup element for showing the results
-                                        const cols = ['IP', 'Miner', 'Offline Count', 'Overall Hash Efficiency', 'Online Hash Efficiency', 'Slot ID', 'Serial Number'];
+                                        const cols = ['IP', 'Miner', 'Offline Count', 'Total Hash Efficiency', 'Online Only Hash Efficiency', 'Slot ID', 'Serial Number'];
                                         createPopUpTable(`Offline Count List (${scanTimeFrameText})`, cols, false, (popupResultElement) => {
                                             
                                             const firstDiv = popupResultElement.querySelector('div');
@@ -5007,7 +5055,7 @@ window.addEventListener('load', function () {
                                                     return Array.from(cells).map(cell => cell.textContent.trim());
                                                 });
 
-                                                const csvHeader = ['IP', 'Miner', 'Offline Count', 'Overall Hash Efficiency', 'Online Hash Efficiency', 'Slot ID', 'Serial Number'];
+                                                const csvHeader = ['IP', 'Miner', 'Offline Count', 'Total Hash Efficiency', 'Online Only Hash Efficiency', 'Slot ID', 'Serial Number'];
                                                 const csvContent = csvHeader.join(',') + '\n' + csvData.map(row => row.join(',')).join('\n');
                                                 const csvBlob = new Blob([csvContent], { type: 'text/csv' });
                                                 const csvURL = URL.createObjectURL(csvBlob);
@@ -5406,6 +5454,7 @@ window.addEventListener('load', function () {
                                 if (fastScan) {
                                     addToProgressLog(currentMiner);
                                     //console.log(`Fast scanning miner: ${minerIP}`);
+                                    //let ipHref = `http://${minerIP}/cgi-bin/hlog.cgi`; // history log for testing
                                     let ipHref = `http://${minerIP}/cgi-bin/log.cgi`;
                                     fetchGUIData(ipHref)
                                         .then(responseText => {
