@@ -8,7 +8,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.3.7
+// @version      6.4.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -64,12 +64,14 @@ if(!ipURLMatch && !allowedSiteMatch) {
     return false;
 }
 
+//https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad
 function getPlannerID(string) {
     try {
-        const plannerID = string.match(/plan\/([^?]+)/)[1].split('/')[0];
+        const plannerID = string.split('plan/')[1].split('/')[0];
         return plannerID;
     } catch (error) {
-        console.log('Error extracting planner ID:', error);
+        console.log('Error extracting planner ID from URL:', string);
+        console.log('Error:', error);
         return null;
     }
 }
@@ -636,7 +638,7 @@ window.addEventListener('load', function () {
     const urlLookupPlanner = {
         "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
         "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
-        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz?tid=6681433f-a30d-43cd-8881-8e964fa723ad"
+        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad"
     };
 
     const urlLookupPlannerGrid = {
@@ -1316,7 +1318,7 @@ window.addEventListener('load', function () {
             let plannerKeys = [`Bitmain`, `Fortitude`, `RAMM`];
             let plannerPages = [];
             for (const key of plannerKeys) {
-                const url = urlLookupPlannerGrid[key];
+                const url = urlLookupPlanner[key];
                 plannerPages.push(url);
             }
             let key = plannerKeys[0];
@@ -1325,7 +1327,7 @@ window.addEventListener('load', function () {
             GM_SuperValue.set("plannerCardsClosePage_"+plannerID, "searching");
             GM_SuperValue.set("plannerCardsData_Pages", plannerPages);
 
-            const newWindow = window.open(urlLookupPlannerGrid[key], '_blank', 'width=800,height=600');
+            const newWindow = window.open(urlLookupPlanner[key], '_blank', 'width=800,height=600');
             newWindow.document.title = 'Planner Cards Data';
 
             // Interval to check the data loaded
@@ -7364,20 +7366,36 @@ window.addEventListener('load', function () {
             }, 500);
         }
 
-    } else if (currentUrl.includes("planner.cloud.microsoft")) {
-
+    } else if (currentUrl.includes("planner.cloud.microsoft") && !currentUrl.includes("iframe")) {
         function PlannerCardPage() {
-            const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
+
+            const filterTextBox = document.querySelector('.ms-SearchBox-field');
+            console.log("Current URL: ", currentUrl);
+            console.log("Filter Text Box: ", filterTextBox);
             if (!filterTextBox) {
                 setTimeout(() => {
+                    console.log("Filter text box not found, trying to click button.");
+                    const searchButton = document.querySelector('button[aria-label="Filter by keyword"]');
+                    if (!searchButton) {
+                        setTimeout(() => {
+                            console.log("Search button not found, trying again.");
+                            PlannerCardPage();
+                        }, 10);
+                        return;
+                    } else {
+                        searchButton.click();
+                    }
                     PlannerCardPage();
-                }, 100);
+                }, 10);
                 return;
             }
 
             // Inital reset since it weirdly will sort of half remember the last input without displaying it?
-            filterTextBox.value = '';
+            // Also, now setting it to space since microsoft updated it so the filter doesn't appear until clicked, so this way we can more easily access it just in case the user clicks away, it will remain open.
+            filterTextBox.click();
+            filterTextBox.value = ' ';
             filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
+            filterTextBox.blur();
 
             let stopChecking = false;
             let existingCard = false;
@@ -7410,13 +7428,22 @@ window.addEventListener('load', function () {
                 filterTextBox.style.transition = 'background-color 0.8s';
                 filterTextBox.style.backgroundColor = '#c3b900';
 
+                // If we don't have plannerTasks data yet, then no elements are made to check yet.
+                if(!plannerTasks) {
+                    console.log("Planner tasks not found, trying again in 100ms.");
+                    setTimeout(() => {
+                        FindIfCardExists(serialNumber, findCallback);
+                    }, 100);
+                    return;
+                }
+
                 // Set horizontal scroll to a bit more each time
                 if(curTry >= 4) {
                     document.querySelector('.columnsList').scrollBy({ left: 100, behavior: 'smooth' });
                 }
 
                 // Get all the cards and scroll to it if the same serial number is found
-                const cards = document.querySelectorAll('.taskCard');
+                const cards = document.querySelectorAll('.taskBoardCard');
                 curTry++;
                 console.log("Checking for card with serial number:", serialNumber);
                 
@@ -7548,10 +7575,12 @@ window.addEventListener('load', function () {
                 }
 
                 if (!isSearching) {
+                    console.log("Not searching this page.");
                     return;
                 }
 
                 if(!plannerTasks || !plannerBuckets) {
+                    console.log("Planner tasks or buckets not found, trying again in 100ms.");
                     setTimeout(collectPlannerCardData, 100);
                     return;
                 }
@@ -7661,8 +7690,6 @@ window.addEventListener('load', function () {
             }
             collectPlannerCardData();
 
-
-            
             let minerSNLookup = GM_SuperValue.get("minerSNLookup_Minden", {});
 
             // Logic for adding button on planner card that will open the miner page
@@ -7798,7 +7825,7 @@ window.addEventListener('load', function () {
             // Logic for displaying the Container/Location ID on the planner cards
             function addSlotIDsToPlannerCards() {
                 // Loops through all taskCard elements and adds the slot ID to the card
-                const taskCards = document.querySelectorAll('.taskCard');
+                const taskCards = document.querySelectorAll('.taskBoardCard');
                 taskCards.forEach(card => {
                     addSlotIDToCard(card);
                 });
@@ -7806,7 +7833,7 @@ window.addEventListener('load', function () {
 
             // Keep trying to add the slot ID to the cards until there are taskCards
             function wonkyEdgeCaseFixForSlotIDs() {
-                const taskCards = document.querySelectorAll('.taskCard');
+                const taskCards = document.querySelectorAll('.taskBoardCard');
                 if (taskCards.length === 0) {
                     setTimeout(() => {
                         wonkyEdgeCaseFixForSlotIDs();
@@ -7827,7 +7854,7 @@ window.addEventListener('load', function () {
                     mutation.addedNodes.forEach(node => {
                         //console.log("Node Added: ", node);
                         if (node.classList && node.classList.contains('taskBoardCard')) {
-                            let card = node.querySelector('.taskCard');
+                            let card = node.querySelector('.taskBoardCard');
                             addSlotIDToCard(card);
                         } else if(node.classList && (node.classList.contains('listboxGroup') || (node.classList.contains('scrollable') && node.getAttribute('data-can-drag-to-scroll') === 'true'))) {
                             //console.log("ListboxGroup or Scrollable with data-can-drag-to-scroll=true added, adding Slot IDs to Planner Cards");
@@ -7846,7 +7873,7 @@ window.addEventListener('load', function () {
             // Logic for automatically adding a task to the planner
 
             function setUpAutoCardLogic() {
-                const filterTextBox = document.querySelector('input[aria-label="Filter text box"]');
+                const filterTextBox = document.querySelector('.ms-SearchBox-field');
 
                 // find the aria-label="Filter text box" and input the serial number
                 if (filterTextBox) {
@@ -7858,7 +7885,6 @@ window.addEventListener('load', function () {
                     return;
                 }
 
-                console.log("Setting up Auto Card Logic");
                 let taskName = GM_SuperValue.get("taskName", "");
                 if (taskName === "") {
                     console.log("No taskName found.");
