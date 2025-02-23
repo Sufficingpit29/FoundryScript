@@ -1,13 +1,13 @@
 // To do:
 // Total up offline time for down scan
 // Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
-// Maybe full site scan for bad/abnormal fans?
+// Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
 // Work on planner card history. (Also, better card finder maybe? Maybe possible to get direct link to card or search via the actual data so we don't have to weirdly scroll?)
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.4.5
+// @version      6.4.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -102,9 +102,11 @@ function overrideFetch() {
                 if(url.includes('tasks') && data.value) {
                     plannerTasks = data.value;
                     console.log('Planner tasks:', plannerTasks);
+                    //GM_SuperValue.set("plannerTasks_" + planID, plannerTasks);
                 } else if(url.includes('buckets') && data.value) {
                     plannerBuckets = data.value;
                     console.log('Planner buckets:', plannerBuckets);
+                    //GM_SuperValue.set("plannerBuckets_" + planID, plannerBuckets);
                 }
             }).catch(err => {
                 console.log('Error parsing JSON:', err);
@@ -2672,7 +2674,7 @@ window.addEventListener('load', function () {
                 // Scroll to bottom of history
                 historyElement.scrollTop = historyElement.scrollHeight;
             });
-*/
+            */
             // Loop through all the tabs and add an extra on click event 
             const tabs = document.querySelectorAll('.tab');
             tabs.forEach(tab => {
@@ -7405,6 +7407,9 @@ window.addEventListener('load', function () {
                     timeout = setTimeout(() => {
                         filterTextBox.style.backgroundColor = '';
                     }, 1000);
+
+                    // Set our scroll back to beginning
+                    document.querySelector('.columnsList').scrollTo({ left: 0, behavior: 'smooth' });
                     return;
                 }
 
