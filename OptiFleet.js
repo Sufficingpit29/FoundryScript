@@ -2,13 +2,12 @@
 // Total up offline time for down scan
 // Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
 // Maybe full site scan for bad/abnormal fans?
-
-// Entire site scan through history logs to try and get every possible error for examples, taking in account the same type of error between miner models so we catelog it all correctly.
+// Work on planner card history. (Also, better card finder maybe? Maybe possible to get direct link to card or search via the actual data so we don't have to weirdly scroll?)
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.4.0
+// @version      6.4.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -79,8 +78,6 @@ function getPlannerID(string) {
 // Get Task board data
 let plannerBuckets = false;
 let plannerTasks = false;
-const originalFetch = unsafeWindow.fetch;
-
 let planID = false;
 // if url has planner in it, like https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad
 // extract the TbJIxx_byEKhuMp-C4tXLGUAD3Tb
@@ -88,29 +85,50 @@ if(currentUrl.includes('planner')) {
     planID = getPlannerID(currentUrl);
 }
 
-// Intercept fetch requests
-unsafeWindow.fetch = async function(...args) {
-    const url = args[0];
-    if (typeof url === 'string' && url.includes(planID) && (url.includes('tasks?') || url.includes('buckets'))) {
-        console.log('[Tampermonkey] Intercepting fetch request:', url);
+const originalFetch = unsafeWindow.fetch;
 
-        const response = await originalFetch(...args);
-        const clone = response.clone();
+function overrideFetch() {
+    // Intercept fetch requests
+    unsafeWindow.fetch = async function(...args) {
+        const url = args[0];
+        
+        //https://graph.microsoft.com/beta/planner/plans/wkeUw2vf1kqEkw6-XXaSR2UABn4T/tasks?$expand=details,assignedToTaskBoardFormat,bucketTaskBoardFormat,progressTaskBoardFormat
+        if (typeof url === 'string' && url.includes(planID) && (url.includes('tasks?') || url.includes('buckets'))) {
+            console.log('[Tampermonkey] Intercepting fetch request:', url);
+            const response = await originalFetch(...args);
+            const clone = response.clone();
 
-        clone.json().then(data => {
-            if(url.includes('tasks') && data.value) {
-                plannerTasks = data.value;
-            } else if(url.includes('buckets') && data.value) {
-                plannerBuckets = data.value;
-            }
-        }).catch(err => {
-        });
+            clone.json().then(data => {
+                if(url.includes('tasks') && data.value) {
+                    plannerTasks = data.value;
+                    console.log('Planner tasks:', plannerTasks);
+                } else if(url.includes('buckets') && data.value) {
+                    plannerBuckets = data.value;
+                    console.log('Planner buckets:', plannerBuckets);
+                }
+            }).catch(err => {
+                console.log('Error parsing JSON:', err);
+            });
+            return response;
+        }
 
-        return response;
-    }
+        return originalFetch(...args);
+    };
+}
+overrideFetch();
 
-    return originalFetch(...args);
-};
+setTimeout(() => {
+    overrideFetch();
+}, 100);
+
+// override fetch again on page load, just in case
+window.addEventListener('load', function() {
+    overrideFetch();
+
+    setTimeout(() => {
+        overrideFetch();
+    }, 100);
+});
 
 const username = 'root';
 const password = 'root';
@@ -636,15 +654,15 @@ window.addEventListener('load', function () {
     urlLookupExcel["RAMM"] = GM_SuperValue.get("rammLink", defaultExcelLink);
 
     const urlLookupPlanner = {
-        "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
-        "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
-        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad"
+        "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/board",
+        "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/board",
+        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz/view/board"
     };
 
     const urlLookupPlannerGrid = {
-        "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
-        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
-        "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad",
+        "Fortitude": "https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid",
+        "RAMM": "https://planner.cloud.microsoft/webui/plan/FHYUYbYUfkqd2-oSKLk7xGUAHvRz/view/grid",
+        "Bitmain": "https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/grid",
     }
 
     //-----------------
@@ -1327,7 +1345,7 @@ window.addEventListener('load', function () {
             GM_SuperValue.set("plannerCardsClosePage_"+plannerID, "searching");
             GM_SuperValue.set("plannerCardsData_Pages", plannerPages);
 
-            const newWindow = window.open(urlLookupPlanner[key], '_blank', 'width=800,height=600');
+            const newWindow = window.open(urlLookupPlanner[key], '_blank');
             newWindow.document.title = 'Planner Cards Data';
 
             // Interval to check the data loaded
@@ -2134,7 +2152,6 @@ window.addEventListener('load', function () {
                     }
                     if (secondaryText) {
                         let textToCopy = secondaryText.textContent.trim();
-                        console.log("Secondary Text:", secondaryText);
                         addCopyButton(secondaryText, textToCopy);
                     }
                     if (!primaryText && !secondaryText) {
@@ -2185,11 +2202,45 @@ window.addEventListener('load', function () {
                     container.insertBefore(sharepointPasteButton, container.firstChild);
                 }
             }
+
+            function setModelEditSumbitToUpdate() {
+                const MinerEditorModal = document.querySelector('#MinerEditorModal');
+                if (MinerEditorModal) {
+                    const submitButton = MinerEditorModal.querySelector('#modalSubmitButton');
+
+                    if (submitButton.getAttribute('observing') === 'true') {
+                        return;
+                    }
+
+                    // Override the submit button onclick to get the status
+                    const originalSubmitButtonOnClick = submitButton.onclick;
+                    submitButton.onclick = function() {
+                        // Get whatever element has aria-controls="MinerEditorModal-statusInput_listbox" in MinerEditorModal
+                        const statusInput = MinerEditorModal.querySelector('[aria-controls="MinerEditorModal-statusInput_listbox"]');
+                        const status = statusInput.textContent.trim();
+
+
+                        // Update the miner details
+                        const minerStatusElement = document.querySelector('#statusInfo');
+                        if (minerStatusElement) {
+                            minerStatusElement.textContent = status;
+                        }
+
+                        // Call the original submit button onclick
+                        originalSubmitButtonOnClick();
+                    };
+
+                    // Set that we're observing the submit button
+                    submitButton.setAttribute('observing', 'true');
+                }
+            }
             
             function addMutationObserver() {
                 const observer = new MutationObserver(() => {
                     //fixAccountWorkerFormatting();
+                    setModelEditSumbitToUpdate();
                     addCopyButtonsToElements();
+                    
                 });
 
                 observer.observe(document.body, { childList: true, subtree: true });
@@ -2200,63 +2251,79 @@ window.addEventListener('load', function () {
             
             // Add "Log" Tab
             const tabsContainer = document.querySelector('.tabs');
-            const quickIPGrabTab = document.createElement('div');
-            quickIPGrabTab.id = 'quickIPGrabTab';
-            quickIPGrabTab.className = 'tab';
-            quickIPGrabTab.custom = true;
-            quickIPGrabTab.innerText = 'Current Log';
-            quickIPGrabTab.style.float = 'right';
-            quickIPGrabTab.style.cssText = `
-                margin-left: auto;
-                margin-right: 0px;
-            `;
-            quickIPGrabTab.onclick = function() {
-                // Swaps to the selected tab
-                $(this).addClass("selected");
-                $(this).siblings(".tab").removeClass("selected");
-
-                // Removes the active class from the other tab content
-                let tabContent = document.querySelector('.tab-content');
-                let children = tabContent.children;
-                for (let i = 0; i < children.length; i++) {
-                    children[i].classList.remove("active");
+            let customTabExists = false;
+            const createCustomTab = (id, title, fetchDataCallback) => {
+                const customTab = document.createElement('div');
+                customTab.id = id;
+                customTab.className = 'tab';
+                customTab.custom = true;
+                customTab.innerText = title;
+                customTab.style.float = 'right';
+                if(!customTabExists) {
+                    customTab.style.cssText = `
+                        margin-left: auto;
+                        margin-right: 0px;
+                    `;
+                } else {
+                    customTab.style.cssText = `
+                        margin-right: 0px;
+                    `;
                 }
+                customTabExists = true;
+                customTab.onclick = function() {
+                    // Swaps to the selected tab
+                    $(this).addClass("selected");
+                    $(this).siblings(".tab").removeClass("selected");
+
+                    // Removes the active class from the other tab content
+                    let tabContent = document.querySelector('.tab-content');
+                    let children = tabContent.children;
+                    for (let i = 0; i < children.length; i++) {
+                        children[i].classList.remove("active");
+                    }
+                    
+                    // Add the new data to the tab content (deletes if it already exists)
+                    const customTabContainer = document.createElement('div');
+                    customTabContainer.className = 'customTabContainer active';
+                    customTabContainer.style.display = 'flex';
+                    customTabContainer.style.flexDirection = 'column';
+                    customTabContainer.style.alignItems = 'center';
+                    customTabContainer.style.justifyContent = 'center';
+                    customTabContainer.style.height = '100%';
+                    customTabContainer.style.color = '#fff';
+
+                    const loadingText = document.createElement('div');
+                    loadingText.textContent = 'Retrieving data...';
+                    loadingText.style.marginBottom = '10px';
+                    customTabContainer.appendChild(loadingText);
+
+                    const loadingSpinner = document.createElement('div');
+                    loadingSpinner.style.border = '6px solid #f3f3f3';
+                    loadingSpinner.style.borderTop = '6px solid #3498db';
+                    loadingSpinner.style.borderRadius = '50%';
+                    loadingSpinner.style.width = '40px';
+                    loadingSpinner.style.height = '40px';
+                    loadingSpinner.style.animation = 'spin 2s linear infinite';
+                    customTabContainer.appendChild(loadingSpinner);
+
+                    tabContent.appendChild(customTabContainer);
+
+                    const style = document.createElement('style');
+                    style.textContent = `
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                    `;
+                    document.head.appendChild(style);
+
+                    fetchDataCallback(customTabContainer, loadingText, loadingSpinner);
+                };
                 
-                // Add the new data to the tab content (deletes if it already exists)
-                const customTabContainer = document.createElement('div');
-                customTabContainer.className = 'customTabContainer active';
-                customTabContainer.style.display = 'flex';
-                customTabContainer.style.flexDirection = 'column';
-                customTabContainer.style.alignItems = 'center';
-                customTabContainer.style.justifyContent = 'center';
-                customTabContainer.style.height = '100%';
-                customTabContainer.style.color = '#fff';
+                tabsContainer.appendChild(customTab);
+            };
 
-                const loadingText = document.createElement('div');
-                loadingText.textContent = 'Retrieving data...';
-                loadingText.style.marginBottom = '10px';
-                customTabContainer.appendChild(loadingText);
-
-                const loadingSpinner = document.createElement('div');
-                loadingSpinner.style.border = '6px solid #f3f3f3';
-                loadingSpinner.style.borderTop = '6px solid #3498db';
-                loadingSpinner.style.borderRadius = '50%';
-                loadingSpinner.style.width = '40px';
-                loadingSpinner.style.height = '40px';
-                loadingSpinner.style.animation = 'spin 2s linear infinite';
-                customTabContainer.appendChild(loadingSpinner);
-
-                tabContent.appendChild(customTabContainer);
-
-                const style = document.createElement('style');
-                style.textContent = `
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                `;
-                document.head.appendChild(style);
-
+            createCustomTab('quickIPGrabTab', 'Current Log', (customTabContainer, loadingText, loadingSpinner) => {
                 // Get IP Address from m-link is-size-xs href
                 const waitForIpElement = setInterval(() => {
                     const ipElement = document.querySelector('.m-link.is-size-xs');
@@ -2528,205 +2595,84 @@ window.addEventListener('load', function () {
                             });
                     }
                 }, 500);
+            });
+            /*
+            createCustomTab('plannerHistoryTab', 'Planner History', (customTabContainer, loadingText, loadingSpinner) => {
+                // Fetch planner history data
+                const testHistoryData = [
+                    { date: '2021-09-01 12:00:00', action: 'Test action 1' },
+                    { date: '2021-09-01 12:30:00', action: 'Test action 2' },
+                ];
 
+                const plannerHistory = GM_SuperValue.get('plannerHistory', testHistoryData);
+                if (plannerHistory.length === 0) {
+                    // Remove the loading text and spinner
+                    customTabContainer.removeChild(loadingText);
+                    customTabContainer.removeChild(loadingSpinner);
 
-                /*
-                // Get id from url
-                const urlParams = new URLSearchParams(window.location.search);
-                const minerID = urlParams.get('id').toString();
-                console.log("Miner ID:", minerID);
+                    // Add a clean nice message saying no history found
+                    const noHistoryMessage = document.createElement('div');
+                    noHistoryMessage.textContent = 'No planner history found.';
+                    customTabContainer.appendChild(noHistoryMessage);
+                    return;
+                }
 
-                let waitForMinerData = setInterval(() => {
-                    // Make sure allMinersData is loaded
-                    if (Object.keys(allMinersLookup).length > 0) {
-                        clearInterval(waitForMinerData);
-                    } else {
-                        return;
+                // Remove the loading text and spinner
+                customTabContainer.removeChild(loadingText);
+                customTabContainer.removeChild(loadingSpinner);
+
+                // Create a sleek history element
+                const historyElement = document.createElement('div');
+                historyElement.style.cssText = `
+                    background-color: #18181b;
+                    color: #fff;
+                    padding: 20px;
+                    border-radius: 10px;
+                    max-height: 400px;
+                    overflow-y: auto;
+                    overflow-x: auto;
+                    font-family: 'Courier New', Courier, monospace;
+                    white-space: pre;
+                    width: 100%;
+                    scrollbar-width: thin;
+                    scrollbar-color: #888 #333;
+                `;
+
+                plannerHistory.forEach(entry => {
+                    const entryElement = document.createElement('div');
+                    entryElement.style.marginBottom = '10px';
+                    entryElement.textContent = `${entry.date}: ${entry.action}`;
+                    historyElement.appendChild(entryElement);
+                });
+
+                customTabContainer.appendChild(historyElement);
+
+                // Add custom scrollbar styles
+                const style = document.createElement('style');
+                style.textContent = `
+                    ::-webkit-scrollbar {
+                        width: 8px;
+                        height: 8px;
                     }
-
-                    // Get the miner data
-                    const currentMiner = allMinersLookup[minerID];
-                    console.log(currentMiner);
-                    const minerIP = currentMiner.ipAddress;
-
-                    // Start scan logic
-                    GM_SuperValue.set('errorsFound', {});
-                    let guiLink = `http://root:root@${minerIP}/#blog`;
-                    if(currentMiner.firmwareVersion.includes('BCFMiner')) {
-                        guiLink = `http://root:root@${minerIP}/#/logs`;
+                    ::-webkit-scrollbar-track {
+                        background: #333;
+                        border-radius: 10px;
                     }
-                    GM_SuperValue.set('currentlyScanning', {[minerIP]: currentMiner});
-                    let logWindow = window.open(guiLink, '_blank', 'width=1,height=1,left=0,top=' + (window.innerHeight - 400));
+                    ::-webkit-scrollbar-thumb {
+                        background-color: #888;
+                        border-radius: 10px;
+                        border: 2px solid #333;
+                    }
+                    ::-webkit-scrollbar-thumb:hover {
+                        background-color: #555;
+                    }
+                `;
+                document.head.appendChild(style);
 
-                    // Wait for the miner gui to load
-                    let loaded = false;
-                    let currentCheckLoadedInterval = setInterval(() => {
-                        const errorsFound = GM_SuperValue.get('errorsFound', false);
-                        if(errorsFound && errorsFound[currentMiner.id]) {
-                            loaded = true;
-                            const minerErrors = errorsFound[currentMiner.id] || [];
-                            clearInterval(currentCheckLoadedInterval);
-                            
-                            GM_SuperValue.set('currentlyScanning', {});
-
-                            // Close the log window
-                            logWindow.close();
-
-                            // Remove the loading spinner and text
-                            customTabContainer.removeChild(loadingText);
-                            customTabContainer.removeChild(loadingSpinner);
-
-                            // Create a list of errors
-                            const errorList = document.createElement('div');
-                            errorList.style.width = '100%';
-                            errorList.style.maxHeight = 'calc(100% - 50px)';
-                            errorList.style.overflowY = 'auto';
-                            errorList.style.padding = '20px';
-                            errorList.style.border = '1px solid #444';
-                            errorList.style.borderRadius = '10px';
-                            errorList.style.marginTop = '20px';
-                            errorList.style.backgroundColor = '#222';
-                            errorList.style.display = 'flex';
-                            errorList.style.flexDirection = 'column';
-                            errorList.style.alignItems = 'center';
-
-                            const errorTitle = document.createElement('h2');
-                            errorTitle.textContent = 'Errors Found';
-                            errorTitle.style.marginBottom = '20px';
-                            errorTitle.style.color = '#fff';
-                            errorList.appendChild(errorTitle);
-
-                            minerErrors.forEach(error => {
-                                const errorContainer = document.createElement('div');
-                                errorContainer.style.display = 'flex';
-                                errorContainer.style.alignItems = 'center';
-                                errorContainer.style.width = '100%';
-                                errorContainer.style.padding = '10px';
-                                errorContainer.style.marginBottom = '10px';
-                                errorContainer.style.borderBottom = '1px solid #444';
-
-                                const errorIcon = document.createElement('img');
-                                errorIcon.src = error.icon;
-                                errorIcon.style.width = '40px';
-                                errorIcon.style.height = '40px';
-                                errorIcon.style.marginRight = '20px';
-                                errorContainer.appendChild(errorIcon);
-
-                                const errorText = document.createElement('div');
-                                errorText.style.display = 'flex';
-                                errorText.style.flexDirection = 'column';
-                                errorText.style.width = '100%';
-
-                                const errorName = document.createElement('h3');
-                                errorName.textContent = error.name;
-                                errorName.style.marginBottom = '5px';
-                                errorName.style.color = '#fff';
-                                errorText.appendChild(errorName);
-
-                                const errorShort = document.createElement('p');
-                                errorShort.textContent = error.short;
-                                errorShort.style.marginBottom = '5px';
-                                errorShort.style.color = '#bbb';
-                                errorText.appendChild(errorShort);
-
-                                var questionColor = 'red';
-                                if(questionColor) {
-                                    row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;   
-                                }
-                                
-                                // Add hover event listeners to show/hide the full details
-                                const questionMark = row.querySelector('td:last-child div[style*="position: relative;"]');
-                                const tooltip = questionMark.querySelector('div[style*="display: none;"]');
-                                document.body.appendChild(tooltip);
-                                questionMark.addEventListener('mouseenter', () => {
-                                    tooltip.style.display = 'block';
-
-                                    // Position the tooltip to the left of the question mark with the added width
-                                    const questionMarkRect = questionMark.getBoundingClientRect();
-                                    const tooltipRect = tooltip.getBoundingClientRect();
-                                    tooltip.style.left = `${questionMarkRect.left - tooltipRect.width}px`;
-                                    tooltip.style.right = 'auto';
-
-                                    // Set top position to be the same as the question mark
-                                    tooltip.style.top = `${questionMarkRect.top}px`;
-                                });
-
-                                // when clicked, open the error log
-                                questionMark.addEventListener('click', () => {
-                                    const ip = currentMiner.ipAddress;
-                                    GM_SuperValue.set('quickGoToLog', {ip: ip, errorText: error.text, category: error.category});
-                                    window.open(guiLink, '_blank');
-                                });
-
-                                
-                                // Start a timer to hide the tooltip after a delay if not hovered over
-                                let hideTooltipTimer;
-                                const hideTooltipWithDelay = () => {
-                                    hideTooltipTimer = setTimeout(() => {
-                                        tooltip.style.display = 'none';
-                                    }, 100);
-                                };
-
-                                tooltip.style.display = 'none';
-
-                                // Clear the timer if the tooltip or question mark is hovered over again
-                                questionMark.addEventListener('mouseenter', () => {
-                                    clearTimeout(hideTooltipTimer);
-                                });
-
-                                tooltip.addEventListener('mouseenter', () => {
-                                    clearTimeout(hideTooltipTimer);
-                                });
-
-                                // Start the timer when the mouse leaves the tooltip or question mark
-                                questionMark.addEventListener('mouseleave', hideTooltipWithDelay);
-                                tooltip.addEventListener('mouseleave', hideTooltipWithDelay);
-
-                                // Observe for changes to the table and delete the tooltip if so
-                                const observer = new MutationObserver(() => {
-                                    tooltip.remove();
-                                    observer.disconnect();
-                                });
-
-                                observer.observe(row, { childList: true });
-
-                                errorContainer.appendChild(errorText);
-                                errorList.appendChild(errorContainer);
-                            });
-
-                            customTabContainer.appendChild(errorList);
-                        }
-                    }, 10);
-
-                    setTimeout(() => {
-                        if (!loaded && currentCheckLoadedInterval) {
-                            let failText = "Failed to load miner GUI.";
-                            if(currentMiner.firmwareVersion.includes('BCFMiner')) {
-                                failText = "Failed to load miner GUI or got stuck on Username/Password prompt.";
-                            }
-
-                            clearInterval(currentCheckLoadedInterval);
-
-                            const errorsFound = GM_SuperValue.get('errorsFound', {});
-                            errorsFound[currentMiner.id] = [{
-                                name: failText,
-                                short: "GUI Load Fail",
-                                icon: "https://img.icons8.com/?size=100&id=111057&format=png&color=FFFFFF"
-                            }];
-                            GM_SuperValue.set('errorsFound', errorsFound);
-                            GM_SuperValue.set('currentlyScanning', {});
-
-                            // Close the log window
-                            logWindow.close();
-                        }
-                    }, 16000);
-                }, 200);
-                
-                */
-            };
-            
-            tabsContainer.appendChild(quickIPGrabTab);
-
+                // Scroll to bottom of history
+                historyElement.scrollTop = historyElement.scrollHeight;
+            });
+*/
             // Loop through all the tabs and add an extra on click event 
             const tabs = document.querySelectorAll('.tab');
             tabs.forEach(tab => {
