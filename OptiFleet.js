@@ -4,10 +4,12 @@
 // Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
 // Work on planner card history. (Also, better card finder maybe? Maybe possible to get direct link to card or search via the actual data so we don't have to weirdly scroll?)
 
+// YNAHANCBCABJA036Y (has more than 1 card for testing)
+
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.4.6
+// @version      6.4.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -102,11 +104,11 @@ function overrideFetch() {
                 if(url.includes('tasks') && data.value) {
                     plannerTasks = data.value;
                     console.log('Planner tasks:', plannerTasks);
-                    //GM_SuperValue.set("plannerTasks_" + planID, plannerTasks);
+                    GM_SuperValue.set("plannerTasks_" + planID, plannerTasks);
                 } else if(url.includes('buckets') && data.value) {
                     plannerBuckets = data.value;
                     console.log('Planner buckets:', plannerBuckets);
-                    //GM_SuperValue.set("plannerBuckets_" + planID, plannerBuckets);
+                    GM_SuperValue.set("plannerBuckets_" + planID, plannerBuckets);
                 }
             }).catch(err => {
                 console.log('Error parsing JSON:', err);
@@ -130,6 +132,10 @@ window.addEventListener('load', function() {
     setTimeout(() => {
         overrideFetch();
     }, 100);
+
+    setTimeout(() => {
+        overrideFetch();
+    }, 800);
 });
 
 const username = 'root';
@@ -2600,14 +2606,29 @@ window.addEventListener('load', function () {
             });
             /*
             createCustomTab('plannerHistoryTab', 'Planner History', (customTabContainer, loadingText, loadingSpinner) => {
-                // Fetch planner history data
-                const testHistoryData = [
-                    { date: '2021-09-01 12:00:00', action: 'Test action 1' },
-                    { date: '2021-09-01 12:30:00', action: 'Test action 2' },
-                ];
+                // Get the planner history
+                let allPlannerTasks = [];
+                let allPlannerBuckets = [];
+                for (const key in urlLookupPlanner) {
+                    const plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
+                    const tasks = GM_SuperValue.get("plannerTasks_" + plannerID, {});
+                    allPlannerTasks = allPlannerTasks.concat(tasks);
 
-                const plannerHistory = GM_SuperValue.get('plannerHistory', testHistoryData);
-                if (plannerHistory.length === 0) {
+                    const buckets = GM_SuperValue.get("plannerBuckets_" + plannerID, {});
+                    allPlannerBuckets = allPlannerBuckets.concat(buckets);
+                }
+                console.log(allPlannerTasks);
+                console.log(allPlannerBuckets);
+
+                let plannerBucketLookup = {};
+                allPlannerBuckets.forEach(bucket => {
+                    plannerBucketLookup[bucket.id] = bucket.name;
+                });
+                // Filter tasks related to the current serial number
+                const serialNumber = getMinerDetails()[1].serialNumber;
+                const relatedTasks = allPlannerTasks.filter(task => task.title.includes(serialNumber));
+
+                if (relatedTasks.length === 0) {
                     // Remove the loading text and spinner
                     customTabContainer.removeChild(loadingText);
                     customTabContainer.removeChild(loadingSpinner);
@@ -2640,11 +2661,59 @@ window.addEventListener('load', function () {
                     scrollbar-color: #888 #333;
                 `;
 
-                plannerHistory.forEach(entry => {
-                    const entryElement = document.createElement('div');
-                    entryElement.style.marginBottom = '10px';
-                    entryElement.textContent = `${entry.date}: ${entry.action}`;
-                    historyElement.appendChild(entryElement);
+                relatedTasks.forEach(task => {
+                    const taskElement = document.createElement('div');
+                    taskElement.style.marginBottom = '10px';
+                    taskElement.style.borderBottom = '1px solid #444';
+                    taskElement.style.paddingBottom = '10px';
+
+                    const titleElement = document.createElement('div');
+                    titleElement.style.fontWeight = 'bold';
+                    titleElement.style.marginBottom = '5px';
+                    titleElement.textContent = `Title: ${task.title}`;
+                    taskElement.appendChild(titleElement);
+
+                    const createdDateElement = document.createElement('div');
+                    createdDateElement.textContent = `Created Date: ${new Date(task.createdDateTime).toLocaleString()}`;
+                    taskElement.appendChild(createdDateElement);
+
+                    const lastModifiedDateElement = document.createElement('div');
+                    lastModifiedDateElement.textContent = `Last Modified Date: ${new Date(task.lastModifiedDateTime).toLocaleString()}`;
+                    taskElement.appendChild(lastModifiedDateElement);
+
+                    const bucketElement = document.createElement('div');
+                    bucketElement.textContent = `Bucket: ${plannerBucketLookup[task.bucketId]}`;
+                    taskElement.appendChild(bucketElement);
+
+                    const completionStatusElement = document.createElement('div');
+                    if (task.completedDateTime) {
+                        completionStatusElement.textContent = `Completed Date: ${new Date(task.completedDateTime).toLocaleString()}`;
+                    } else {
+                        completionStatusElement.textContent = 'Not Marked Completed';
+                    }
+                    taskElement.appendChild(completionStatusElement);
+
+                    const notesElement = document.createElement('div');
+                    notesElement.style.marginTop = '10px';
+                    notesElement.style.cursor = 'pointer';
+                    notesElement.style.color = '#0078d4';
+                    notesElement.textContent = 'Notes (click to expand/collapse)';
+                    notesElement.addEventListener('click', () => {
+                        const notesContent = notesElement.nextElementSibling;
+                        notesContent.style.display = notesContent.style.display === 'none' ? 'block' : 'none';
+                    });
+                    taskElement.appendChild(notesElement);
+
+                    const notesContentElement = document.createElement('div');
+                    notesContentElement.style.display = 'none';
+                    notesContentElement.style.marginTop = '10px';
+                    notesContentElement.style.padding = '10px';
+                    notesContentElement.style.backgroundColor = '#333';
+                    notesContentElement.style.borderRadius = '5px';
+                    notesContentElement.innerHTML = task.details.notes.content;
+                    taskElement.appendChild(notesContentElement);
+
+                    historyElement.appendChild(taskElement);
                 });
 
                 customTabContainer.appendChild(historyElement);
@@ -7513,6 +7582,8 @@ window.addEventListener('load', function () {
             let plannerID = getPlannerID(currentUrl); //.match(/plan\/([^?]+)/)[1].split('/')[0];
             let newPlannerData = {};
             let createdOverlay = false;
+            let refreshLimit = 30;
+            let refreshCount = 0;
             function collectPlannerCardData() {
                 // Check if this window is actually one we should scan
                 let pages = GM_SuperValue.get("plannerCardsData_Pages", []);
@@ -7532,7 +7603,13 @@ window.addEventListener('load', function () {
 
                 if(!plannerTasks || !plannerBuckets) {
                     console.log("Planner tasks or buckets not found, trying again in 100ms.");
+                    if(refreshCount >= refreshLimit) {
+                        // refresh page
+                        window.location.reload();
+                        return
+                    }
                     setTimeout(collectPlannerCardData, 100);
+                    refreshCount++;
                     return;
                 }
 
