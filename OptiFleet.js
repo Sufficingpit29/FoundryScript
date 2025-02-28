@@ -3,12 +3,10 @@
 // Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
 // Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
 
-// 2025-02-07 01:42:37 miner:BHB56804,board_name:BHB56804
-
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.5.0
+// @version      6.5.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2670,147 +2668,6 @@ window.addEventListener('load', function () {
                 }, 500);
             });
 
-            /*
-            createCustomTab('plannerHistoryTab', 'Planner History', (customTabContainer, loadingText, loadingSpinner) => {
-                // Get the planner history
-                let allPlannerTasks = [];
-                let allPlannerBuckets = [];
-                for (const key in urlLookupPlanner) {
-                    const plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
-                    const tasks = GM_SuperValue.get("plannerTasks_" + plannerID, {});
-                    allPlannerTasks = allPlannerTasks.concat(tasks);
-
-                    const buckets = GM_SuperValue.get("plannerBuckets_" + plannerID, {});
-                    allPlannerBuckets = allPlannerBuckets.concat(buckets);
-                }
-                console.log(allPlannerTasks);
-                console.log(allPlannerBuckets);
-
-                let plannerBucketLookup = {};
-                allPlannerBuckets.forEach(bucket => {
-                    plannerBucketLookup[bucket.id] = bucket.name;
-                });
-                // Filter tasks related to the current serial number
-                const serialNumber = getMinerDetails()[1].serialNumber;
-                const relatedTasks = allPlannerTasks.filter(task => task.title.includes(serialNumber));
-
-                if (relatedTasks.length === 0) {
-                    // Remove the loading text and spinner
-                    customTabContainer.removeChild(loadingText);
-                    customTabContainer.removeChild(loadingSpinner);
-
-                    // Add a clean nice message saying no history found
-                    const noHistoryMessage = document.createElement('div');
-                    noHistoryMessage.textContent = 'No planner history found.';
-                    customTabContainer.appendChild(noHistoryMessage);
-                    return;
-                }
-
-                // Remove the loading text and spinner
-                customTabContainer.removeChild(loadingText);
-                customTabContainer.removeChild(loadingSpinner);
-
-                // Create a sleek history element
-                const historyElement = document.createElement('div');
-                historyElement.style.cssText = `
-                    background-color: #18181b;
-                    color: #fff;
-                    padding: 20px;
-                    border-radius: 10px;
-                    max-height: 400px;
-                    overflow-y: auto;
-                    overflow-x: auto;
-                    font-family: 'Courier New', Courier, monospace;
-                    white-space: pre;
-                    width: 100%;
-                    scrollbar-width: thin;
-                    scrollbar-color: #888 #333;
-                `;
-
-                relatedTasks.forEach(task => {
-                    const taskElement = document.createElement('div');
-                    taskElement.style.marginBottom = '10px';
-                    taskElement.style.borderBottom = '1px solid #444';
-                    taskElement.style.paddingBottom = '10px';
-
-                    const titleElement = document.createElement('div');
-                    titleElement.style.fontWeight = 'bold';
-                    titleElement.style.marginBottom = '5px';
-                    titleElement.textContent = `Title: ${task.title}`;
-                    taskElement.appendChild(titleElement);
-
-                    const createdDateElement = document.createElement('div');
-                    createdDateElement.textContent = `Created Date: ${new Date(task.createdDateTime).toLocaleString()}`;
-                    taskElement.appendChild(createdDateElement);
-
-                    const lastModifiedDateElement = document.createElement('div');
-                    lastModifiedDateElement.textContent = `Last Modified Date: ${new Date(task.lastModifiedDateTime).toLocaleString()}`;
-                    taskElement.appendChild(lastModifiedDateElement);
-
-                    const bucketElement = document.createElement('div');
-                    bucketElement.textContent = `Bucket: ${plannerBucketLookup[task.bucketId]}`;
-                    taskElement.appendChild(bucketElement);
-
-                    const completionStatusElement = document.createElement('div');
-                    if (task.completedDateTime) {
-                        completionStatusElement.textContent = `Completed Date: ${new Date(task.completedDateTime).toLocaleString()}`;
-                    } else {
-                        completionStatusElement.textContent = 'Not Marked Completed';
-                    }
-                    taskElement.appendChild(completionStatusElement);
-
-                    const notesElement = document.createElement('div');
-                    notesElement.style.marginTop = '10px';
-                    notesElement.style.cursor = 'pointer';
-                    notesElement.style.color = '#0078d4';
-                    notesElement.textContent = 'Notes (click to expand/collapse)';
-                    notesElement.addEventListener('click', () => {
-                        const notesContent = notesElement.nextElementSibling;
-                        notesContent.style.display = notesContent.style.display === 'none' ? 'block' : 'none';
-                    });
-                    taskElement.appendChild(notesElement);
-
-                    const notesContentElement = document.createElement('div');
-                    notesContentElement.style.display = 'none';
-                    notesContentElement.style.marginTop = '10px';
-                    notesContentElement.style.padding = '10px';
-                    notesContentElement.style.backgroundColor = '#333';
-                    notesContentElement.style.borderRadius = '5px';
-                    notesContentElement.innerHTML = task.details.notes.content;
-                    taskElement.appendChild(notesContentElement);
-
-                    historyElement.appendChild(taskElement);
-                });
-
-                customTabContainer.appendChild(historyElement);
-
-                // Add custom scrollbar styles
-                const style = document.createElement('style');
-                style.textContent = `
-                    ::-webkit-scrollbar {
-                        width: 8px;
-                        height: 8px;
-                    }
-                    ::-webkit-scrollbar-track {
-                        background: #333;
-                        border-radius: 10px;
-                    }
-                    ::-webkit-scrollbar-thumb {
-                        background-color: #888;
-                        border-radius: 10px;
-                        border: 2px solid #333;
-                    }
-                    ::-webkit-scrollbar-thumb:hover {
-                        background-color: #555;
-                    }
-                `;
-                document.head.appendChild(style);
-
-                // Scroll to bottom of history
-                historyElement.scrollTop = historyElement.scrollHeight;
-            });
-            */
-
             // Loop through all the tabs and add an extra on click event 
             const tabs = document.querySelectorAll('.tab');
             tabs.forEach(tab => {
@@ -5365,10 +5222,6 @@ window.addEventListener('load', function () {
                                     <input type="checkbox" id="includeOtherErrors" style="margin-right: 10px;">
                                     <label for="includeOtherErrors">Include 'Other' Errors</label>
                                 </div>
-                                <div class="m-menu-item">
-                                    <input type="checkbox" id="fastScan" style="margin-right: 10px;">
-                                    <label for="fastScan">Fast Scan</label>
-                                </div>
                             </div>
                         </div>
                     `;
@@ -5376,11 +5229,6 @@ window.addEventListener('load', function () {
                     // If includeOtherErrors data is saved, set the checkbox to checked
                     if (GM_SuperValue.get('includeOtherErrors', false)) {
                         errorScanDropdown.querySelector('#includeOtherErrors').checked = true;
-                    }
-
-                    // If fastScan data is saved, set the checkbox to checked
-                    if (GM_SuperValue.get('fastScan', false)) {
-                        errorScanDropdown.querySelector('#fastScan').checked = true;
                     }
 
                     // Add event listener for the includeOtherErrors m-menu-item
@@ -5392,24 +5240,11 @@ window.addEventListener('load', function () {
                         }
                         GM_SuperValue.set('includeOtherErrors', checkbox.checked);
                     });
-
-                    // Add event listener for the fastScan m-menu-item
-                    let fastScanMenu = errorScanDropdown.querySelector('.m-menu-item:nth-child(4)');
-                    fastScanMenu.addEventListener('click', function(event) {
-                        const checkbox = errorScanDropdown.querySelector('#fastScan');
-                        if (event.target === fastScanMenu) {
-                            checkbox.checked = !checkbox.checked;
-                        }
-                        GM_SuperValue.set('fastScan', checkbox.checked);
-                    });
-
-
+                    
                     // Add the auto reboot button to the right of the dropdown
                     actionsDropdown.before(errorScanDropdown);
 
                     errorScan = function(allScan) {
-                        let fastScan = GM_SuperValue.get('fastScan', false);
-                        //
                         let [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone] = createScanOverlayUI();
                         retrieveIssueMiners((issueMiners) => {
                             let currentCheckLoadedInterval = null;
@@ -5537,138 +5372,44 @@ window.addEventListener('load', function () {
                                 }
                     
                                 const minerIP = currentMiner.ipAddress;
-                                if (fastScan) {
-                                    addToProgressLog(currentMiner);
-                                    //console.log(`Fast scanning miner: ${minerIP}`);
-                                    //let ipHref = `http://${minerIP}/cgi-bin/hlog.cgi`; // history log for testing
-                                    let ipHref = `http://${minerIP}/cgi-bin/log.cgi`;
-                                    fetchGUIData(ipHref)
-                                        .then(responseText => {
-                                            responseText = cleanErrors(responseText);
-                                            //console.log(`Received response for miner: ${minerIP}`);
-                                            let errorsFound = runErrorScanLogic(responseText);
-                                            if(!GM_SuperValue.get('includeOtherErrors', false)) {
-                                                errorsFound = errorsFound.filter(error => error.type === 'Main');
-                                            } /*else {
-                                                errorsFound = errorsFound.filter(error => error.type === 'Main' || error.type === 'Other');
-                                            }*/
-                                            //console.log("Errors Found:", errorsFound);
-                                            if(errorsFound.length > 0) {
-                                                const errorsFoundObj = GM_SuperValue.get('errorsFound', {});
-                                                errorsFoundObj[currentMiner.id] = errorsFound;
-                                                GM_SuperValue.set('errorsFound', errorsFoundObj);
-                                                setPreviousLogDone(currentMiner.id, "✔", errorsFound.filter(error => error.type !== 'Info').map(error => `• ${error.name}`).join('\n'));
-                                            } else {
-                                                setPreviousLogDone(currentMiner.id, "✔", "No Errors Found");
-                                                noErrorCount++;
-                                            }
+                                addToProgressLog(currentMiner);
+                                //console.log(`Fast scanning miner: ${minerIP}`);
+                                //let ipHref = `http://${minerIP}/cgi-bin/hlog.cgi`; // history log for testing
+                                let ipHref = `http://${minerIP}/cgi-bin/log.cgi`;
+                                fetchGUIData(ipHref)
+                                    .then(responseText => {
+                                        responseText = cleanErrors(responseText);
+                                        //console.log(`Received response for miner: ${minerIP}`);
+                                        let errorsFound = runErrorScanLogic(responseText);
+                                        if(!GM_SuperValue.get('includeOtherErrors', false)) {
+                                            errorsFound = errorsFound.filter(error => error.type === 'Main');
+                                        } /*else {
+                                            errorsFound = errorsFound.filter(error => error.type === 'Main' || error.type === 'Other');
+                                        }*/
+                                        //console.log("Errors Found:", errorsFound);
+                                        if(errorsFound.length > 0) {
+                                            const errorsFoundObj = GM_SuperValue.get('errorsFound', {});
+                                            errorsFoundObj[currentMiner.id] = errorsFound;
+                                            GM_SuperValue.set('errorsFound', errorsFoundObj);
+                                            setPreviousLogDone(currentMiner.id, "✔", errorsFound.filter(error => error.type !== 'Info').map(error => `• ${error.name}`).join('\n'));
+                                        } else {
+                                            setPreviousLogDone(currentMiner.id, "✔", "No Errors Found");
+                                            noErrorCount++;
+                                        }
 
-                                            // Clear the responseText to free up memory
-                                            responseText = null;
+                                        // Clear the responseText to free up memory
+                                        responseText = null;
 
-                                            errorScanMiners.shift();
-                                            openMinerGUILog();
-                                        })
-                                        .catch(error => {
-                                            //console.log(`Error fetching data for miner: ${minerIP}`, error);
-                                            setPreviousLogDone(currentMiner.id, "✖", "Failed to load miner GUI.");
-                                            failLoadCount++;
-                                            errorScanMiners.shift();
-                                            openMinerGUILog();
-                                        });
-                                } else {
-                                    let guiLink = `http://${currentMiner.username}:${currentMiner.passwd}@${minerIP}/#blog`;
-                                    if(currentMiner.firmwareVersion.includes('BCFMiner')) {
-                                        guiLink = `http://${currentMiner.username}:${currentMiner.passwd}@${minerIP}/#/logs`;
-                                    }
-                    
-                                    //console.log("Opening miner GUI for:", currentMiner);
-                                    //console.log("GUI Link:", guiLink);
-                    
-                                    // Open the miner in a new tab
-                                    addToProgressLog(currentMiner);
-                    
-                                    // loop through openedWindows
-                                    let currentWindowIndex = 0;
-                                    for (let index = 0; index < openedWindows.length; index++) {
-                                        let curWindow = openedWindows[index].window;
-                                        if(!curWindow || curWindow.closed) {
-                                            currentlyScanning[minerIP] = currentMiner;
-                                            GM_SuperValue.set('currentlyScanning', currentlyScanning);
-                                            currentWindowIndex = index;
-                                            let logWindow = window.open(guiLink, '_blank', 'width=1,height=1,left=0,top=' + (window.innerHeight - 400));
-                                            openedWindows[index].window = logWindow;
-                                            openedWindows[index].nextReady = false;
-                                            break;
-                                        } else if(openedWindows[index].nextReady) {
-                                            currentlyScanning[minerIP] = currentMiner;
-                                            GM_SuperValue.set('currentlyScanning', currentlyScanning);
-                                            currentWindowIndex = index;
-                                            openedWindows[index].nextReady = false;
-                                            //redirect the current window to the new miner
-                                            curWindow.location.href = guiLink;
-                                            break;
-                                        }
-                                    }
-                    
-                                    // Wait for the miner gui to load
-                                    let loaded = false;
-                                    currentCheckLoadedInterval = setInterval(() => {
-                                        const errorsFound = GM_SuperValue.get('errorsFound', false);
-                                        if(errorsFound && errorsFound[currentMiner.id]) {
-                                            loaded = true;
-                                            const minerErrors = errorsFound[currentMiner.id] || [];
-                                            let errorNames = "";
-                                            minerErrors.forEach(error => {
-                                                if(error.type === 'Info') { return; }
-                                                errorNames += `• ${error.name}\n`;
-                                            });
-                                            if(errorNames === "") {
-                                                errorNames = "No Errors Found";
-                                                noErrorCount++;
-                                            }
-                                            setPreviousLogDone(currentMiner.id, "✔", errorNames);
-                                            clearInterval(currentCheckLoadedInterval);
-                                            delete currentlyScanning[minerIP];
-                                            GM_SuperValue.set('currentlyScanning', currentlyScanning);
-                                            openedWindows[currentWindowIndex].nextReady = true;
-                                            errorScanMiners.shift();
-                                            openMinerGUILog();
-                                        }
-                                    }, 10);
-                    
-                                    setTimeout(() => {
-                                        if (!loaded && currentCheckLoadedInterval) {
-                                            openedWindows[currentWindowIndex].window.location.reload();
-                                        }
-                                    }, 6000);
-                    
-                                    setTimeout(() => {
-                                        if (!loaded && currentCheckLoadedInterval) {
-                                            let failText = "Failed to load miner GUI.";
-                                            if(currentMiner.firmwareVersion.includes('BCFMiner')) {
-                                                failText = "Failed to load miner GUI or got stuck on Username/Password prompt.";
-                                            }
-                                            setPreviousLogDone(currentMiner.id, "✖", failText);
-                                            failLoadCount++;
-                                            clearInterval(currentCheckLoadedInterval);
-                    
-                                            const errorsFound = GM_SuperValue.get('errorsFound', {});
-                                            errorsFound[currentMiner.id] = [{
-                                                name: failText,
-                                                short: "GUI Load Fail",
-                                                icon: "https://img.icons8.com/?size=100&id=111057&format=png&color=FFFFFF"
-                                            }];
-                                            GM_SuperValue.set('errorsFound', errorsFound);
-                    
-                                            delete currentlyScanning[minerIP];
-                                            GM_SuperValue.set('currentlyScanning', currentlyScanning);
-                                            openedWindows[currentWindowIndex].nextReady = true;
-                                            errorScanMiners.shift();
-                                            openMinerGUILog();
-                                        }
-                                    }, 16000);
-                                }
+                                        errorScanMiners.shift();
+                                        openMinerGUILog();
+                                    })
+                                    .catch(error => {
+                                        //console.log(`Error fetching data for miner: ${minerIP}`, error);
+                                        setPreviousLogDone(currentMiner.id, "✖", "Failed to load miner GUI.");
+                                        failLoadCount++;
+                                        errorScanMiners.shift();
+                                        openMinerGUILog();
+                                    });
                             }
                             
                             for (let i = 0; i < maxScan; i++) {
@@ -6272,7 +6013,7 @@ window.addEventListener('load', function () {
                         updatePlannerCardsDropdown.style.display = 'inline-block';
                         updatePlannerCardsDropdown.innerHTML = `
                             <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('updatePlannerCardsDropdown'); return false;">
-                                Refresh Planner Cards
+                                Planner Cards
                                 <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
                             </button>
                             <div id="updatePlannerCardsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
@@ -8428,90 +8169,15 @@ window.addEventListener('load', function () {
     if (ipURLMatch) {
         const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
         let findLog = false;
-        let selectCategory = "Current Logs";
         if(quickGoToLog && currentUrl.includes(quickGoToLog.ip)) {
             findLog = quickGoToLog.errorText;
-            selectCategory = quickGoToLog.category;
             GM_SuperValue.set('quickGoToLog', false);
         }
 
-         // Scan Error Logs Logic
-         let isScanning = false;
-         let homePage = document.getElementById('homePage');
-         let currentlyScanning = GM_SuperValue.get('currentlyScanning', {});
-         let foundMiner = null;
-         let isFoundry = currentUrl.includes("#/");
-         if (currentlyScanning && Object.keys(currentlyScanning).length > 0) {
-             // Loop through currentlyScanning via object keys and find if the ipAdress matches any of the miners
-             Object.keys(currentlyScanning).forEach(miner => {
-                 let currentMiner = currentlyScanning[miner];
-                 if(currentUrl.includes(currentMiner.ipAddress)) {
-                     foundMiner = currentMiner;
-                     return;
-                 }
-             });
- 
-             if (foundMiner) {
-                isScanning = true;
-                
-                if(!isFoundry) {
-                    // 12 second timeout to refresh the page
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 7000);
-                }
-             }
-         }
- 
-        let loadedFoundryGUI = false;
-        if (isFoundry) {
-            function clickCategory() {
-                let tabs = document.querySelectorAll('.react-tabs__tab-list');
-
-                if(!tabs || tabs.length === 0 || !tabs[0].childNodes || tabs[0].childNodes.length === 0) {
-                    setTimeout(() => {
-                        clickCategory();
-                    }, 0);
-                    return;
-                }
-
-                // loop through all the tabs
-                tabs.forEach(tab => {
-                    // loop through all the tab elements
-                    tab.childNodes.forEach(tabElement => {
-                        // If the tab element contains the category text, then click it
-                        if(tabElement.textContent.includes(selectCategory)) {
-                            tabElement.click();
-                            // then click document body to fix the weird selection visual
-                            setTimeout(() => {
-                                if(!isScanning) {
-                                    let refreshButton = document.querySelector('.m-button.is-ghost');
-                                    refreshButton.click();
-                                }
-                            }, 1);
-                        }
-
-                        if(isScanning && tabElement.textContent.includes('Reboot Logs')) {
-                            setTimeout(() => {
-                                tabElement.click();
-                            }, 1000);
-
-                            // repeativly check if loadedFoundryGUI is the true then click and end the loop
-                            let interval = setInterval(() => {
-                                if(loadedFoundryGUI) {
-                                    tabElement.click();
-                                    clearInterval(interval);
-                                }
-                            }, 500);
-                        }
-                    });
-                });
-            }
-            clickCategory();
-         }
+        // Scan Error Logs Logic
+        let homePage = document.getElementById('homePage');
 
         let clickedAutoRefresh = false;
-        let changingLog = false;
         let lastTextLog = "";
         function setUpErrorLog() { //(logContent, ) {
             // Locate the log content element
@@ -8663,27 +8329,6 @@ window.addEventListener('load', function () {
                                     setTimeout(adjustLayout, 0);
                                 });
 
-                                if(isFoundry) {
-                                    // Add a nice font to the error tab and sub-menu
-                                    const fontStyle = document.createElement('style');
-                                    fontStyle.textContent = `
-                                        .menu-t.menu, .sub-menu.menu, .itm-name  {
-                                            font-family: 'Arial', sans-serif;
-                                            font-size: 14px;
-                                        }
-                                    `;
-                                    document.head.appendChild(fontStyle);
-
-                                    
-                                    errorTab.style.marginBottom = '10px';
-
-                                    // click error tab twice to fix it appearing opened
-                                    setTimeout(() => {
-                                        errorTab.click();
-                                        errorTab.click();
-                                    }, 0);
-                                }
-
                                 // Light blue text when hovering over the error tab
                                 errorTab.addEventListener('mouseover', () => {
                                     errorTab.style.color = '#5FB2FF';
@@ -8720,11 +8365,7 @@ window.addEventListener('load', function () {
                                 dropIcon2.style.height = '16px';
                                 dropIcon2.style.display = 'inline-block';
                                 dropIcon2.style.backgroundSize = 'contain';
-                                if(isFoundry) {
-                                    dropIcon2.style.position = 'relative';
-                                    dropIcon2.style.float = 'right';
-                                    dropIcon2.style.marginRight = '10px';
-                                }
+
                                 errorTab.appendChild(dropIcon2);
 
                                 // Swap the left empty icon source with the error icon
@@ -8743,12 +8384,6 @@ window.addEventListener('load', function () {
                                     errorItem.classList.add('item');
                                     errorItem.setAttribute('data-id', `error-${index}`);
                                     errorItem.innerHTML = `<i class="error-detail-ico icon"></i> <span class="itm-name">${error.textReturn}</span>`;
-                                    if(isFoundry) {
-                                        errorItem.style.cursor = 'pointer';
-                                        // add padding to the error item
-                                        errorItem.style.padding = '5px 8px 5px 0px';
-                                        errorItem.style.verticalAlign = 'middle';
-                                    }
 
                                     function resetLogText() {
                                         // Remove any children of the log content
@@ -8988,76 +8623,6 @@ window.addEventListener('load', function () {
                     createErrorTab("Miner Info", errorsFound.filter(error => error.type === "Info"));
                     createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"));
                     createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
-                    if(isScanning && logContent && logContent.textContent.includes("\n")) {
-                        const minerID = foundMiner.id;
-                        let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
-                        if(GM_SuperValue.get('includeOtherErrors', false)) {
-                            errorsFoundSave[minerID] = errorsFound.filter(error => error.type === "Main" || error.type === "Other") || [];
-                        } else {
-                            errorsFoundSave[minerID] = errorsFound.filter(error => error.type === "Main") || [];
-                        }
-                        
-
-                        if(isFoundry) {
-                            let category = "";
-                            let selectedCurrent = document.querySelector('.react-tabs__tab.react-tabs__tab--selected');
-                            if(selectedCurrent) {
-                                category = selectedCurrent.textContent;
-                            }
-
-                            // If we're on the Reboot Logs, get the error with highest start index
-                            if(category === "Reboot Logs") {
-                                let lastError = errorsFoundSave[minerID].sort((a, b) => b.start - a.start)[0];
-                                if(lastError && lastError.text) {
-
-                                    // Remove all errors that are before the last error
-                                    errorsFoundSave[minerID] = [lastError];
-
-                                    // split the error text and get the date "11/02/24 00:27:35 Exit due to FANS NOT DETECTED | FAN FAILED"
-                                    errorsFoundSave[minerID].forEach(error => {
-                                        const errorText = error.text.split(' ');
-                                        const date = errorText[0];
-                                        const time = errorText[1];
-
-                                        // check if the date is today
-                                        const today = new Date();
-                                        const todayString = `${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getDate().toString().padStart(2, '0')}/${today.getFullYear().toString().slice(-2)}`;
-                                        
-                                        if(date !== todayString) {
-                                            errorsFoundSave[minerID] = [];
-                                        }
-                                    });
-                                }
-                            }
-
-                            // loop through errorsFoundSave[minerID] and add the category to each error
-                            errorsFoundSave[minerID].forEach(error => {
-                                if(!error) {
-                                    return;
-                                }
-                                error.category = category;
-                            });
-
-                            /* goofy
-                            if(category === "Reboot Logs") {
-                                GM_SuperValue.set('errorsFound', errorsFoundSave);
-                                GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
-                                return;
-                            }
-                                */
-
-                            // if the category isn't Reboot Logs, and the errors are empty, return
-                            if(category !== "Reboot Logs" && errorsFoundSave[minerID].length === 0) {
-                                loadedFoundryGUI = true;
-                                return;
-                            }
-                        }
-
-                        // Save the errors found
-                        GM_SuperValue.set('errorsFound', errorsFoundSave);
-                        //GM_SuperValue.set('minerGUILoaded_' + foundMiner.id, true);
-                        console.log('Errors found and saved');
-                    }
                 }
 
                 //setTimeout(adjustLayout, 500);
