@@ -2,14 +2,13 @@
 // Total up offline time for down scan
 // Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
 // Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
-// Work on planner card history. (Also, better card finder maybe? Maybe possible to get direct link to card or search via the actual data so we don't have to weirdly scroll?)
 
-// YNAHANCBCABJA036Y (has more than 1 card for testing)
+// 2025-02-07 01:42:37 miner:BHB56804,board_name:BHB56804
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.4.7
+// @version      6.5.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -104,11 +103,11 @@ function overrideFetch() {
                 if(url.includes('tasks') && data.value) {
                     plannerTasks = data.value;
                     console.log('Planner tasks:', plannerTasks);
-                    GM_SuperValue.set("plannerTasks_" + planID, plannerTasks);
+                    //GM_SuperValue.set("plannerTasks_" + planID, plannerTasks);
                 } else if(url.includes('buckets') && data.value) {
                     plannerBuckets = data.value;
                     console.log('Planner buckets:', plannerBuckets);
-                    GM_SuperValue.set("plannerBuckets_" + planID, plannerBuckets);
+                    //GM_SuperValue.set("plannerBuckets_" + planID, plannerBuckets);
                 }
             }).catch(err => {
                 console.log('Error parsing JSON:', err);
@@ -174,10 +173,60 @@ const errorsToSearch = {
         start: "Booting Linux on physical",
     },
     */
+    //1970-01-01 00:00:13 Miner sn: HKYQANUBCAAAG015X
+    'Miner Serial Number': {
+        icon: "https://img.icons8.com/?size=100&id=11878&format=png&color=FFFFFF",
+        start: "Miner sn: ",
+        type: "Info",
+        textReturn: (text) => {
+            return "SN: " + text.split("Miner sn: ")[1].replace(/\r?\n|\r/g, '');
+        },
+        showOnce: "last",
+    },
+    'Hashboard Model': {
+        icon: "https://img.icons8.com/?size=100&id=TCPyCvcuaQTs&format=png&color=FFFFFF",
+        start: ["board_name:", "load machine"],
+        end: "machine : ",
+        type: "Info",
+        textReturn: (text) => {
+            if(text.includes("board_name")) {
+                return "HB: " + text.split("board_name:")[1].replace(/\r?\n|\r/g, '');
+            } else {
+                return "HB: " + text.split("machine : ")[1].replace(/\r?\n|\r/g, '').trim();
+            }
+        },
+        showOnce: "last",
+    },
+
+    'Hashboard Model Mismatch': {
+        icon: "https://img.icons8.com/?size=100&id=Aqjz8Pn0nyLl&format=png&color=FFFFFF",
+        start: "board_name:",
+        start: ["board_name:", "load machine"],
+        end: "machine : ",
+        conditions: (text) => {
+            if(text.includes("board_name")) {
+                // Extract the miner and board name from the text 2025-02-14 05:29:17 miner:BHB56804,board_name:BHB56804
+                const minerName = text.split("miner:")[1].split(",")[0].replace(/\r?\n|\r/g, '');
+                const boardName = text.split("board_name:")[1].replace(/\r?\n|\r/g, '');
+                return minerName !== boardName;
+            } else {
+                /*
+                2025-01-28 16:35:08 load machine BHB42651 conf
+                2025-01-28 16:35:08 machine : BHB42651
+                */
+                const loadName = text.split("load machine ")[1].split(" conf")[0].trim();
+                const machineName = text.split("machine : ")[1].replace(/\r?\n|\r/g, '').trim();
+                return loadName !== machineName;
+            }
+        },
+        showOnce: "last",
+    },
+
     'Bad Hashboard Chain': {
         icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
         start: ["get pll config err", /Chain\[0\]: find .* asic, times/], // 0
         end: ["stop_mining: soc init failed"],
+        type: "Main",
         conditions: (text) => {
             return text.includes('only find');
         }
@@ -186,6 +235,7 @@ const errorsToSearch = {
         icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
         start: ["Chain[0]: find "],
         end: ["stop_mining: asic number is not right"],
+        type: "Main",
         conditions: (text) => {
             return text.includes('asic number is not right');
         }
@@ -193,46 +243,55 @@ const errorsToSearch = {
     'Fan Speed Error': {
         icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
         start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /\[WARN\] FAN \d+ Fail/],
-        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", " has failed to run at expected RPM"]
+        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", " has failed to run at expected RPM"],
+        type: "Main",
     },
     'SOC INIT Fail': {
         icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
         start: "ERROR_SOC_INIT",
         end: ["ERROR_SOC_INIT", "stop_mining: soc init failed!"],
+        type: "Main",
         onlySeparate: true
     },
     'EEPROM Error': {
         icon: "https://img.icons8.com/?size=100&id=9040&format=png&color=FFFFFF",
         start: ["eeprom error crc 3rd region", "EEPROM error"],
+        type: "Main",
         onlySeparate: true
     },
     'Hashboard Init Fail': {
         icon: "https://img.icons8.com/?size=100&id=35849&format=png&color=FFFFFF",
         start: "Exit due to HASHBOARD INITIALIZATION FAILED",
+        type: "Main",
         onlySeparate: true
     },
     'Target Hashrate Fail': {
         icon: "https://img.icons8.com/?size=100&id=20767&format=png&color=FFFFFF",
         start: "Exit due to Unable to Generate Given Target Hashrate",
+        type: "Main",
         onlySeparate: true
     },
     'Voltage Abnormity': {
         icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
         start: ["chain avg vol drop from", "ERROR_POWER_LOST", "failed to scale voltage up"],
         end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
+        type: "Main",
     },
     "Error Status": {
         icon: "https://img.icons8.com/?size=100&id=6SQJcUEPQTXf&format=png&color=FFFFFF",
         start: "err status:",
+        type: "Main",
     },
     'Temperature Sensor Error': {
         icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
         start: "Exit due to TEMPERATURE SENSORS FAILED",
+        type: "Main",
     },
     'Temperature Too Low Error': {
         icon: "https://img.icons8.com/?size=100&id=0Bm1Quaegs8d&format=png&color=FFFFFF",
         start: "ERROR_TEMP_TOO_LOW",
         end: "stop_mining",
+        type: "Main",
     },
     /*
     'Voltage over 13.20 V': {
@@ -254,6 +313,7 @@ const errorsToSearch = {
     'Temp ≤ 0°C|32°F': {
         icon: "https://img.icons8.com/?size=100&id=-uAldka8Jgn4&format=png&color=FFFFFF",
         start: "temp:",
+        type: "Main",
         conditions: (text) => {
             // Extract the temp number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
             const parts = text.split("temp:");
@@ -270,6 +330,7 @@ const errorsToSearch = {
         icon: "https://img.icons8.com/?size=100&id=er279jFX2Yuq&format=png&color=FFFFFF",
         start: ["asic temp too high", "ERROR_TEMP_TOO_HIGH", "Exit due to SHUTDOWN TEMPERATURE LIMIT REACHED"],
         end: ["stop_mining: asic temp too high", "stop_mining: over max temp"],
+        type: "Main",
     },
     /*
     'Temp ≥ 50°C|122°F': {
@@ -291,143 +352,144 @@ const errorsToSearch = {
         icon: "https://img.icons8.com/?size=100&id=Kjoxcp7iiC5M&format=png&color=FFFFFF",
         start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
         end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
+        type: "Main",
     },
     'TSensor Error': {
         icon: "https://img.icons8.com/?size=100&id=123900&format=png&color=FFFFFF",
         start: "fail to read tsensor by iic",
-        unimportant: true
+        type: "Other",
     },
     'PIC Temp Error': {
         icon: "https://img.icons8.com/?size=100&id=IN6gab7HZOis&format=png&color=FFFFFF",
         start: "fail to read pic temp",
-        unimportant: true
+        type: "Other"
     },
     'Nonce Buffer Full': {
         icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
         start: "nonce_read_out buffer is full!",
-        unimportant: true
+        type: "Other"
     },
     'Reg Buffer Full': {
         icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
         start: "reg_value_buf buffer is full!",
-        unimportant: true
+        type: "Other"
     },
     'Reg CRC Error': {
         icon: "https://img.icons8.com/?size=100&id=IzwgH77KrB9L&format=png&color=FFFFFF",
         start: "reg crc error",
-        unimportant: true
+        type: "Other"
     },
     'Nonce CRC Error': {
         icon: "https://img.icons8.com/?size=100&id=nMIFbmGDOQri&format=png&color=FFFFFF",
         start: "nonce crc error",
-        unimportant: true
+        type: "Other"
     },
     'Hash2_32 Error': {
         icon: "https://img.icons8.com/?size=100&id=0OqFiOxbTdXT&format=png&color=FFFFFF",
         start: "hash2_32 error",
-        unimportant: true
+        type: "Other"
     },
     'I2C Error': {
         icon: "https://img.icons8.com/?size=100&id=47752&format=png&color=FFFFFF",
         start: "IIC_SendData checkack",
-        unimportant: true
+        type: "Other"
     },
     'Read SDA Error': {
         icon: "https://img.icons8.com/?size=100&id=47752&format=png&color=FFFFFF",
         start: "error! read SDA return 0",
         end: "i2c_check_ack:290 ack error",
-        unimportant: true
+        type: "Other"
     },
     'Bad Chain ID': {
         icon: "https://img.icons8.com/?size=100&id=W7rVpJuanYI8&format=png&color=FFFFFF",
         start: "bad chain id",
         end: "stop_mining: basic init failed!",
-        unimportant: true
+        type: "Other"
     },
     'Firmware Error': {
         icon: "https://img.icons8.com/?size=100&id=hbCljOlfk4WP&format=png&color=FFFFFF",
         start: "Firmware registration failed",
-        unimportant: true
+        type: "Other"
     },
     'ASIC Error': {
         icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
         start: "test_loop_securely_find_asic_num",
-        unimportant: true
+        type: "Other"
     },
     'Defendkey Error': {
         icon: "https://img.icons8.com/?size=100&id=BqBqC9QVDQrd&format=png&color=FFFFFF",
         start: "defendkey: probe of defendkey failed with error",
-        unimportant: true
+        type: "Other"
     },
     'SN File Error': {
         icon: "https://img.icons8.com/?size=100&id=sMVM8zkGFw2r&format=png&color=FFFFFF",
         start: "Open miner sn file /config/sn error",
-        unimportant: true
+        type: "Other"
     },
     'Allocate Memory Error': {
         icon: "https://img.icons8.com/?size=100&id=ZbgOH8S7aNFB&format=png&color=FFFFFF",
         start: "failed to allocate memory for node linux",
-        unimportant: true
+        type: "Other"
     },
     'Modalias Failure': {
         icon: "https://img.icons8.com/?size=100&id=RdfQcH0NSwo1&format=png&color=FFFFFF",
         start: "modalias failure",
-        unimportant: true
+        type: "Other"
     },
     'CLKMSR Failure': {
         icon: "https://img.icons8.com/?size=100&id=T6eNtBzusujD&format=png&color=FFFFFF",
         start: "clkmsr ffd18004.meson_clk_msr: failed to get msr",
-        unimportant: true
+        type: "Other"
     },
     'Unpack Failure': {
         icon: "https://img.icons8.com/?size=100&id=4nmZphA6KAL2&format=png&color=FFFFFF",
         start: "Initramfs unpacking failed",
-        unimportant: true
+        type: "Other"
     },
     'I2C Device': {
         icon: "https://img.icons8.com/?size=100&id=9078&format=png&color=FFFFFF",
         start: "Failed to create I2C device",
-        unimportant: true
+        type: "Other"
     },
     'No Ports': {
         icon: "https://img.icons8.com/?size=100&id=91076&format=png&color=FFFFFF",
         start: "hub doesn't have any ports",
-        unimportant: true
+        type: "Other"
     },
     'Thermal Binding': {
         icon: "https://img.icons8.com/?size=100&id=8bhyzQ0ncJqR&format=png&color=FFFFFF",
         start: "binding zone soc_thermal with cdev thermal",
-        unimportant: true
+        type: "Other"
     },
     'PTP Init Failure': {
         icon: "https://img.icons8.com/?size=100&id=mtsC9dJebzYW&format=png&color=FFFFFF",
         start: "fail to init PTP",
-        unimportant: true
+        type: "Other"
     },
     'Ram Error': {
         icon: "https://img.icons8.com/?size=100&id=2lS2aIm5uhCG&format=png&color=FFFFFF",
         start: "persistent_ram: uncorrectable error in header",
-        unimportant: true
+        type: "Other"
     },
     'Pins Error': {
         icon: "https://img.icons8.com/?size=100&id=110969&format=png&color=FFFFFF",
         start: "did not get pins for",
-        unimportant: true
+        type: "Other"
     },
     'Bone Capemgr': {
         icon: "https://img.icons8.com/?size=100&id=7WuWQLicqKdy&format=png&color=FFFFFF",
         start: "bone-capemgr bone_capemgr",
-        unimportant: true
+        type: "Other"
     },
     'OMAP HSMMC Error': {
         icon: "https://img.icons8.com/?size=100&id=5k62AODVrDXf&format=png&color=FFFFFF",
         start: "omap_hsmmc mmc",
-        unimportant: true
+        type: "Other"
     },
     'Dummy Regulator': {
         icon: "https://img.icons8.com/?size=100&id=byEdLu15HrqW&format=png&color=FFFFFF",
         start: "using dummy regulator",
-        unimportant: true
+        type: "Other"
     },
 }
 
@@ -547,13 +609,16 @@ function runErrorScanLogic(logText) {
 
                     // Check if the error text meets the conditions
                     if (typeof errorData.conditions === 'function' ? errorData.conditions(errorText) : true && !errorTextAlreadyFound) {
+                        let textReturn = errorData.textReturn ? errorData.textReturn(errorText) : error;
+                        
                         errorsFound.push({
                             name: error,
                             icon: errorData.icon || "https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF",
                             text: errorText.trimEnd(),
                             start: startIndex,
                             end: endIndex,
-                            unimportant: errorData.unimportant || false
+                            type: errorData.type || "Other",
+                            textReturn: textReturn 
                         });
                         setEndIndexAfter = endIndex;
 
@@ -600,7 +665,7 @@ function runErrorScanLogic(logText) {
                 text: errorText.trimEnd(),
                 start: start,
                 end: end,
-                unimportant: true
+                type: "Other"
             });
         }
     }
@@ -2448,7 +2513,7 @@ window.addEventListener('load', function () {
                                     const items = errors.map((error, index) => `
                                         <div class="m-nav-group-item" style="display: flex; align-items: center;">
                                             <img src="${error.icon}" width="16" height="16" style="margin-right: 8px;" />
-                                            <a href="#" class="m-nav-item" data-error-index="${index}">${error.name}</a>
+                                            <a href="#" class="m-nav-item" data-error-index="${index}">${error.textReturn}</a>
                                         </div>
                                     `).join('');
                                     
@@ -2588,9 +2653,9 @@ window.addEventListener('load', function () {
                                     errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 }
                                 
-
-                                const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant), true);
-                                const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.unimportant));
+                                const infoTab = createErrorTab("Info", errorsFound.filter(error => error.type === "Info"), true);
+                                const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"), true);
+                                const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
 
                                 // Scroll to show new tabs
                                 otherTab.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -2604,6 +2669,7 @@ window.addEventListener('load', function () {
                     }
                 }, 500);
             });
+
             /*
             createCustomTab('plannerHistoryTab', 'Planner History', (customTabContainer, loadingText, loadingSpinner) => {
                 // Get the planner history
@@ -2744,6 +2810,7 @@ window.addEventListener('load', function () {
                 historyElement.scrollTop = historyElement.scrollHeight;
             });
             */
+
             // Loop through all the tabs and add an extra on click event 
             const tabs = document.querySelectorAll('.tab');
             tabs.forEach(tab => {
@@ -5481,14 +5548,16 @@ window.addEventListener('load', function () {
                                             //console.log(`Received response for miner: ${minerIP}`);
                                             let errorsFound = runErrorScanLogic(responseText);
                                             if(!GM_SuperValue.get('includeOtherErrors', false)) {
-                                                errorsFound = errorsFound.filter(error => !error.unimportant);
-                                            }
+                                                errorsFound = errorsFound.filter(error => error.type === 'Main');
+                                            } /*else {
+                                                errorsFound = errorsFound.filter(error => error.type === 'Main' || error.type === 'Other');
+                                            }*/
                                             //console.log("Errors Found:", errorsFound);
                                             if(errorsFound.length > 0) {
                                                 const errorsFoundObj = GM_SuperValue.get('errorsFound', {});
                                                 errorsFoundObj[currentMiner.id] = errorsFound;
                                                 GM_SuperValue.set('errorsFound', errorsFoundObj);
-                                                setPreviousLogDone(currentMiner.id, "✔", errorsFound.map(error => `• ${error.name}`).join('\n'));
+                                                setPreviousLogDone(currentMiner.id, "✔", errorsFound.filter(error => error.type !== 'Info').map(error => `• ${error.name}`).join('\n'));
                                             } else {
                                                 setPreviousLogDone(currentMiner.id, "✔", "No Errors Found");
                                                 noErrorCount++;
@@ -5551,6 +5620,7 @@ window.addEventListener('load', function () {
                                             const minerErrors = errorsFound[currentMiner.id] || [];
                                             let errorNames = "";
                                             minerErrors.forEach(error => {
+                                                if(error.type === 'Info') { return; }
                                                 errorNames += `• ${error.name}\n`;
                                             });
                                             if(errorNames === "") {
@@ -5802,6 +5872,7 @@ window.addEventListener('load', function () {
                                             const minerID = miner.id;
                                             const errors = errorsFoundSave[minerID] || [];
                                             errors.forEach((error, index) => {
+                                                if(error.type === 'Info') { return; }
                                                 const row = document.createElement('tr');
                                                 let curMiner = scanMinersLookup[minerID];
                                                 setUpRowData(row, curMiner, error);
@@ -5834,14 +5905,21 @@ window.addEventListener('load', function () {
                                                 if(errorCount === 1 && !errorData[0].text) {
                                                     errorCount = '?';
                                                 }
-                    
+
+                                                let hashboardModel = "Unknown";
                                                 let iconLinks = [];
                                                 if(errorData) {
                                                     errorData.forEach(error => {
-                                                        if(!iconLinks.find(icon => icon.icon === error.icon)) {
-                                                            iconLinks.push({icon: error.icon, count: 1, name: error.name});
-                                                        } else {
-                                                            iconLinks.find(icon => icon.icon === error.icon).count++;                                                            
+                                                        if(error.textReturn && error.textReturn.includes('HB: ')) {
+                                                            hashboardModel = error.textReturn.replace('HB: ', '');
+                                                        }
+                                                        
+                                                        if(error.type !== 'Info') {
+                                                            if(!iconLinks.find(icon => icon.icon === error.icon)) {
+                                                                iconLinks.push({icon: error.icon, count: 1, name: error.name});
+                                                            } else {
+                                                                iconLinks.find(icon => icon.icon === error.icon).count++;                                                            
+                                                            }
                                                         }
                                                     });
                                                 }
@@ -5863,6 +5941,7 @@ window.addEventListener('load', function () {
                                                         display: inline-block;
                                                         margin-top: 3px;
                                                         margin-left: -8px;
+                                                        white-space: nowrap; /* Prevent wrapping */
                                                     `;
                                                     iconDiv.innerHTML = `
                                                         <span style="position: relative; top: -10px; right: -10px; background-color: red; color: white; border-radius: 50%; padding: 1px 3px; font-size: 10px;">${icon.count}</span>
@@ -5942,6 +6021,9 @@ window.addEventListener('load', function () {
                                                         </span>
                                                         <span class="error-serialnumber-text" style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
                                                             ${minerSerialNumber}
+                                                        </span>
+                                                        <span class="error-hashboard-text" style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
+                                                            ${hashboardModel}
                                                         </span>
                                                         <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: right;">
                                                             ${paddedSlotIDBreaker}
@@ -6047,6 +6129,7 @@ window.addEventListener('load', function () {
                                         setMaxWidth('.error-guilink-text');
                                         setMaxWidth('.error-link-text');
                                         setMaxWidth('.error-serialnumber-text');
+                                        setMaxWidth('.error-hashboard-text');
                                     });
                                 }
                             }, 100);
@@ -8659,7 +8742,7 @@ window.addEventListener('load', function () {
                                     const errorItem = document.createElement('li');
                                     errorItem.classList.add('item');
                                     errorItem.setAttribute('data-id', `error-${index}`);
-                                    errorItem.innerHTML = `<i class="error-detail-ico icon"></i> <span class="itm-name">${error.name}</span>`;
+                                    errorItem.innerHTML = `<i class="error-detail-ico icon"></i> <span class="itm-name">${error.textReturn}</span>`;
                                     if(isFoundry) {
                                         errorItem.style.cursor = 'pointer';
                                         // add padding to the error item
@@ -8902,16 +8985,16 @@ window.addEventListener('load', function () {
                             adjustLayout();
                         }
                     }
-
-                    createErrorTab("Main Errors", errorsFound.filter(error => !error.unimportant));
-                    createErrorTab("Other Errors", errorsFound.filter(error => error.unimportant));
+                    createErrorTab("Miner Info", errorsFound.filter(error => error.type === "Info"));
+                    createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"));
+                    createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
                     if(isScanning && logContent && logContent.textContent.includes("\n")) {
                         const minerID = foundMiner.id;
                         let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
                         if(GM_SuperValue.get('includeOtherErrors', false)) {
-                            errorsFoundSave[minerID] = errorsFound;
+                            errorsFoundSave[minerID] = errorsFound.filter(error => error.type === "Main" || error.type === "Other") || [];
                         } else {
-                            errorsFoundSave[minerID] = errorsFound.filter(error => !error.unimportant) || [];
+                            errorsFoundSave[minerID] = errorsFound.filter(error => error.type === "Main") || [];
                         }
                         
 
