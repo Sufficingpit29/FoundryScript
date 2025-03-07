@@ -2,11 +2,12 @@
 // Total up offline time for down scan
 // Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
 // Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
+// Replace the quick link to just be the model name being a hyperlink to the miner, just to retain the normalness
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.5.2
+// @version      6.5.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2729,7 +2730,7 @@ window.addEventListener('load', function () {
                     rows.forEach(row => {
                         const uid = row.getAttribute('data-uid');
                         let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
-                        
+                        /* was the replacement for the 3 dots icon, removed for now
                         // for first index add a link icon element that opens the miner page
                         if(minerLinkElement && !minerLinkElement.addedLinkIcon) {
                             minerLinkElement.addedLinkIcon = true;
@@ -2783,7 +2784,7 @@ window.addEventListener('load', function () {
                                 }
                             });
                         }
-
+                        */
                         // Loop through columnIndexes and get the data for each column
                         for (const [key, colIndex] of Object.entries(columnIndexes)) {
                             let colRowElement = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(colIndex+1)) + ')');
@@ -2899,10 +2900,29 @@ window.addEventListener('load', function () {
                                 const statusCell = minerData['Status'];
 
                                 // Get the serial number from the model cell, second child is the serial number
+                                const modelNameElement = modelCell.children[0];
                                 const serialNumber = modelCell.children[1].innerText;
                                 const slotID = slotIDCell.innerText;
                                 const status = statusCell.innerText;
                                 //console.log("serialNumber", serialNumber);
+
+                                // Set the model name to be a link to the miner page
+                                if (modelNameElement) {
+                                    // Make it green with a underline when hovered over
+                                    modelNameElement.style.color = '#17b26a';
+                                    modelNameElement.style.cursor = 'pointer';
+                                    modelNameElement.onclick = function() {
+                                        window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`, '_blank');
+                                    };
+
+                                    modelNameElement.onmouseover = function() {
+                                        modelNameElement.style.textDecoration = 'underline';
+                                    };
+
+                                    modelNameElement.onmouseout = function() {
+                                        modelNameElement.style.textDecoration = 'none';
+                                    };
+                                }
 
                                 // Check if slotID has minden in it
                                 if (!slotID.includes('Minden')) {
