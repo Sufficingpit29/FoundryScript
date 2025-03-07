@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.5.1
+// @version      6.5.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1919,13 +1919,16 @@ window.addEventListener('load', function () {
                 let modelLiteSplit = modelLite.split(' (');
                 modelLite = modelLiteSplit[0];
                 modelLiteSplit[1] = modelLiteSplit[1] || '';
-                const hashRate = modelLiteSplit[1].replace(')', '');
+                let hashRate = modelLiteSplit[1].replace(')', '');
                 let modelWithoutParens = model.replace('(', '').replace(')', '');
 
                 minerDetails['type'] = type;
                 minerDetails['issue'] = issue;
                 minerDetails['log'] = log;
                 minerDetails['hashRate'] = hashRate;
+
+                //replace THs with T
+                hashRate = hashRate.replace('THs', 'T');
 
                 console.log(`${modelLite}_${hashRate}_${serialNumber}_${issue}`);
                 console.log(cleanedText);
@@ -7043,22 +7046,61 @@ window.addEventListener('load', function () {
         });
         testBench1.after(testBench2);
         */
-
-
     }
 
     if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
-        // If there is a taskName/Notes in storage, then create a overlay on the right side of the page that says Go to Planner
         let taskName = GM_SuperValue.get("taskName", "");
         const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
         const minerType = detailsData['type'];
 
         if (taskName !== "") {
+            // Quick popup notification saying it been formatted & copied to clipboard
+            const popup = document.createElement('div');
+            popup.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 9999;
+            opacity: 1;
+            transition: opacity 1s ease-out;
+            `;
+            popup.textContent = 'Miner Data has been formatted and copied to clipboard!';
+            document.body.appendChild(popup);
+
+            setTimeout(() => {
+                popup.style.opacity = '0';
+                setTimeout(() => {
+                    document.body.removeChild(popup);
+                }, 1000); // Wait for the fade-out transition to complete
+            }, 3000);
+
+            // Clear data
+            GM_SuperValue.set('taskName', '');
+            GM_SuperValue.set('taskNotes', '');
+            GM_SuperValue.set('taskComment', '');
+            GM_SuperValue.set('detailsData', {});
+        }
+    }
+
+    /*
+    if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
+        // If there is a taskName/Notes in storage, then create a overlay on the right side of the page that says Go to Planner
+        let taskName = GM_SuperValue.get("taskName", "");
+        const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
+        const minerType = detailsData['type'];
+    
+        if (taskName !== "") {
             // If the minerType is contained in the URL, then we probably opened up the right excel sheet
             if(currentUrl.toLowerCase().includes(minerType.toLowerCase())) {
                 GM_SuperValue.set('openedExcel', true);
             }
-
+    
             setTimeout(() => {
                 const overlay = document.createElement('div');
                 overlay.style.position = 'fixed';
@@ -7083,7 +7125,7 @@ window.addEventListener('load', function () {
                 // Make sure it is always layered on top
                 overlay.style.zIndex = '9999';
                 document.body.appendChild(overlay);
-
+    
                 const cancelButton = document.getElementById('cancelButton');
                 cancelButton.addEventListener('click', () => {
                     GM_SuperValue.set('taskName', '');
@@ -7091,27 +7133,25 @@ window.addEventListener('load', function () {
                     GM_SuperValue.set('taskComment', '');
                     GM_SuperValue.set('detailsData', {});
                     document.body.removeChild(overlay);
-
+    
                     // Close the window
                     window.close();
                 });
-
+    
                 // -- Find the actual list item in the planner and click it
-
-                // Select the parent element
-                const parentElement = document.querySelector('.ms-List-page');
-
-                // Get all inner elements with the specified attributes
-                const innerElements = parentElement.querySelectorAll('div[data-is-focusable="true"][role="row"][data-is-draggable="false"][draggable="false"]');
-
+    
+                // Query all inner elements directly
+                const innerElements = document.querySelectorAll('div[role="row"][data-automationid^="row-"]');
+    
                 // Initialize an array to store elements with the required aria-label
                 const matchingElements = [];
                 var backUpElement = null;
-
+    
                 // Loop through each inner element and check the aria-label
                 innerElements.forEach(element => {
-                    const ariaLabel = element.getAttribute('aria-label').toLowerCase();
-                    if (ariaLabel.includes(minerType.toLowerCase()) && ariaLabel.includes('minden') && ariaLabel.includes('gv')) {
+                    console.log("Element: ", element);
+                    const ariaLabel = element.getAttribute('aria-label');
+                    if (ariaLabel && ariaLabel.toLowerCase().includes(minerType.toLowerCase()) && ariaLabel.includes('minden') && ariaLabel.includes('gv')) {
                         // Extract the number between "bitmain" and "minden"
                         const match = ariaLabel.match(new RegExp(`${minerType.toLowerCase()}\\s*(\\d+)\\s*minden`, 'i'));
                         if (match) {
@@ -7119,45 +7159,45 @@ window.addEventListener('load', function () {
                             matchingElements.push({ element, number });
                         }
                     }
-
-                    if (ariaLabel.includes(minerType.toLowerCase())) {
+    
+                    if (ariaLabel && ariaLabel.toLowerCase().includes(minerType.toLowerCase())) {
                         backUpElement = element;
                     }
                 });
-
+    
                 // Find the element with the largest number
                 let largestElement = null;
                 let largestNumber = 0;
-
+    
                 matchingElements.forEach(item => {
                     if (item.number > largestNumber) {
                         largestNumber = item.number;
                         largestElement = item.element;
                     }
                 });
-
+    
                 if(largestElement === null) {
                     largestElement = backUpElement;
                 }
-
+    
                 // Click the largest element link (find the button with the role 'link')
-                const linkButton = largestElement.querySelector('button[role="link"]');
+                const linkButton = largestElement.querySelector('span[role="button"]');
                 if (linkButton) {
                     // Scroll to the element
                     linkButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
+    
                     // Highlight the element
                     largestElement.style.backgroundColor = 'yellow';
-
+    
                     setTimeout(() => {
                         // Instant scroll, in case the smooth scroll didn't make it/got interrupted
                         linkButton.scrollIntoView({ behavior: 'auto', block: 'center' });
-
+    
                         // Simulate a click on the link button
                         GM_SuperValue.set('openedExcel', false);
                         linkButton.click();
                         
-
+    
                         // Inteval checking if taskname is empty to close the page
                         const interval = setInterval(() => {
                             let excelOpened = GM_SuperValue.get('openedExcel', false);
@@ -7170,10 +7210,10 @@ window.addEventListener('load', function () {
                                 window.close();
                             }
                         }, 100);
-
+    
                         // Simulate a right click and copy the link
                         //linkButton.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
-
+    
                         // Another timer which adds to overlay that it failed to open and that you need to allow 'pop ups'
                         setTimeout(() => {
                             const overlay2 = document.createElement('div');
@@ -7194,7 +7234,7 @@ window.addEventListener('load', function () {
                             // Make sure it is always layered on top
                             overlay2.style.zIndex = '9999';
                             document.body.appendChild(overlay2);
-
+    
                             // Timeout for one tick
                             setTimeout(() => {
                                 // Position the old overlay below the new overlay
@@ -7206,8 +7246,9 @@ window.addEventListener('load', function () {
                 }
             }, 500);
         }
-
-    } else if (currentUrl.includes("planner.cloud.microsoft") && !currentUrl.includes("iframe")) {
+    }*/
+    
+    if (currentUrl.includes("planner.cloud.microsoft") && !currentUrl.includes("iframe")) {
         function PlannerCardPage() {
 
             const filterTextBox = document.querySelector('.ms-SearchBox-field');
