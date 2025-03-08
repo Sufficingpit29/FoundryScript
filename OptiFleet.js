@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.5.3
+// @version      6.7.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -39,7 +39,6 @@ const currentUrl = window.location.href;
 if(currentUrl.includes("OptiWatch")) {
     return;
 }
-
 
 const allowedSites = [
     "foundryoptifleet.com",
@@ -983,6 +982,16 @@ window.addEventListener('load', function () {
         
         // Add a small 'edit notification amount' button to bottom right
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues") && siteName.includes("Minden")) {
+
+            // Find hubspot-messages-iframe-container and remove it
+            const interval = setInterval(() => {
+                const hubspotMessagesIframeContainer = document.querySelector('#hubspot-messages-iframe-container');
+                if (hubspotMessagesIframeContainer) {
+                    hubspotMessagesIframeContainer.remove();
+                    clearInterval(interval);
+                }
+            }, 500);
+
             const editAmountButton = document.createElement('button');
             editAmountButton.innerText = 'Edit Alert';
             editAmountButton.style.position = 'fixed';
@@ -1967,10 +1976,11 @@ window.addEventListener('load', function () {
                 const currentDate = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10); // YYYY-MM-DD format
                 let textToCopy = `${serialNumber}\t${modelLite}\t${hashRate}\t${issue}\t${status}\t${currentDate}`;
 
+                /*
                 if(type === "Fortitude") {
                     textToCopy = `${serialNumber}\t${modelWithoutParens}\t${hbSerialNumber}\t${hbModel}\t${hbVersion}\t${chainIssue}\t${binNumber}`;
                     GM_SuperValue.set("taskName", `${serialNumber}_${modelLite}_${hashRate}_${issue}_${skuID}`);
-                }
+                }*/
 
                 if(!onlyPlanner) {
                     copyTextToClipboard(textToCopy);
@@ -2059,6 +2069,7 @@ window.addEventListener('load', function () {
 
                     const normalIssueContainer = popupElement.querySelector('#normalIssueContainer');
 
+                    /*
                     if (type !== "Fortitude") {
                         hbSerialNumberContainer.style.display = 'none';
                         hbModelContainer.style.display = 'none';
@@ -2073,7 +2084,7 @@ window.addEventListener('load', function () {
                         chainIssueContainer.style.display = 'block';
                         binNumberContainer.style.display = 'block';
                         skuIDContainer.style.display = 'block';
-                    }
+                    }*/
                 });
 
                 // Hide the Edit Links button for the meantime
@@ -7105,169 +7116,99 @@ window.addEventListener('load', function () {
             GM_SuperValue.set('taskNotes', '');
             GM_SuperValue.set('taskComment', '');
             GM_SuperValue.set('detailsData', {});
-        }
-    }
 
-    /*
-    if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
-        // If there is a taskName/Notes in storage, then create a overlay on the right side of the page that says Go to Planner
-        let taskName = GM_SuperValue.get("taskName", "");
-        const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
-        const minerType = detailsData['type'];
-    
-        if (taskName !== "") {
-            // If the minerType is contained in the URL, then we probably opened up the right excel sheet
-            if(currentUrl.toLowerCase().includes(minerType.toLowerCase())) {
-                GM_SuperValue.set('openedExcel', true);
-            }
-    
-            setTimeout(() => {
-                const overlay = document.createElement('div');
-                overlay.style.position = 'fixed';
-                overlay.style.top = '20px';
-                overlay.style.right = '20px';
-                overlay.style.backgroundColor = '#f2f2f2';
-                overlay.style.padding = '10px';
-                overlay.style.borderRadius = '5px';
-                overlay.style.color = '#333';
-                overlay.style.fontSize = '14px';
-                overlay.style.fontWeight = 'bold';
-                overlay.style.outline = '2px solid #333'; // Add outline
-                let plannerUrl = urlLookupPlanner[detailsData['type']];
-                overlay.innerHTML = `
-                    <p>Model: ${detailsData['model']}</p>
-                    <p>Serial Number: ${detailsData['serialNumber']}</p>
-                    <p>Slot ID: ${detailsData['locationID']}</p>
-                    <button id="cancelButton" style="background-color: red; color: #fff; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px;">
-                    Cancel
-                    </button>
-                `;
-                // Make sure it is always layered on top
-                overlay.style.zIndex = '9999';
-                document.body.appendChild(overlay);
-    
-                const cancelButton = document.getElementById('cancelButton');
-                cancelButton.addEventListener('click', () => {
-                    GM_SuperValue.set('taskName', '');
-                    GM_SuperValue.set('taskNotes', '');
-                    GM_SuperValue.set('taskComment', '');
-                    GM_SuperValue.set('detailsData', {});
-                    document.body.removeChild(overlay);
-    
-                    // Close the window
-                    window.close();
-                });
-    
-                // -- Find the actual list item in the planner and click it
-    
+            function locateNewestSheet() {
                 // Query all inner elements directly
                 const innerElements = document.querySelectorAll('div[role="row"][data-automationid^="row-"]');
-    
+
+                if(innerElements.length === 0) {
+                    setTimeout(locateNewestSheet, 500);
+                    return;
+                }
+        
                 // Initialize an array to store elements with the required aria-label
                 const matchingElements = [];
                 var backUpElement = null;
-    
+
                 // Loop through each inner element and check the aria-label
                 innerElements.forEach(element => {
-                    console.log("Element: ", element);
                     const ariaLabel = element.getAttribute('aria-label');
-                    if (ariaLabel && ariaLabel.toLowerCase().includes(minerType.toLowerCase()) && ariaLabel.includes('minden') && ariaLabel.includes('gv')) {
-                        // Extract the number between "bitmain" and "minden"
-                        const match = ariaLabel.match(new RegExp(`${minerType.toLowerCase()}\\s*(\\d+)\\s*minden`, 'i'));
-                        if (match) {
-                            const number = parseInt(match[1], 10);
+                    if (ariaLabel && ariaLabel.toLowerCase().includes(minerType.toLowerCase())) {
+                        // Check if a number is present in the aria-label, and get the number if it is
+                        const number = parseInt(ariaLabel.match(/\d+/));
+                        if (!isNaN(number)) {
                             matchingElements.push({ element, number });
                         }
                     }
-    
+
                     if (ariaLabel && ariaLabel.toLowerCase().includes(minerType.toLowerCase())) {
                         backUpElement = element;
                     }
                 });
-    
+
                 // Find the element with the largest number
                 let largestElement = null;
                 let largestNumber = 0;
-    
+
                 matchingElements.forEach(item => {
                     if (item.number > largestNumber) {
                         largestNumber = item.number;
                         largestElement = item.element;
                     }
                 });
-    
+
                 if(largestElement === null) {
                     largestElement = backUpElement;
                 }
-    
+
                 // Click the largest element link (find the button with the role 'link')
                 const linkButton = largestElement.querySelector('span[role="button"]');
                 if (linkButton) {
+                    console.log("Found the link button:", linkButton);
                     // Scroll to the element
                     linkButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    
+
                     // Highlight the element
-                    largestElement.style.backgroundColor = 'yellow';
-    
+                    largestElement.style.backgroundColor = 'lightgrey';
                     setTimeout(() => {
-                        // Instant scroll, in case the smooth scroll didn't make it/got interrupted
-                        linkButton.scrollIntoView({ behavior: 'auto', block: 'center' });
-    
-                        // Simulate a click on the link button
-                        GM_SuperValue.set('openedExcel', false);
-                        linkButton.click();
-                        
-    
-                        // Inteval checking if taskname is empty to close the page
-                        const interval = setInterval(() => {
-                            let excelOpened = GM_SuperValue.get('openedExcel', false);
-                            taskName = GM_SuperValue.get("taskName", "");
-                            if (taskName === "" || excelOpened) {
-                                GM_SuperValue.set('taskName', '');
-                                GM_SuperValue.set('taskNotes', '');
-                                GM_SuperValue.set('taskComment', '');
-                                GM_SuperValue.set('detailsData', {});
-                                window.close();
+                        largestElement.style.backgroundColor = '';
+                    }, 15000);
+
+                    linkButton.click();
+
+                    // Find data-automationid="openFileCommand", click it then click "Open in Browser"
+                    const interval = setInterval(() => {
+                        const menuItems = document.querySelectorAll('.ms-ContextualMenu-itemText');
+                        if(menuItems && menuItems.length > 0) {
+                            menuItems.forEach(item => {
+                                if (item.textContent.trim() === 'Open in browser') {
+                                    
+                                    unsafeWindow.open = function(url,windowName,parms) {
+                                        // Instead set the current URL to the new URL
+                                        if(url.includes("sharepoint")) {
+                                            window.location.href = url;
+                                        }
+                                    };
+
+
+                                    item.click();
+                                    clearInterval(interval);
+                                }
+                            });
+                        } else {
+                            const openFileCommand = document.querySelector('button[data-automationid="openFileCommand"]');
+                            if (openFileCommand) {
+                                openFileCommand.click();
                             }
-                        }, 100);
-    
-                        // Simulate a right click and copy the link
-                        //linkButton.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
-    
-                        // Another timer which adds to overlay that it failed to open and that you need to allow 'pop ups'
-                        setTimeout(() => {
-                            const overlay2 = document.createElement('div');
-                            overlay2.style.position = 'fixed';
-                            overlay2.style.top = '20px';
-                            overlay2.style.right = '20px';
-                            overlay2.style.backgroundColor = '#f2f2f2';
-                            overlay2.style.padding = '10px';
-                            overlay2.style.borderRadius = '5px';
-                            overlay2.style.color = '#333';
-                            overlay2.style.fontSize = '14px';
-                            overlay2.style.fontWeight = 'bold';
-                            overlay2.style.outline = '2px solid #333'; // Add outline
-                            overlay2.innerHTML = `
-                                <p>Failed to open the link.</p>
-                                <p>Please set 'Always allow pop-ups and redirects' on this page.</p>
-                            `;
-                            // Make sure it is always layered on top
-                            overlay2.style.zIndex = '9999';
-                            document.body.appendChild(overlay2);
-    
-                            // Timeout for one tick
-                            setTimeout(() => {
-                                // Position the old overlay below the new overlay
-                                const overlay2Rect = overlay2.getBoundingClientRect();
-                                overlay.style.top = `${overlay2Rect.bottom + 20}px`;
-                            }, 0);
-                        }, 1000);
-                    }, 500);
+                        }
+                    }, 10);
+
                 }
-            }, 500);
+            }
+            locateNewestSheet();
         }
-    }*/
-    
+    }
+
     if (currentUrl.includes("planner.cloud.microsoft") && !currentUrl.includes("iframe")) {
         function PlannerCardPage() {
 
