@@ -2,7 +2,6 @@
 // Total up offline time for down scan
 // Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
 // Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
-// Replace the quick link to just be the model name being a hyperlink to the miner, just to retain the normalness
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
