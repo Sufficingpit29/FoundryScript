@@ -3,10 +3,15 @@
 // Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
 // Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
 
+// prob work on better planner check for existing card
+
+// Make a thing for only downloading the selected miners csv file
+// maybe only only hash rate for miners so we can see actual *real* low hashers
+
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.7.1
+// @version      6.7.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -18,6 +23,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
 // @connect      *
+// @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js
 // @require      https://userscripts-mirror.org/scripts/source/107941.user.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.min.js
 // @require      https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/HackyWorkAround.js
@@ -2709,6 +2715,66 @@ window.addEventListener('load', function () {
         //--------------------------------------------
         // Scan Logic/Auto Reboot Logic
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
+
+            // Add the export XLSX action for only selected rows, and change current to say All
+            const issuesActionsDropdown = document.querySelector('#issuesActionsDropdown .m-menu');
+            if (issuesActionsDropdown) {
+                const exportAllItem = issuesActionsDropdown.querySelector('.m-menu-item[onclick="issues.exportToExcel()"]');
+                if (exportAllItem) {
+                    exportAllItem.textContent = 'Export XLSX (All)';
+                }
+
+                const exportSelectedItem = document.createElement('div');
+                exportSelectedItem.classList.add('m-menu-item');
+                exportSelectedItem.textContent = 'Export XLSX (Selected)';
+                exportSelectedItem.style.display = 'none';
+                exportSelectedItem.onclick = function() {
+                    const selectedIds = Object.keys(unsafeWindow.issues.activeGrid._selectedIds);
+                    const columns = unsafeWindow.issues.activeExportGrid.columns.filter(col => col.field && !col.hidden);
+                    const data = unsafeWindow.issues.hashingFilterMiners.filter(miner => selectedIds.includes(miner.id.toString()));
+                
+                    const exportData = data.map(miner => {
+                        const row = {};
+                        columns.forEach(col => {
+                            row[col.title] = miner[col.field];
+                        });
+                        return row;
+                    });
+                
+                    const worksheet = XLSX.utils.json_to_sheet(exportData);
+                
+                    // Adjust column widths to fit the text
+                    const columnWidths = columns.map(col => {
+                        const maxLength = Math.max(...exportData.map(row => (row[col.title] || '').toString().length), col.title.length);
+                        return { wch: maxLength + 2 }; // Add some padding
+                    });
+                    worksheet['!cols'] = columnWidths;
+                
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, 'Selected Miners');
+                    XLSX.writeFile(workbook, 'selected_miners.xlsx');
+                };
+
+                issuesActionsDropdown.insertBefore(exportSelectedItem, exportAllItem.nextSibling);
+
+                // Observer for changes in selected IDs
+                const observer = new MutationObserver(() => {
+                    try {
+                        console.log("Selected IDs: ");
+                        console.log("ONE:", unsafeWindow.issues.activeGrid._selectedIds);
+                        console.log(Object.keys(unsafeWindow.issues.activeGrid._selectedIds).length);
+                        if (Object.keys(unsafeWindow.issues.activeGrid._selectedIds).length > 0) {
+                            exportSelectedItem.style.display = 'block';
+                        } else {
+                            exportSelectedItem.style.display = 'none';
+                        }
+                    } catch (error) {
+                        console.log("Error in observer: ", error);
+                    }
+                });
+
+                observer.observe(document.querySelector('#minerSelectedCount'), { childList: true, subtree: true });
+            }
 
             // -- Add Breaker Number to Slot ID --
 
