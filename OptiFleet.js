@@ -11,7 +11,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.7.6
+// @version      6.7.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1943,7 +1943,7 @@ window.addEventListener('load', function () {
                 minerDetails['hashRate'] = hashRate;
 
                 //replace THs with T
-                hashRate = hashRate.replace('THs', 'T');
+                hashRate = hashRate.replace(' THs', 'T');
 
                 console.log(`${modelLite}_${hashRate}_${serialNumber}_${issue}`);
                 console.log(cleanedText);
