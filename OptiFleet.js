@@ -4,14 +4,12 @@
 // Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
 
 // prob work on better planner check for existing card
-
-// Make a thing for only downloading the selected miners csv file
 // maybe only only hash rate for miners so we can see actual *real* low hashers
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.7.7
+// @version      6.8.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -65,6 +63,232 @@ const allowedSiteMatch = allowedSites.some(site => currentUrl.includes(site));
 if(!ipURLMatch && !allowedSiteMatch) {
     console.log("Script not for this site, exiting...");
     return false;
+}
+
+// Feature enable config menu
+const features = [
+    // All
+    { name: 'SN Bar Code Scan', id: 'snBarCodeScan', category: 'All' },
+    { name: 'Paste SN', id: 'pasteSN', category: 'All' },
+    { name: 'Alert System', id: 'alertSystem', category: 'All' },
+
+    // Overview Page
+    { name: 'Averaged Container Temps', id: 'avgContainerTemps', category: 'Overview' },
+
+    // Issues page
+    { name: 'Down Scan', id: 'downScan', category: 'Issues' },
+    { name: 'Error Scan', id: 'errorScan', category: 'Issues' },
+    { name: 'Auto Reboot', id: 'autoReboot', category: 'Issues' },
+    { name: 'Planner Card Scan', id: 'plannerCardScan', category: 'Issues' },
+    { name: 'Export Selected Miners', id: 'exportSelectedMiners', category: 'Issues' },
+    { name: 'Miner Name Link', id: 'minerNameLink', category: 'Issues' },
+    { name: 'Breaker Number', id: 'breakerNumber', category: 'Issues' },
+    { name: 'Averaged Container Temp', id: 'displayAvgContainerTemp', category: 'Issues' },
+
+    // Individual miner page
+    { name: 'Copy Buttons', id: 'copyButtons', category: 'Individual Miner' },
+    { name: 'Sharepoint & Planner', id: 'quickSharepointPlanner', category: 'Individual Miner' },
+    { name: 'Planner Card Info', id: 'plannerCardScanMiner', category: 'Individual Miner' },
+    { name: 'Breaker Number', id: 'breakerNumberMiner', category: 'Individual Miner' },
+    { name: 'Times Down', id: 'downCount', category: 'Individual Miner' },
+    { name: 'Soft Reboot Count', id: 'softRebootCount', category: 'Individual Miner' },
+    { name: 'Last Soft Reboot', id: 'lastSoftReboot', category: 'Individual Miner' },
+    { name: 'Current Log Tab', id: 'currentLogTab', category: 'Individual Miner' },
+
+    // GUI page
+    { name: 'Estimated Live Time', id: 'estimatedLiveTime', category: 'GUI' },
+    { name: 'Firmware Links', id: 'firmwareLinks', category: 'GUI' },
+    { name: 'Start at log bottom', id: 'startAtLogBottom', category: 'GUI' },
+    { name: 'Miner Log Errors/Info', id: 'minerLogErrorsInfo', category: 'GUI' },
+];
+
+const categories = [...new Set(features.map(feature => feature.category))];
+
+const savedFeatures = GM_SuperValue.get('features', {});
+features.forEach(feature => {
+    if (savedFeatures[feature.id] === undefined) {
+        savedFeatures[feature.id] = true; // Default to enabled if not set
+    }
+});
+GM_SuperValue.set('features', savedFeatures); // Save the default features
+
+if(currentUrl.includes("https://foundryoptifleet.com")) {
+    // Add the config cog icon and toggle menu
+    const configIcon = document.createElement('img');
+    configIcon.setAttribute('src', 'https://img.icons8.com/?size=100&id=2969&format=png&color=FFFFFF');
+    configIcon.setAttribute('alt', 'Config Icon');
+    configIcon.setAttribute('style', 'cursor: pointer; width: 24px; height: 24px;');
+    configIcon.setAttribute('id', 'configIcon');
+
+    const configMenu = document.createElement('div');
+    configMenu.setAttribute('id', 'configMenu');
+    configMenu.setAttribute('style', `
+        display: none; 
+        position: absolute; 
+        top: 50px; 
+        right: 0; 
+        background-color: #333; 
+        color: white; 
+        padding: 20px; 
+        border-radius: 10px; 
+        z-index: 1000; 
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        width: 280px;
+    `);
+
+    categories.forEach(category => {
+        const categoryDiv = document.createElement('div');
+        categoryDiv.setAttribute('style', 'margin-bottom: 5px;');
+        categoryDiv.innerHTML = `
+            <h3 style="cursor: pointer; padding: 8px; background-color: #444; border-radius: 5px; display: flex; justify-content: space-between; align-items: center;">
+                ${category}
+                <span style="font-size: 12px;">&#9660;</span>
+            </h3>
+        `;
+        const featureList = document.createElement('div');
+        featureList.setAttribute('style', 'display: none; padding-left: 20px; margin-top: 10px;');
+
+        features.filter(feature => feature.category === category).forEach(feature => {
+            const featureToggle = document.createElement('div');
+            featureToggle.setAttribute('style', 'margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;');
+            featureToggle.innerHTML = `
+                <span style="flex-grow: 1;">${feature.name}</span>
+                <label class="switch">
+                    <input type="checkbox" id="${feature.id}" ${savedFeatures[feature.id] ? 'checked' : ''}>
+                    <span class="slider round"></span>
+                </label>
+            `;
+            featureList.appendChild(featureToggle);
+
+            featureToggle.querySelector('input').addEventListener('change', () => {
+                savedFeatures[feature.id] = featureToggle.querySelector('input').checked;
+                showSaveButton();
+            });
+        });
+
+        categoryDiv.appendChild(featureList);
+        configMenu.appendChild(categoryDiv);
+
+        categoryDiv.querySelector('h3').addEventListener('click', () => {
+            const isVisible = featureList.style.display === 'block';
+            featureList.style.display = isVisible ? 'none' : 'block';
+            categoryDiv.querySelector('span').innerHTML = isVisible ? '&#9660;' : '&#9650;';
+        });
+    });
+
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 34px;
+            height: 20px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(14px);
+        }
+    `;
+    document.head.appendChild(style);
+
+    window.addEventListener('DOMContentLoaded', (event) => {
+        document.body.appendChild(configMenu);
+    });
+
+    configIcon.addEventListener('click', () => {
+        configMenu.style.display = configMenu.style.display === 'none' ? 'block' : 'none';
+    });
+
+    function tryAddConfigIcon() {
+        // Don't if already added
+        if(document.getElementById('configIcon')) {
+            return;
+        }
+
+        // Get all buttons and loop through them to find the user button
+        const allButtons = document.querySelectorAll('button');
+        let userButton = false;
+        // loop and print each button for testing
+        allButtons.forEach(button => {
+            if(button.getAttribute('onclick') === "ms.toggleUserDropdown();") {
+                userButton = button;
+                return;
+            }
+        });
+
+        if (userButton) {
+            userButton.parentNode.insertBefore(configIcon, userButton.nextSibling);
+        } else {
+            setTimeout(() => {
+                tryAddConfigIcon();
+            }, 100);
+        }
+    }
+
+    tryAddConfigIcon();
+
+    function showSaveButton() {
+        let saveButton = document.getElementById('saveButton');
+        const currentFeatures = GM_SuperValue.get('features', {});
+        const hasChanges = Object.keys(currentFeatures).some(key => currentFeatures[key] !== savedFeatures[key]);
+
+        if (hasChanges) {
+            if (!saveButton) {
+                console.log('Creating save button');
+                saveButton = document.createElement('button');
+                saveButton.id = 'saveButton';
+                saveButton.innerText = 'Save & Refresh';
+                saveButton.style.backgroundColor = '#4CAF50';
+                saveButton.style.color = 'white';
+                saveButton.style.border = 'none';
+                saveButton.style.borderRadius = '5px';
+                saveButton.style.padding = '10px 20px';
+                saveButton.style.cursor = 'pointer';
+                saveButton.style.marginTop = '10px';
+                saveButton.addEventListener('click', () => {
+                    GM_SuperValue.set('features', savedFeatures);
+                    location.reload();
+                });
+                configMenu.appendChild(saveButton);
+            }
+        } else if (saveButton) {
+            saveButton.remove();
+        }
+    }
 }
 
 //https://planner.cloud.microsoft/webui/plan/wkeUw2vf1kqEkw6-XXaSR2UABn4T/view/board?tid=6681433f-a30d-43cd-8881-8e964fa723ad
@@ -985,8 +1209,12 @@ window.addEventListener('load', function () {
         }
         
         
-        // Add a small 'edit notification amount' button to bottom right
+        // Add a small edit button to bottom right
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues") && siteName.includes("Minden")) {
+
+            if(!savedFeatures["alertSystem"]) {
+                return;
+            }
 
             // Find hubspot-messages-iframe-container and remove it
             const interval = setInterval(() => {
@@ -1167,6 +1395,10 @@ window.addEventListener('load', function () {
 
         // Check if minden
         if( siteName.includes("Minden") ) {
+            if(!savedFeatures["alertSystem"]) {
+                return;
+            }
+
             // Miner issue notification every minute
             setInterval(function() {
                 minerIssueNotification()
@@ -1745,6 +1977,10 @@ window.addEventListener('load', function () {
             var timeoutId;
             document.addEventListener('keydown', function(event) {
 
+                if(!savedFeatures["snBarCodeScan"]) {
+                    return;
+                }
+
                 // Get the focused element
                 var activeElement = document.activeElement;
 
@@ -1810,6 +2046,10 @@ window.addEventListener('load', function () {
             });
 
             document.addEventListener('paste', function(event) {
+                if(!savedFeatures["pasteSN"]) {
+                    return;
+                }
+
                 console.log('Paste event detected!');
                 
                 let clipboardData = event.clipboardData || window.clipboardData || unsafeWindow.clipboardData;
@@ -2231,6 +2471,7 @@ window.addEventListener('load', function () {
             }
 
             function addCopyButtonsToElements() {
+                if(!savedFeatures["copyButtons"]) { return; }
                 const detailSections = document.querySelectorAll('.miner-detail-info');
 
                 detailSections.forEach(section => {
@@ -2262,7 +2503,7 @@ window.addEventListener('load', function () {
                     container.insertBefore(spacer, container.firstChild);
                 }
 
-                if (!container.querySelector('.copyAllBtn')) {
+                if (!container.querySelector('.copyAllBtn') && savedFeatures["copyButtons"]) {
                     const copyAllButton = document.createElement('button');
                     copyAllButton.innerText = 'Copy All';
                     copyAllButton.className = 'copyBtn copyAllBtn';
@@ -2281,7 +2522,7 @@ window.addEventListener('load', function () {
                     container.insertBefore(copyAllButton, container.firstChild);
                 }
 
-                if (!container.querySelector('.sharepointPasteBtn') && siteName.includes("Minden")) {
+                if (!container.querySelector('.sharepointPasteBtn') && siteName.includes("Minden") && savedFeatures["quickSharepointPlanner"]) {
                     const sharepointPasteButton = document.createElement('button');
                     sharepointPasteButton.innerText = 'Quick Sharepoint & Planner';
                     sharepointPasteButton.className = 'copyBtn sharepointPasteBtn';
@@ -2414,279 +2655,281 @@ window.addEventListener('load', function () {
                 tabsContainer.appendChild(customTab);
             };
 
-            createCustomTab('quickIPGrabTab', 'Current Log', (customTabContainer, loadingText, loadingSpinner) => {
-                // Get IP Address from m-link is-size-xs href
-                const waitForIpElement = setInterval(() => {
-                    const ipElement = document.querySelector('.m-link.is-size-xs');
-                    if (ipElement && ipElement.href && ipElement.href.includes('http')) {
-                        clearInterval(waitForIpElement);
+            if(savedFeatures["currentLogTab"]) {
+                createCustomTab('quickIPGrabTab', 'Current Log', (customTabContainer, loadingText, loadingSpinner) => {
+                    // Get IP Address from m-link is-size-xs href
+                    const waitForIpElement = setInterval(() => {
+                        const ipElement = document.querySelector('.m-link.is-size-xs');
+                        if (ipElement && ipElement.href && ipElement.href.includes('http')) {
+                            clearInterval(waitForIpElement);
 
-                        // Get status from the miner
-                        const status = getMinerDetails()[1].status;
-                        
-                        if(status !== "Online") {
-                            // Remove the loading text and spinner
-                            customTabContainer.removeChild(loadingText);
-                            customTabContainer.removeChild(loadingSpinner);
-
-                            // Add a clean nice message saying the miner is offline
-                            const offlineMessage = document.createElement('div');
-                            offlineMessage.textContent = 'Miner is currently offline.';
-                            customTabContainer.appendChild(offlineMessage);
-                            return;
-                        }
-                        
-                        const ipHref = ipElement.href.replace('root:root@', '') + '/cgi-bin/log.cgi';
-                        fetchGUIData(ipHref)
-                            .then(responseText => {
+                            // Get status from the miner
+                            const status = getMinerDetails()[1].status;
+                            
+                            if(status !== "Online") {
                                 // Remove the loading text and spinner
                                 customTabContainer.removeChild(loadingText);
                                 customTabContainer.removeChild(loadingSpinner);
 
-                                // Create a sleek log element
-                                const logElement = document.createElement('div');
-                                logElement.style.cssText = `
-                                    background-color: #18181b;
-                                    color: #fff;
-                                    padding: 20px;
-                                    border-radius: 10px;
-                                    max-height: 400px;
-                                    overflow-y: auto;
-                                    overflow-x: auto;
-                                    font-family: 'Courier New', Courier, monospace;
-                                    white-space: pre;
-                                    width: 100%;
-                                    scrollbar-width: thin;
-                                    scrollbar-color: #888 #333;
-                                `;
-                                
-                                responseText = responseText.trim();
-                                responseText = cleanErrors(responseText);
-                                let orignalLogText = responseText;
-                                logElement.textContent = orignalLogText;
-                                customTabContainer.appendChild(logElement);
+                                // Add a clean nice message saying the miner is offline
+                                const offlineMessage = document.createElement('div');
+                                offlineMessage.textContent = 'Miner is currently offline.';
+                                customTabContainer.appendChild(offlineMessage);
+                                return;
+                            }
+                            
+                            const ipHref = ipElement.href.replace('root:root@', '') + '/cgi-bin/log.cgi';
+                            fetchGUIData(ipHref)
+                                .then(responseText => {
+                                    // Remove the loading text and spinner
+                                    customTabContainer.removeChild(loadingText);
+                                    customTabContainer.removeChild(loadingSpinner);
 
-                                // Add custom scrollbar styles
-                                const style = document.createElement('style');
-                                style.textContent = `
-                                    ::-webkit-scrollbar {
-                                        width: 8px;
-                                        height: 8px;
-                                    }
-                                    ::-webkit-scrollbar-track {
-                                        background: #333;
+                                    // Create a sleek log element
+                                    const logElement = document.createElement('div');
+                                    logElement.style.cssText = `
+                                        background-color: #18181b;
+                                        color: #fff;
+                                        padding: 20px;
                                         border-radius: 10px;
-                                    }
-                                    ::-webkit-scrollbar-thumb {
-                                        background-color: #888;
-                                        border-radius: 10px;
-                                        border: 2px solid #333;
-                                    }
-                                    ::-webkit-scrollbar-thumb:hover {
-                                        background-color: #555;
-                                    }
-                                `;
-                                document.head.appendChild(style);
+                                        max-height: 400px;
+                                        overflow-y: auto;
+                                        overflow-x: auto;
+                                        font-family: 'Courier New', Courier, monospace;
+                                        white-space: pre;
+                                        width: 100%;
+                                        scrollbar-width: thin;
+                                        scrollbar-color: #888 #333;
+                                    `;
+                                    
+                                    responseText = responseText.trim();
+                                    responseText = cleanErrors(responseText);
+                                    let orignalLogText = responseText;
+                                    logElement.textContent = orignalLogText;
+                                    customTabContainer.appendChild(logElement);
 
-                                // Scroll to bottom of log
-                                logElement.scrollTop = logElement.scrollHeight;
+                                    // Add custom scrollbar styles
+                                    const style = document.createElement('style');
+                                    style.textContent = `
+                                        ::-webkit-scrollbar {
+                                            width: 8px;
+                                            height: 8px;
+                                        }
+                                        ::-webkit-scrollbar-track {
+                                            background: #333;
+                                            border-radius: 10px;
+                                        }
+                                        ::-webkit-scrollbar-thumb {
+                                            background-color: #888;
+                                            border-radius: 10px;
+                                            border: 2px solid #333;
+                                        }
+                                        ::-webkit-scrollbar-thumb:hover {
+                                            background-color: #555;
+                                        }
+                                    `;
+                                    document.head.appendChild(style);
 
-                                // Create the error tabs
-                                const logText = logElement.innerText;
-                                var errorsFound = runErrorScanLogic(logText);
-                                if(errorsFound.length === 0) {
-                                    return;
-                                }
+                                    // Scroll to bottom of log
+                                    logElement.scrollTop = logElement.scrollHeight;
 
-                                // Add divider to m-nav
-                                const mnav = document.querySelector('.m-nav');
-                                const divider = document.createElement('div');
-                                divider.className = 'm-divider has-space-m';
-                                divider.classList.add('error-divider');
-                                mnav.appendChild(divider);
-            
-                                function createErrorTab(title, errors, defaultOpen = false) {
-
-                                    // If there are no errors
-                                    if(errors.length === 0) {
+                                    // Create the error tabs
+                                    const logText = logElement.innerText;
+                                    var errorsFound = runErrorScanLogic(logText);
+                                    if(errorsFound.length === 0) {
                                         return;
                                     }
 
-                                    const errorTab = document.createElement('div');
-                                    errorTab.className = 'm-nav-group';
-                                    errorTab.classList.add('error-tab');
+                                    // Add divider to m-nav
+                                    const mnav = document.querySelector('.m-nav');
+                                    const divider = document.createElement('div');
+                                    divider.className = 'm-divider has-space-m';
+                                    divider.classList.add('error-divider');
+                                    mnav.appendChild(divider);
+                
+                                    function createErrorTab(title, errors, defaultOpen = false) {
 
-                                    // Create the header with the dynamic title
-                                    const header = `
-                                        <div class="m-nav-group-header">
-                                            <div class="m-nav-group-label">
-                                                <m-icon name="error" size="l" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-                                                ${title}
-                                            </div>
-                                            <m-icon name="chevron-down" data-dashlane-shadowhost="true" data-dashlane-observed="true" class="flip"></m-icon>
-                                        </div>
-                                    `;
-                                
-                                    // Create the group items with icons dynamically
-                                    const items = errors.map((error, index) => `
-                                        <div class="m-nav-group-item" style="display: flex; align-items: center;">
-                                            <img src="${error.icon}" width="16" height="16" style="margin-right: 8px;" />
-                                            <a href="#" class="m-nav-item" data-error-index="${index}">${error.textReturn}</a>
-                                        </div>
-                                    `).join('');
-                                    
-                                    // Combine all parts into the final HTML
-                                    errorTab.innerHTML = `
-                                        ${header}
-                                        <div class="m-nav-group-section" style="display: none;">
-                                            <div class="m-nav-group-items">
-                                                ${items}
-                                            </div>
-                                        </div>
-                                    `;
-                                
-                                    // Add collapse and open logic
-                                    const headerElement = errorTab.querySelector('.m-nav-group-header');
-                                    const sectionElement = errorTab.querySelector('.m-nav-group-section');
-                                    const chevronIcon = errorTab.querySelector('.m-nav-group-header m-icon');
-                                
-                                    headerElement.addEventListener('click', () => {
-                                        const isOpen = sectionElement.style.display === 'block';
-                                        sectionElement.style.display = isOpen ? 'none' : 'block';
-                                        chevronIcon.classList.toggle('flip', !isOpen);
-                                    });
-
-                                    if (defaultOpen) {
-                                        sectionElement.style.display = 'block';
-                                        chevronIcon.classList.add('flip');
-                                    }
-                                
-                                    // Add click event listener to each error item
-                                    const errorItems = errorTab.querySelectorAll('.m-nav-item');
-                                    errorItems.forEach(item => {
-                                        item.addEventListener('click', (event) => {
-                                            event.preventDefault();
-                                            const errorIndex = event.target.getAttribute('data-error-index');
-                                            const error = errors[errorIndex];
-                                            handleErrorClick(error, orignalLogText);
-                                        });
-                                    });
-                                
-                                    mnav.appendChild(errorTab);
-                                    return errorTab;
-                                }
-                                
-                                function handleErrorClick(error, orignalLogText) {
-                                    // Reset log text
-                                    while (logElement.firstChild) {
-                                        logElement.removeChild(logElement.firstChild);
-                                    }
-                                    logElement.textContent = orignalLogText;
-                                
-                                    // Create a new element to highlight the error
-                                    const errorElement = document.createElement('span');
-                                    errorElement.style.backgroundColor = '#FF2323';
-                                    
-                                    const errorTextNode = document.createElement('span');
-                                    errorTextNode.style.fontWeight = 'bolder';
-                                    errorTextNode.style.textShadow = '1px 1px 2px black';
-                                    errorTextNode.style.color = 'white';
-                                    errorTextNode.textContent = error.text;
-                                    errorElement.appendChild(errorTextNode);
-                                    errorElement.style.width = logElement.scrollWidth + 'px';
-                                    errorElement.style.display = 'block';
-                                
-                                    // Create a copy button
-                                    const copyButton = document.createElement('button');
-                                    copyButton.textContent = 'Copy';
-                                    copyButton.style.position = 'absolute';
-                                    copyButton.style.bottom = '0';
-                                    copyButton.style.right = '0';
-                                    copyButton.style.backgroundColor = 'transparent';
-                                    copyButton.style.border = 'none';
-                                    copyButton.style.color = 'black';
-                                    copyButton.style.cursor = 'pointer';
-                                    copyButton.style.padding = '5px';
-                                    copyButton.style.fontSize = '12px';
-                                    copyButton.style.fontWeight = 'bold';
-                                    copyButton.style.zIndex = '1';
-                                    copyButton.addEventListener('click', () => {
-                                        // disable default behavior
-                                        event.preventDefault();
-
-                                        // copy text to clipboard
-                                        if (navigator.clipboard) {
-                                            navigator.clipboard.writeText(error.text).then(() => {
-                                                console.log('Text copied to clipboard');
-                                            }).catch(err => {
-                                                console.error('Failed to copy text: ', err);
-                                            });
-                                        } else {
-                                            const textArea = document.createElement('textarea');
-                                            textArea.value = error.text;
-                                            document.body.appendChild(textArea);
-                                            textArea.select();
-                                            try {
-                                                document.execCommand('copy');
-                                                console.log('Text copied to clipboard');
-                                            } catch (err) {
-                                                console.error('Failed to copy text: ', err);
-                                            }
-                                            document.body.removeChild(textArea);
+                                        // If there are no errors
+                                        if(errors.length === 0) {
+                                            return;
                                         }
-                                        copyButton.textContent = 'Copied!';
-                                        setTimeout(() => {
-                                            copyButton.textContent = 'Copy';
-                                        }, 1000);
-                                    });
-                                
-                                    errorElement.style.position = 'relative';
-                                    errorElement.appendChild(copyButton);
-                                
-                                    errorElement.addEventListener('mouseover', () => {
-                                        copyButton.style.display = 'block';
-                                    });
-                                
-                                    errorElement.addEventListener('mouseout', () => {
-                                        copyButton.style.display = 'none';
-                                    });
-                                
-                                    copyButton.addEventListener('mouseover', () => {
-                                        copyButton.style.color = 'green';
-                                    });
-                                
-                                    copyButton.addEventListener('mouseout', () => {
-                                        copyButton.style.color = 'black';
-                                    });
-                                
-                                    // Replace the error text in the log with the highlighted version
-                                    const logTextNode = logElement.childNodes[0];
-                                    const beforeErrorText = logTextNode.textContent.substring(0, error.start);
-                                    const afterErrorText = logTextNode.textContent.substring(error.end);
 
-                                    logTextNode.textContent = beforeErrorText;
+                                        const errorTab = document.createElement('div');
+                                        errorTab.className = 'm-nav-group';
+                                        errorTab.classList.add('error-tab');
+
+                                        // Create the header with the dynamic title
+                                        const header = `
+                                            <div class="m-nav-group-header">
+                                                <div class="m-nav-group-label">
+                                                    <m-icon name="error" size="l" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                                                    ${title}
+                                                </div>
+                                                <m-icon name="chevron-down" data-dashlane-shadowhost="true" data-dashlane-observed="true" class="flip"></m-icon>
+                                            </div>
+                                        `;
                                     
-                                    logElement.insertBefore(errorElement, logTextNode.nextSibling);
-                                    logElement.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
-                                    errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                }
-                                
-                                const infoTab = createErrorTab("Info", errorsFound.filter(error => error.type === "Info"), true);
-                                const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"), true);
-                                const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
+                                        // Create the group items with icons dynamically
+                                        const items = errors.map((error, index) => `
+                                            <div class="m-nav-group-item" style="display: flex; align-items: center;">
+                                                <img src="${error.icon}" width="16" height="16" style="margin-right: 8px;" />
+                                                <a href="#" class="m-nav-item" data-error-index="${index}">${error.textReturn}</a>
+                                            </div>
+                                        `).join('');
+                                        
+                                        // Combine all parts into the final HTML
+                                        errorTab.innerHTML = `
+                                            ${header}
+                                            <div class="m-nav-group-section" style="display: none;">
+                                                <div class="m-nav-group-items">
+                                                    ${items}
+                                                </div>
+                                            </div>
+                                        `;
+                                    
+                                        // Add collapse and open logic
+                                        const headerElement = errorTab.querySelector('.m-nav-group-header');
+                                        const sectionElement = errorTab.querySelector('.m-nav-group-section');
+                                        const chevronIcon = errorTab.querySelector('.m-nav-group-header m-icon');
+                                    
+                                        headerElement.addEventListener('click', () => {
+                                            const isOpen = sectionElement.style.display === 'block';
+                                            sectionElement.style.display = isOpen ? 'none' : 'block';
+                                            chevronIcon.classList.toggle('flip', !isOpen);
+                                        });
 
-                                // Scroll to show new tabs
-                                otherTab.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                        if (defaultOpen) {
+                                            sectionElement.style.display = 'block';
+                                            chevronIcon.classList.add('flip');
+                                        }
+                                    
+                                        // Add click event listener to each error item
+                                        const errorItems = errorTab.querySelectorAll('.m-nav-item');
+                                        errorItems.forEach(item => {
+                                            item.addEventListener('click', (event) => {
+                                                event.preventDefault();
+                                                const errorIndex = event.target.getAttribute('data-error-index');
+                                                const error = errors[errorIndex];
+                                                handleErrorClick(error, orignalLogText);
+                                            });
+                                        });
+                                    
+                                        mnav.appendChild(errorTab);
+                                        return errorTab;
+                                    }
+                                    
+                                    function handleErrorClick(error, orignalLogText) {
+                                        // Reset log text
+                                        while (logElement.firstChild) {
+                                            logElement.removeChild(logElement.firstChild);
+                                        }
+                                        logElement.textContent = orignalLogText;
+                                    
+                                        // Create a new element to highlight the error
+                                        const errorElement = document.createElement('span');
+                                        errorElement.style.backgroundColor = '#FF2323';
+                                        
+                                        const errorTextNode = document.createElement('span');
+                                        errorTextNode.style.fontWeight = 'bolder';
+                                        errorTextNode.style.textShadow = '1px 1px 2px black';
+                                        errorTextNode.style.color = 'white';
+                                        errorTextNode.textContent = error.text;
+                                        errorElement.appendChild(errorTextNode);
+                                        errorElement.style.width = logElement.scrollWidth + 'px';
+                                        errorElement.style.display = 'block';
+                                    
+                                        // Create a copy button
+                                        const copyButton = document.createElement('button');
+                                        copyButton.textContent = 'Copy';
+                                        copyButton.style.position = 'absolute';
+                                        copyButton.style.bottom = '0';
+                                        copyButton.style.right = '0';
+                                        copyButton.style.backgroundColor = 'transparent';
+                                        copyButton.style.border = 'none';
+                                        copyButton.style.color = 'black';
+                                        copyButton.style.cursor = 'pointer';
+                                        copyButton.style.padding = '5px';
+                                        copyButton.style.fontSize = '12px';
+                                        copyButton.style.fontWeight = 'bold';
+                                        copyButton.style.zIndex = '1';
+                                        copyButton.addEventListener('click', () => {
+                                            // disable default behavior
+                                            event.preventDefault();
 
-                                // Scroll to show console log
-                                logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                            })
-                            .catch(error => {
-                                console.error(error);
-                            });
-                    }
-                }, 500);
-            });
+                                            // copy text to clipboard
+                                            if (navigator.clipboard) {
+                                                navigator.clipboard.writeText(error.text).then(() => {
+                                                    console.log('Text copied to clipboard');
+                                                }).catch(err => {
+                                                    console.error('Failed to copy text: ', err);
+                                                });
+                                            } else {
+                                                const textArea = document.createElement('textarea');
+                                                textArea.value = error.text;
+                                                document.body.appendChild(textArea);
+                                                textArea.select();
+                                                try {
+                                                    document.execCommand('copy');
+                                                    console.log('Text copied to clipboard');
+                                                } catch (err) {
+                                                    console.error('Failed to copy text: ', err);
+                                                }
+                                                document.body.removeChild(textArea);
+                                            }
+                                            copyButton.textContent = 'Copied!';
+                                            setTimeout(() => {
+                                                copyButton.textContent = 'Copy';
+                                            }, 1000);
+                                        });
+                                    
+                                        errorElement.style.position = 'relative';
+                                        errorElement.appendChild(copyButton);
+                                    
+                                        errorElement.addEventListener('mouseover', () => {
+                                            copyButton.style.display = 'block';
+                                        });
+                                    
+                                        errorElement.addEventListener('mouseout', () => {
+                                            copyButton.style.display = 'none';
+                                        });
+                                    
+                                        copyButton.addEventListener('mouseover', () => {
+                                            copyButton.style.color = 'green';
+                                        });
+                                    
+                                        copyButton.addEventListener('mouseout', () => {
+                                            copyButton.style.color = 'black';
+                                        });
+                                    
+                                        // Replace the error text in the log with the highlighted version
+                                        const logTextNode = logElement.childNodes[0];
+                                        const beforeErrorText = logTextNode.textContent.substring(0, error.start);
+                                        const afterErrorText = logTextNode.textContent.substring(error.end);
+
+                                        logTextNode.textContent = beforeErrorText;
+                                        
+                                        logElement.insertBefore(errorElement, logTextNode.nextSibling);
+                                        logElement.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
+                                        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }
+                                    
+                                    const infoTab = createErrorTab("Info", errorsFound.filter(error => error.type === "Info"), true);
+                                    const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"), true);
+                                    const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
+
+                                    // Scroll to show new tabs
+                                    otherTab.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+                                    // Scroll to show console log
+                                    logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                })
+                                .catch(error => {
+                                    console.error(error);
+                                });
+                        }
+                    }, 500);
+                });
+            }
 
             // Loop through all the tabs and add an extra on click event 
             const tabs = document.querySelectorAll('.tab');
@@ -2718,7 +2961,7 @@ window.addEventListener('load', function () {
 
             // Add the export XLSX action for only selected rows, and change current to say All
             const issuesActionsDropdown = document.querySelector('#issuesActionsDropdown .m-menu');
-            if (issuesActionsDropdown) {
+            if (issuesActionsDropdown && savedFeatures["exportSelectedMiners"]) {
                 const exportAllItem = issuesActionsDropdown.querySelector('.m-menu-item[onclick="issues.exportToExcel()"]');
                 if (exportAllItem) {
                     exportAllItem.textContent = 'Export XLSX (All)';
@@ -2760,9 +3003,6 @@ window.addEventListener('load', function () {
                 // Observer for changes in selected IDs
                 const observer = new MutationObserver(() => {
                     try {
-                        console.log("Selected IDs: ");
-                        console.log("ONE:", unsafeWindow.issues.activeGrid._selectedIds);
-                        console.log(Object.keys(unsafeWindow.issues.activeGrid._selectedIds).length);
                         if (Object.keys(unsafeWindow.issues.activeGrid._selectedIds).length > 0) {
                             exportSelectedItem.style.display = 'block';
                         } else {
@@ -2983,7 +3223,7 @@ window.addEventListener('load', function () {
                                 //console.log("serialNumber", serialNumber);
 
                                 // Set the model name to be a link to the miner page
-                                if (modelNameElement) {
+                                if (modelNameElement && savedFeatures["minerNameLink"]) {
                                     // Make it green with a underline when hovered over
                                     modelNameElement.style.color = '#17b26a';
                                     modelNameElement.style.cursor = 'pointer';
@@ -3012,7 +3252,7 @@ window.addEventListener('load', function () {
                                 var breakerNum = (row-1)*rowWidth + col;
 
                                 // if breakerNum isn't NAN
-                                if (!isNaN(breakerNum)) {
+                                if (!isNaN(breakerNum) && savedFeatures["breakerNumber"]) {
                                     var newElement = document.createElement('div');
                                     newElement.textContent = 'Breaker Number: ' + breakerNum;
                                     minerData['Slot ID'].appendChild(newElement);
@@ -3030,7 +3270,7 @@ window.addEventListener('load', function () {
                                 }
                             }
                             
-                            if(siteName.includes("Minden")) {
+                            if(siteName.includes("Minden") && savedFeatures["displayAvgContainerTemp"]) {
                                 // Container Temp
                                 retrieveContainerTempData((containerTempData) => {
                                     for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
@@ -3100,38 +3340,40 @@ window.addEventListener('load', function () {
                 if (actionsDropdown) {
                     clearInterval(interval);
 
-                    // Create a new dropdown element
-                    const newActionsDropdown = document.createElement('div');
-                    newActionsDropdown.classList.add('op-dropdown');
-                    newActionsDropdown.style.display = 'inline-block';
-                    newActionsDropdown.innerHTML = `
-                        <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('newActionsDropdown'); return false;">
-                            Down Scans
-                            <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-                        </button>
-                        <div id="newActionsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
-                            <div class="m-menu">
-                                <div class="m-menu-item" onclick="lastHourScan()">
-                                    Scan Last Hour
-                                </div>
-                                <div class="m-menu-item" onclick="last4HourScan()">
-                                    Scan Last 4 Hours
-                                </div>
-                                <div class="m-menu-item" onclick="last24HourScan()">
-                                    Scan Last 24 Hours
-                                </div>
-                                <div class="m-menu-item" onclick="last7DayScan()">
-                                    Scan Last 7 Days
-                                </div>
-                                <div class="m-menu-item" onclick="last30DayScan()">
-                                    Scan Last 30 Days
+                    if(savedFeatures["downScan"]) {
+                        // Create a new dropdown element
+                        const newActionsDropdown = document.createElement('div');
+                        newActionsDropdown.classList.add('op-dropdown');
+                        newActionsDropdown.style.display = 'inline-block';
+                        newActionsDropdown.innerHTML = `
+                            <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('newActionsDropdown'); return false;">
+                                Down Scans
+                                <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                            </button>
+                            <div id="newActionsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
+                                <div class="m-menu">
+                                    <div class="m-menu-item" onclick="lastHourScan()">
+                                        Scan Last Hour
+                                    </div>
+                                    <div class="m-menu-item" onclick="last4HourScan()">
+                                        Scan Last 4 Hours
+                                    </div>
+                                    <div class="m-menu-item" onclick="last24HourScan()">
+                                        Scan Last 24 Hours
+                                    </div>
+                                    <div class="m-menu-item" onclick="last7DayScan()">
+                                        Scan Last 7 Days
+                                    </div>
+                                    <div class="m-menu-item" onclick="last30DayScan()">
+                                        Scan Last 30 Days
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    `;
+                        `;
 
-                    // Put the new dropdown before the original dropdown
-                    actionsDropdown.before(newActionsDropdown);
+                        // Put the new dropdown before the original dropdown
+                        actionsDropdown.before(newActionsDropdown);
+                    }
 
                     function createPopUpTable(title, cols, parent, callback) {
                         // Check if there is an existing #minerTable, if so, click the first tab (assumingly it is the extra tab tables I've made)
@@ -5301,47 +5543,49 @@ window.addEventListener('load', function () {
 
 
                     // Create a error scan button
-                    const errorScanDropdown = document.createElement('div');
-                    errorScanDropdown.classList.add('op-dropdown');
-                    errorScanDropdown.style.display = 'inline-block';
-                    errorScanDropdown.innerHTML = `
-                        <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('errorScanDropdown'); return false;">
-                            Error Scan
-                            <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-                        </button>
-                        <div id="errorScanDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
-                            <div class="m-menu">
-                                <div class="m-menu-item" onclick="errorScan(true)">
-                                    All Issue Miners Scan
-                                </div>
-                                <div class="m-menu-item" onclick="errorScan(false)">
-                                    Non-Hashing Only Scan
-                                </div>
-                                <div class="m-menu-item">
-                                    <input type="checkbox" id="includeOtherErrors" style="margin-right: 10px;">
-                                    <label for="includeOtherErrors">Include 'Other' Errors</label>
+                    if(savedFeatures["errorScan"]) {
+                        const errorScanDropdown = document.createElement('div');
+                        errorScanDropdown.classList.add('op-dropdown');
+                        errorScanDropdown.style.display = 'inline-block';
+                        errorScanDropdown.innerHTML = `
+                            <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('errorScanDropdown'); return false;">
+                                Error Scan
+                                <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                            </button>
+                            <div id="errorScanDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
+                                <div class="m-menu">
+                                    <div class="m-menu-item" onclick="errorScan(true)">
+                                        All Issue Miners Scan
+                                    </div>
+                                    <div class="m-menu-item" onclick="errorScan(false)">
+                                        Non-Hashing Only Scan
+                                    </div>
+                                    <div class="m-menu-item">
+                                        <input type="checkbox" id="includeOtherErrors" style="margin-right: 10px;">
+                                        <label for="includeOtherErrors">Include 'Other' Errors</label>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    `;
+                        `;
 
-                    // If includeOtherErrors data is saved, set the checkbox to checked
-                    if (GM_SuperValue.get('includeOtherErrors', false)) {
-                        errorScanDropdown.querySelector('#includeOtherErrors').checked = true;
-                    }
-
-                    // Add event listener for the includeOtherErrors m-menu-item
-                    let includeOtherMenu = errorScanDropdown.querySelector('.m-menu-item:nth-child(3)');
-                    includeOtherMenu.addEventListener('click', function(event) {
-                        const checkbox = errorScanDropdown.querySelector('#includeOtherErrors');
-                        if (event.target === includeOtherMenu) {
-                            checkbox.checked = !checkbox.checked;
+                        // If includeOtherErrors data is saved, set the checkbox to checked
+                        if (GM_SuperValue.get('includeOtherErrors', false)) {
+                            errorScanDropdown.querySelector('#includeOtherErrors').checked = true;
                         }
-                        GM_SuperValue.set('includeOtherErrors', checkbox.checked);
-                    });
-                    
-                    // Add the auto reboot button to the right of the dropdown
-                    actionsDropdown.before(errorScanDropdown);
+
+                        // Add event listener for the includeOtherErrors m-menu-item
+                        let includeOtherMenu = errorScanDropdown.querySelector('.m-menu-item:nth-child(3)');
+                        includeOtherMenu.addEventListener('click', function(event) {
+                            const checkbox = errorScanDropdown.querySelector('#includeOtherErrors');
+                            if (event.target === includeOtherMenu) {
+                                checkbox.checked = !checkbox.checked;
+                            }
+                            GM_SuperValue.set('includeOtherErrors', checkbox.checked);
+                        });
+                        
+                        // Add the auto reboot button to the right of the dropdown
+                        actionsDropdown.before(errorScanDropdown);
+                    }
 
                     errorScan = function(allScan) {
                         let [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone] = createScanOverlayUI();
@@ -5979,341 +6223,344 @@ window.addEventListener('load', function () {
 
                     if(siteName.includes("Minden")) {
                         // Create a auto reboot button to the right of the dropdown
-                        const autoRebootButton = document.createElement('button');
-                        autoRebootButton.classList.add('m-button');
-                        autoRebootButton.style.marginLeft = '10px';
-                        autoRebootButton.textContent = 'Auto Reboot';
-                        autoRebootButton.onclick = function(event) {
-                            event.preventDefault(); // Prevent the default behavior of the button
+                        if(savedFeatures["autoReboot"]) {
+                            const autoRebootButton = document.createElement('button');
+                            autoRebootButton.classList.add('m-button');
+                            autoRebootButton.style.marginLeft = '10px';
+                            autoRebootButton.textContent = 'Auto Reboot';
+                            autoRebootButton.onclick = function(event) {
+                                event.preventDefault(); // Prevent the default behavior of the button
 
-                            startScan(60*60*24*7, true, false);
-                        };
+                                startScan(60*60*24*7, true, false);
+                            };
 
-                        // Add the auto reboot button to the right of the dropdown
-                        actionsDropdown.before(autoRebootButton);
+                            // Add the auto reboot button to the right of the dropdown
+                            actionsDropdown.before(autoRebootButton);
 
-                        // Create a 'full' auto reboot button to the right of the dropdown
-                        const fullAutoRebootButton = document.createElement('button');
-                        fullAutoRebootButton.classList.add('m-button');
-                        fullAutoRebootButton.style.marginLeft = '10px';
-                        fullAutoRebootButton.textContent = 'Full Auto Reboot';
-                        fullAutoRebootButton.onclick = function(event) {
-                            event.preventDefault(); // Prevent the default behavior of the button
+                            // Create a 'full' auto reboot button to the right of the dropdown
+                            const fullAutoRebootButton = document.createElement('button');
+                            fullAutoRebootButton.classList.add('m-button');
+                            fullAutoRebootButton.style.marginLeft = '10px';
+                            fullAutoRebootButton.textContent = 'Full Auto Reboot';
+                            fullAutoRebootButton.onclick = function(event) {
+                                event.preventDefault(); // Prevent the default behavior of the button
 
-                            // Create popup to type in what percentage efficiency to reboot at
-                            const popup = document.createElement('div');
-                            popup.style.cssText = `
-                                position: fixed;
-                                top: 0;
-                                left: 0;
-                                width: 100%;
-                                height: 100%;
-                                background-color: rgba(0, 0, 0, 0.5);
-                                z-index: 1000;
-                                display: flex;
-                                justify-content: center;
-                                align-items: center;
-                            `;
-                            document.body.appendChild(popup);
+                                // Create popup to type in what percentage efficiency to reboot at
+                                const popup = document.createElement('div');
+                                popup.style.cssText = `
+                                    position: fixed;
+                                    top: 0;
+                                    left: 0;
+                                    width: 100%;
+                                    height: 100%;
+                                    background-color: rgba(0, 0, 0, 0.5);
+                                    z-index: 1000;
+                                    display: flex;
+                                    justify-content: center;
+                                    align-items: center;
+                                `;
+                                document.body.appendChild(popup);
 
-                            const popupContent = document.createElement('div');
-                            popupContent.style.cssText = `
-                                padding: 20px;
-                                background-color: #333;
-                                border-radius: 10px;
-                            `;
-                            popup.appendChild(popupContent);
+                                const popupContent = document.createElement('div');
+                                popupContent.style.cssText = `
+                                    padding: 20px;
+                                    background-color: #333;
+                                    border-radius: 10px;
+                                `;
+                                popup.appendChild(popupContent);
 
-                            const popupTitle = document.createElement('h2');
-                            popupTitle.textContent = 'Efficiency percentage to reboot miners when at/below:';
-                            popupTitle.style.color = 'white';
-                            popupTitle.style.marginBottom = '10px';
-                            popupContent.appendChild(popupTitle);
+                                const popupTitle = document.createElement('h2');
+                                popupTitle.textContent = 'Efficiency percentage to reboot miners when at/below:';
+                                popupTitle.style.color = 'white';
+                                popupTitle.style.marginBottom = '10px';
+                                popupContent.appendChild(popupTitle);
 
-                            const currentEfficiency = GM_SuperValue.get('rebootEfficiency', 90);
-                            const efficiencyInput = document.createElement('input');
-                            efficiencyInput.type = 'number';
-                            efficiencyInput.min = 0;
-                            efficiencyInput.max = 100;
-                            efficiencyInput.value = currentEfficiency;
-                            efficiencyInput.style.width = '100%';
-                            efficiencyInput.style.padding = '10px';
-                            efficiencyInput.style.marginBottom = '10px';
-                            efficiencyInput.style.color = 'white';
-                            popupContent.appendChild(efficiencyInput);
+                                const currentEfficiency = GM_SuperValue.get('rebootEfficiency', 90);
+                                const efficiencyInput = document.createElement('input');
+                                efficiencyInput.type = 'number';
+                                efficiencyInput.min = 0;
+                                efficiencyInput.max = 100;
+                                efficiencyInput.value = currentEfficiency;
+                                efficiencyInput.style.width = '100%';
+                                efficiencyInput.style.padding = '10px';
+                                efficiencyInput.style.marginBottom = '10px';
+                                efficiencyInput.style.color = 'white';
+                                popupContent.appendChild(efficiencyInput);
 
-                            const buttonsDiv = document.createElement('div');
-                            buttonsDiv.style.display = 'flex';
-                            buttonsDiv.style.justifyContent = 'space-between';
-                            popupContent.appendChild(buttonsDiv);
-                            
+                                const buttonsDiv = document.createElement('div');
+                                buttonsDiv.style.display = 'flex';
+                                buttonsDiv.style.justifyContent = 'space-between';
+                                popupContent.appendChild(buttonsDiv);
+                                
 
-                            const submitButton = document.createElement('button');
-                            submitButton.textContent = 'Submit';
-                            submitButton.style.padding = '10px 20px';
-                            submitButton.style.backgroundColor = '#0078d4';
-                            submitButton.style.color = 'white';
-                            submitButton.style.border = 'none';
-                            submitButton.style.cursor = 'pointer';
-                            submitButton.style.borderRadius = '5px';
-                            submitButton.style.transition = 'background-color 0.3s';
-                            submitButton.style.display = 'block';
-                            submitButton.style.marginTop = '10px';
-                            buttonsDiv.appendChild(submitButton);
+                                const submitButton = document.createElement('button');
+                                submitButton.textContent = 'Submit';
+                                submitButton.style.padding = '10px 20px';
+                                submitButton.style.backgroundColor = '#0078d4';
+                                submitButton.style.color = 'white';
+                                submitButton.style.border = 'none';
+                                submitButton.style.cursor = 'pointer';
+                                submitButton.style.borderRadius = '5px';
+                                submitButton.style.transition = 'background-color 0.3s';
+                                submitButton.style.display = 'block';
+                                submitButton.style.marginTop = '10px';
+                                buttonsDiv.appendChild(submitButton);
 
-                            submitButton.addEventListener('mouseenter', function() {
-                                this.style.backgroundColor = '#005a9e';
-                            });
+                                submitButton.addEventListener('mouseenter', function() {
+                                    this.style.backgroundColor = '#005a9e';
+                                });
 
-                            submitButton.addEventListener('mouseleave', function() {
-                                this.style.backgroundColor = '#0078d4';
-                            });
+                                submitButton.addEventListener('mouseleave', function() {
+                                    this.style.backgroundColor = '#0078d4';
+                                });
 
-                            submitButton.onclick = function() {
-                                const efficiency = efficiencyInput.value;
-                                GM_SuperValue.set('rebootEfficiency', efficiency);
-                                startScan(60*60*24*7, true, efficiency);
-                                popup.remove();
-                            }
+                                submitButton.onclick = function() {
+                                    const efficiency = efficiencyInput.value;
+                                    GM_SuperValue.set('rebootEfficiency', efficiency);
+                                    startScan(60*60*24*7, true, efficiency);
+                                    popup.remove();
+                                }
 
-                            const closeButton = document.createElement('button');
-                            closeButton.textContent = 'Cancel';
-                            closeButton.style.padding = '10px 20px';
-                            closeButton.style.backgroundColor = '#ff5e57';
-                            closeButton.style.color = 'white';
-                            closeButton.style.border = 'none';
-                            closeButton.style.cursor = 'pointer';
-                            closeButton.style.borderRadius = '5px';
-                            closeButton.style.transition = 'background-color 0.3s';
-                            closeButton.style.display = 'block';
-                            closeButton.style.marginTop = '10px';
-                            closeButton.style.marginLeft = '10px';
-                            buttonsDiv.appendChild(closeButton);
+                                const closeButton = document.createElement('button');
+                                closeButton.textContent = 'Cancel';
+                                closeButton.style.padding = '10px 20px';
+                                closeButton.style.backgroundColor = '#ff5e57';
+                                closeButton.style.color = 'white';
+                                closeButton.style.border = 'none';
+                                closeButton.style.cursor = 'pointer';
+                                closeButton.style.borderRadius = '5px';
+                                closeButton.style.transition = 'background-color 0.3s';
+                                closeButton.style.display = 'block';
+                                closeButton.style.marginTop = '10px';
+                                closeButton.style.marginLeft = '10px';
+                                buttonsDiv.appendChild(closeButton);
 
-                            closeButton.addEventListener('mouseenter', function() {
-                                this.style.backgroundColor = '#ff3832';
-                            });
+                                closeButton.addEventListener('mouseenter', function() {
+                                    this.style.backgroundColor = '#ff3832';
+                                });
 
-                            closeButton.addEventListener('mouseleave', function() {
-                                this.style.backgroundColor = '#ff5e57';
-                            });
+                                closeButton.addEventListener('mouseleave', function() {
+                                    this.style.backgroundColor = '#ff5e57';
+                                });
 
-                            closeButton.onclick = function() {
-                                popup.remove();
-                            }
-                        };
+                                closeButton.onclick = function() {
+                                    popup.remove();
+                                }
+                            };
+                        }
 
                         // Add the full auto reboot button to the right of the dropdown
                         //actionsDropdown.before(fullAutoRebootButton);
                         
                         // Create a 'getPlannerCardData' button to the right of the dropdown
-                        const updatePlannerCardsDropdown = document.createElement('div');
-                        updatePlannerCardsDropdown.classList.add('op-dropdown');
-                        updatePlannerCardsDropdown.style.display = 'inline-block';
-                        updatePlannerCardsDropdown.innerHTML = `
-                            <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('updatePlannerCardsDropdown'); return false;">
-                                Planner Cards
-                                <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-                            </button>
-                            <div id="updatePlannerCardsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
-                                <div class="m-menu">
-                                    <div class="m-menu-item" onclick="getPlannerCardData()">
-                                        Retrieve Planner Cards Data
-                                    </div>
-                                    <div class="m-menu-item" onclick="openPlannerCardDataConfig()">
-                                        Edit Config
+                        if(savedFeatures["plannerCardScan"]) {
+                            const updatePlannerCardsDropdown = document.createElement('div');
+                            updatePlannerCardsDropdown.classList.add('op-dropdown');
+                            updatePlannerCardsDropdown.style.display = 'inline-block';
+                            updatePlannerCardsDropdown.innerHTML = `
+                                <button id="btnNewAction" type="button" class="m-button" onclick="issues.toggleDropdownMenu('updatePlannerCardsDropdown'); return false;">
+                                    Planner Cards
+                                    <m-icon name="chevron-down" class="button-caret-down" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                                </button>
+                                <div id="updatePlannerCardsDropdown" class="m-dropdown-menu is-position-right" aria-hidden="true">
+                                    <div class="m-menu">
+                                        <div class="m-menu-item" onclick="getPlannerCardData()">
+                                            Retrieve Planner Cards Data
+                                        </div>
+                                        <div class="m-menu-item" onclick="openPlannerCardDataConfig()">
+                                            Edit Config
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        `;
+                            `;
 
-                        // Add the update planner cards button to the right of the dropdown
-                        actionsDropdown.before(updatePlannerCardsDropdown);
+                            // Add the update planner cards button to the right of the dropdown
+                            actionsDropdown.before(updatePlannerCardsDropdown);
 
-                        let plannerCardRefreshInterval;
-                        let firstLoad = true;
-                        function setUpPlannerCardRefresh() {
-                            const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
-                            
-                            // If first load and openOnLoad is enabled, open the planner cards
-                            if(firstLoad && plannerCardConfig.openOnLoad) {
-                                getPlannerCardData();
-                                firstLoad = false;
-                            }
-
-                            // Disable the refresh interval if it exists
-                            if(plannerCardRefreshInterval) {
-                                clearInterval(plannerCardRefreshInterval);
-                            }
-                            
-                            // If the autoRetrieve is enabled, set the interval to refresh the planner cards
-                            if(plannerCardConfig.autoRetrieve) {
-                                plannerCardRefreshInterval = setInterval(() => {
+                            let plannerCardRefreshInterval;
+                            let firstLoad = true;
+                            function setUpPlannerCardRefresh() {
+                                const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
+                                
+                                // If first load and openOnLoad is enabled, open the planner cards
+                                if(firstLoad && plannerCardConfig.openOnLoad) {
                                     getPlannerCardData();
-                                }, plannerCardConfig.retrieveInterval * 60 * 1000);
+                                    firstLoad = false;
+                                }
+
+                                // Disable the refresh interval if it exists
+                                if(plannerCardRefreshInterval) {
+                                    clearInterval(plannerCardRefreshInterval);
+                                }
+                                
+                                // If the autoRetrieve is enabled, set the interval to refresh the planner cards
+                                if(plannerCardConfig.autoRetrieve) {
+                                    plannerCardRefreshInterval = setInterval(() => {
+                                        getPlannerCardData();
+                                    }, plannerCardConfig.retrieveInterval * 60 * 1000);
+                                }
                             }
+
+                            openPlannerCardDataConfig = function() {
+                                // Open a small overlay menu for editing if the user wants auto retrieval of planner data and how often
+                                const popup = document.createElement('div');
+                                popup.style.cssText = `
+                                    position: fixed;
+                                    top: 0;
+                                    left: 0;
+                                    width: 100%;
+                                    height: 100%;
+                                    background-color: rgba(0, 0, 0, 0.5);
+                                    z-index: 1000;
+                                    display: flex;
+                                    justify-content: center;
+                                    align-items: center;
+                                `;
+                                document.body.appendChild(popup);
+
+                                const popupContent = document.createElement('div');
+                                popupContent.style.cssText = `
+                                    padding: 20px;
+                                    background-color: #333;
+                                    border-radius: 10px;
+                                `;
+                                popup.appendChild(popupContent);
+
+                                const popupTitle = document.createElement('h2');
+                                popupTitle.textContent = 'Planner Card Data Config';
+                                popupTitle.style.color = 'white';
+                                popupTitle.style.marginBottom = '10px';
+                                popupContent.appendChild(popupTitle);
+
+                                const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
+                                
+                                // Auto retrieve checkbox
+                                const autoRetrieveContainer = document.createElement('div');
+                                autoRetrieveContainer.style.display = 'flex';
+                                autoRetrieveContainer.style.alignItems = 'center';
+
+                                const autoRetrieveCheckbox = document.createElement('input');
+                                autoRetrieveCheckbox.type = 'checkbox';
+                                autoRetrieveCheckbox.checked = plannerCardConfig.autoRetrieve;
+                                autoRetrieveCheckbox.style.marginBottom = '10px';
+                                autoRetrieveCheckbox.style.width = '20px'; // Set the width smaller
+                                autoRetrieveCheckbox.style.height = '20px'; // Set the height smaller
+                                autoRetrieveCheckbox.style.marginRight = '10px'; // Add some space to the right
+
+                                const autoRetrieveLabelText = document.createElement('span');
+                                autoRetrieveLabelText.innerText = 'Auto Retrieve';
+                                autoRetrieveLabelText.style.color = '#fff'; // Set text color to white for better contrast
+                                autoRetrieveLabelText.style.marginBottom = '10px';
+
+                                autoRetrieveContainer.appendChild(autoRetrieveCheckbox);
+                                autoRetrieveContainer.appendChild(autoRetrieveLabelText);
+                                popupContent.appendChild(autoRetrieveContainer);
+
+                                // Open on load checkbox
+                                const openOnLoadContainer = document.createElement('div');
+                                openOnLoadContainer.style.display = 'flex';
+                                openOnLoadContainer.style.alignItems = 'center';
+
+                                const openOnLoadCheckbox = document.createElement('input');
+                                openOnLoadCheckbox.type = 'checkbox';
+                                openOnLoadCheckbox.checked = plannerCardConfig.openOnLoad;
+                                openOnLoadCheckbox.style.marginBottom = '10px';
+                                openOnLoadCheckbox.style.width = '20px'; // Set the width smaller
+                                openOnLoadCheckbox.style.height = '20px'; // Set the height smaller
+                                openOnLoadCheckbox.style.marginRight = '10px'; // Add some space to the right
+
+                                const openOnLoadLabelText = document.createElement('span');
+                                openOnLoadLabelText.innerText = 'Open on Load';
+                                openOnLoadLabelText.style.color = '#fff'; // Set text color to white for better contrast
+                                openOnLoadLabelText.style.marginBottom = '10px';
+
+                                openOnLoadContainer.appendChild(openOnLoadCheckbox);
+                                openOnLoadContainer.appendChild(openOnLoadLabelText);
+                                popupContent.appendChild(openOnLoadContainer);
+
+                                // Retrieve interval input
+                                const retrieveIntervalLabel = document.createElement('label');
+                                retrieveIntervalLabel.textContent = 'Retrieve Interval (minutes)';
+                                retrieveIntervalLabel.style.color = 'white';
+                                retrieveIntervalLabel.style.marginBottom = '10px';
+                                popupContent.appendChild(retrieveIntervalLabel);
+                                
+                                const retrieveIntervalInput = document.createElement('input');
+                                retrieveIntervalInput.type = 'number';
+                                retrieveIntervalInput.min = 1;
+                                retrieveIntervalInput.value = plannerCardConfig.retrieveInterval;
+                                retrieveIntervalInput.style.width = '100%';
+                                retrieveIntervalInput.style.padding = '10px';
+                                retrieveIntervalInput.style.marginBottom = '10px';
+                                retrieveIntervalInput.style.color = 'white';
+                                popupContent.appendChild(retrieveIntervalInput);
+
+                                const buttonsDiv = document.createElement('div');
+                                buttonsDiv.style.display = 'flex';
+                                buttonsDiv.style.justifyContent = 'space-between';
+                                popupContent.appendChild(buttonsDiv);
+                                
+                                const submitButton = document.createElement('button');
+                                submitButton.textContent = 'Save';
+                                submitButton.style.padding = '10px 20px';
+                                submitButton.style.backgroundColor = '#4CAF50';
+                                submitButton.style.color = 'white';
+                                submitButton.style.border = 'none';
+                                submitButton.style.cursor = 'pointer';
+                                submitButton.style.borderRadius = '5px';
+                                submitButton.style.transition = 'background-color 0.3s';
+                                submitButton.style.display = 'block';
+                                submitButton.style.marginTop = '10px';
+                                buttonsDiv.appendChild(submitButton);
+
+                                submitButton.addEventListener('mouseenter', function() {
+                                    this.style.backgroundColor = '#45a049';
+                                });
+
+                                submitButton.addEventListener('mouseleave', function() {
+                                    this.style.backgroundColor = '#4CAF50';
+                                });
+
+                                submitButton.onclick = function() {
+                                    const autoRetrieve = autoRetrieveCheckbox.checked;
+                                    const openOnLoad = openOnLoadCheckbox.checked;
+                                    const retrieveInterval = retrieveIntervalInput.value;
+                                    GM_SuperValue.set('plannerCardConfig', {autoRetrieve: autoRetrieve, openOnLoad: openOnLoad, retrieveInterval: retrieveInterval});
+                                    popup.remove();
+
+                                    setUpPlannerCardRefresh();
+                                    updatePlannerCardsData();
+                                }
+
+                                const closeButton = document.createElement('button');
+                                closeButton.textContent = 'Cancel';
+                                closeButton.style.padding = '10px 20px';
+                                closeButton.style.backgroundColor = '#ff5e57';
+                                closeButton.style.color = 'white';
+                                closeButton.style.border = 'none';
+                                closeButton.style.cursor = 'pointer';
+                                closeButton.style.borderRadius = '5px';
+                                closeButton.style.transition = 'background-color 0.3s';
+                                closeButton.style.display = 'block';
+                                closeButton.style.marginTop = '10px';
+                                closeButton.style.marginLeft = '10px';
+                                buttonsDiv.appendChild(closeButton);
+
+                                closeButton.addEventListener('mouseenter', function() {
+                                    this.style.backgroundColor = '#ff3832';
+                                });
+
+                                closeButton.addEventListener('mouseleave', function() {
+                                    this.style.backgroundColor = '#ff5e57';
+                                });
+
+                                closeButton.onclick = function() {
+                                    popup.remove();
+                                }
+                            }
+                            
+                            setUpPlannerCardRefresh();
                         }
-
-                        openPlannerCardDataConfig = function() {
-                            // Open a small overlay menu for editing if the user wants auto retrieval of planner data and how often
-                            const popup = document.createElement('div');
-                            popup.style.cssText = `
-                                position: fixed;
-                                top: 0;
-                                left: 0;
-                                width: 100%;
-                                height: 100%;
-                                background-color: rgba(0, 0, 0, 0.5);
-                                z-index: 1000;
-                                display: flex;
-                                justify-content: center;
-                                align-items: center;
-                            `;
-                            document.body.appendChild(popup);
-
-                            const popupContent = document.createElement('div');
-                            popupContent.style.cssText = `
-                                padding: 20px;
-                                background-color: #333;
-                                border-radius: 10px;
-                            `;
-                            popup.appendChild(popupContent);
-
-                            const popupTitle = document.createElement('h2');
-                            popupTitle.textContent = 'Planner Card Data Config';
-                            popupTitle.style.color = 'white';
-                            popupTitle.style.marginBottom = '10px';
-                            popupContent.appendChild(popupTitle);
-
-                            const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
-                            
-                            // Auto retrieve checkbox
-                            const autoRetrieveContainer = document.createElement('div');
-                            autoRetrieveContainer.style.display = 'flex';
-                            autoRetrieveContainer.style.alignItems = 'center';
-
-                            const autoRetrieveCheckbox = document.createElement('input');
-                            autoRetrieveCheckbox.type = 'checkbox';
-                            autoRetrieveCheckbox.checked = plannerCardConfig.autoRetrieve;
-                            autoRetrieveCheckbox.style.marginBottom = '10px';
-                            autoRetrieveCheckbox.style.width = '20px'; // Set the width smaller
-                            autoRetrieveCheckbox.style.height = '20px'; // Set the height smaller
-                            autoRetrieveCheckbox.style.marginRight = '10px'; // Add some space to the right
-
-                            const autoRetrieveLabelText = document.createElement('span');
-                            autoRetrieveLabelText.innerText = 'Auto Retrieve';
-                            autoRetrieveLabelText.style.color = '#fff'; // Set text color to white for better contrast
-                            autoRetrieveLabelText.style.marginBottom = '10px';
-
-                            autoRetrieveContainer.appendChild(autoRetrieveCheckbox);
-                            autoRetrieveContainer.appendChild(autoRetrieveLabelText);
-                            popupContent.appendChild(autoRetrieveContainer);
-
-                            // Open on load checkbox
-                            const openOnLoadContainer = document.createElement('div');
-                            openOnLoadContainer.style.display = 'flex';
-                            openOnLoadContainer.style.alignItems = 'center';
-
-                            const openOnLoadCheckbox = document.createElement('input');
-                            openOnLoadCheckbox.type = 'checkbox';
-                            openOnLoadCheckbox.checked = plannerCardConfig.openOnLoad;
-                            openOnLoadCheckbox.style.marginBottom = '10px';
-                            openOnLoadCheckbox.style.width = '20px'; // Set the width smaller
-                            openOnLoadCheckbox.style.height = '20px'; // Set the height smaller
-                            openOnLoadCheckbox.style.marginRight = '10px'; // Add some space to the right
-
-                            const openOnLoadLabelText = document.createElement('span');
-                            openOnLoadLabelText.innerText = 'Open on Load';
-                            openOnLoadLabelText.style.color = '#fff'; // Set text color to white for better contrast
-                            openOnLoadLabelText.style.marginBottom = '10px';
-
-                            openOnLoadContainer.appendChild(openOnLoadCheckbox);
-                            openOnLoadContainer.appendChild(openOnLoadLabelText);
-                            popupContent.appendChild(openOnLoadContainer);
-
-                            // Retrieve interval input
-                            const retrieveIntervalLabel = document.createElement('label');
-                            retrieveIntervalLabel.textContent = 'Retrieve Interval (minutes)';
-                            retrieveIntervalLabel.style.color = 'white';
-                            retrieveIntervalLabel.style.marginBottom = '10px';
-                            popupContent.appendChild(retrieveIntervalLabel);
-                            
-                            const retrieveIntervalInput = document.createElement('input');
-                            retrieveIntervalInput.type = 'number';
-                            retrieveIntervalInput.min = 1;
-                            retrieveIntervalInput.value = plannerCardConfig.retrieveInterval;
-                            retrieveIntervalInput.style.width = '100%';
-                            retrieveIntervalInput.style.padding = '10px';
-                            retrieveIntervalInput.style.marginBottom = '10px';
-                            retrieveIntervalInput.style.color = 'white';
-                            popupContent.appendChild(retrieveIntervalInput);
-
-                            const buttonsDiv = document.createElement('div');
-                            buttonsDiv.style.display = 'flex';
-                            buttonsDiv.style.justifyContent = 'space-between';
-                            popupContent.appendChild(buttonsDiv);
-                            
-                            const submitButton = document.createElement('button');
-                            submitButton.textContent = 'Save';
-                            submitButton.style.padding = '10px 20px';
-                            submitButton.style.backgroundColor = '#4CAF50';
-                            submitButton.style.color = 'white';
-                            submitButton.style.border = 'none';
-                            submitButton.style.cursor = 'pointer';
-                            submitButton.style.borderRadius = '5px';
-                            submitButton.style.transition = 'background-color 0.3s';
-                            submitButton.style.display = 'block';
-                            submitButton.style.marginTop = '10px';
-                            buttonsDiv.appendChild(submitButton);
-
-                            submitButton.addEventListener('mouseenter', function() {
-                                this.style.backgroundColor = '#45a049';
-                            });
-
-                            submitButton.addEventListener('mouseleave', function() {
-                                this.style.backgroundColor = '#4CAF50';
-                            });
-
-                            submitButton.onclick = function() {
-                                const autoRetrieve = autoRetrieveCheckbox.checked;
-                                const openOnLoad = openOnLoadCheckbox.checked;
-                                const retrieveInterval = retrieveIntervalInput.value;
-                                GM_SuperValue.set('plannerCardConfig', {autoRetrieve: autoRetrieve, openOnLoad: openOnLoad, retrieveInterval: retrieveInterval});
-                                popup.remove();
-
-                                setUpPlannerCardRefresh();
-                                updatePlannerCardsData();
-                            }
-
-                            const closeButton = document.createElement('button');
-                            closeButton.textContent = 'Cancel';
-                            closeButton.style.padding = '10px 20px';
-                            closeButton.style.backgroundColor = '#ff5e57';
-                            closeButton.style.color = 'white';
-                            closeButton.style.border = 'none';
-                            closeButton.style.cursor = 'pointer';
-                            closeButton.style.borderRadius = '5px';
-                            closeButton.style.transition = 'background-color 0.3s';
-                            closeButton.style.display = 'block';
-                            closeButton.style.marginTop = '10px';
-                            closeButton.style.marginLeft = '10px';
-                            buttonsDiv.appendChild(closeButton);
-
-                            closeButton.addEventListener('mouseenter', function() {
-                                this.style.backgroundColor = '#ff3832';
-                            });
-
-                            closeButton.addEventListener('mouseleave', function() {
-                                this.style.backgroundColor = '#ff5e57';
-                            });
-
-                            closeButton.onclick = function() {
-                                popup.remove();
-                            }
-                        }
-                        
-                        setUpPlannerCardRefresh();
-                        
                     }
 
                     function DetectFrozenMiners() {
@@ -6640,11 +6887,13 @@ window.addEventListener('load', function () {
                 return parsePathData(d);
             }
 
-            function createChartDataBox(chartID, title, callback) {
+            function createDownTimesChartDataBox(chartID, title, callback) {
+                if(!savedFeatures["downCount"]) { return; }
+
                 const chart = document.querySelector(chartID);
                 if (!chart) {
                     setTimeout(() => {
-                        createChartDataBox(chartID, title, callback);
+                        createDownTimesChartDataBox(chartID, title, callback);
                     }, 500);
                     return;
                 }
@@ -6698,7 +6947,7 @@ window.addEventListener('load', function () {
                 });
             }
 
-            createChartDataBox('#uptimeChart', 'Times Down', (result, timeSpan) => {
+            createDownTimesChartDataBox('#uptimeChart', 'Times Down', (result, timeSpan) => {
             });
 
 
@@ -6734,25 +6983,31 @@ window.addEventListener('load', function () {
                     }
 
                     // Add the reboot count to the page
-                    addDataBox('Reboot Count (Activity Log)', reboots.length);
+                    if(savedFeatures["softRebootCount"]) {
+                        addDataBox('Reboot Count (Activity Log)', reboots.length);
+                    }
 
-                    // Time since last reboot
-                    if(lastRebootTime) {
-                        const timeSinceReboot = Date.now() - lastRebootTime;
-                        const timeSinceRebootElement = addDataBox('Time Since Last Reboot (Activity Log)', timeSinceReboot, (mBox, h3, p) => {
-                            let timeSinceReboot = Date.now() - lastRebootTime;
-                            const days = Math.floor(timeSinceReboot / (1000 * 60 * 60 * 24));
-                            timeSinceReboot = new Date(timeSinceReboot).toISOString().substr(11, 8);
-                            if (days > 0) {
-                                timeSinceReboot = days + 'd ' + timeSinceReboot;
-                            }
-                            p.textContent = timeSinceReboot;
-                        }, 1000);
+                    if(savedFeatures["lastSoftReboot"]) {
+                        // Time since last reboot
+                        if(lastRebootTime) {
+                            const timeSinceReboot = Date.now() - lastRebootTime;
+                            const timeSinceRebootElement = addDataBox('Time Since Last Reboot (Activity Log)', timeSinceReboot, (mBox, h3, p) => {
+                                let timeSinceReboot = Date.now() - lastRebootTime;
+                                const days = Math.floor(timeSinceReboot / (1000 * 60 * 60 * 24));
+                                timeSinceReboot = new Date(timeSinceReboot).toISOString().substr(11, 8);
+                                if (days > 0) {
+                                    timeSinceReboot = days + 'd ' + timeSinceReboot;
+                                }
+                                p.textContent = timeSinceReboot;
+                            }, 1000);
+                        }
                     }
                 }
             }, 500);
 
             function createBreakerNumBox() {
+                if(!savedFeatures["breakerNumberMiner"]) { return; }
+
                 // Check if the details were loaded
                 var detailsLoadedInterval = setInterval(() => {
                     var [cleanedText, minerDetails] = getMinerDetails();
@@ -6781,6 +7036,7 @@ window.addEventListener('load', function () {
             // Logic for seeing if the miner exists in a planner board
             function checkIfInPlannerBoard() {
                 GM_SuperValue.set("locatePlannerCard", false);
+                if(!savedFeatures["plannerCardScanMiner"]) { return; }
 
                 var [cleanedText, minerDetails] = getMinerDetails();
                 console.log(minerDetails);
@@ -6921,111 +7177,13 @@ window.addEventListener('load', function () {
             checkIfInPlannerBoard();
             
         }
-        
-        // Miner Map/List, add temperature data
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/Map") || currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/List")) {
-            function addDataBox(title, data, updateFunc, updateInterval) {
-                // Add new m-box to m-grid-list
-                const mGridList = document.querySelector('.m-grid-list');
-                const mBox = document.createElement('div');
-                mBox.classList.add('m-box');
-                mGridList.appendChild(mBox);
-
-                // Add new m-stack to m-box
-                const mStack = document.createElement('div');
-                mStack.classList.add('m-stack');
-                mStack.classList.add('has-space-s');
-                mBox.appendChild(mStack);
-
-                // Add new h3 to m-stack
-                const h3 = document.createElement('h3');
-                h3.classList.add('m-heading');
-                h3.classList.add('is-muted');
-                h3.textContent = title;
-                h3.style.color = '#70707b';
-                mStack.appendChild(h3);
-
-                // Add new p to m-stack
-                const p = document.createElement('p');
-                p.classList.add('m-code');
-                p.classList.add('is-size-xl');
-                p.textContent = data;
-                mStack.appendChild(p);
-
-                // Run the update function if it exists
-                if (updateFunc) {
-                    updateFunc(mBox, h3, p);
-                    if (updateInterval) {
-                        setInterval(() => {
-                            updateFunc(mBox, h3, p);
-                        }, updateInterval);
-                    }
-                }
-
-                // Return the m-box element
-                return mBox;
-            }
-
-            let lastContainer = "";
-            let currentTempBox = null;
-            function CreateTemperatureDataBox() {
-                currentTempBox = addDataBox("Temperature", "Loading...", (mBox, h3, p) => {
-                    if (mBox) {
-                        retrieveContainerTempData((containerTempData) => {
-                            var containerElement = document.querySelector('#zoneList');
-                            if (containerElement) {
-                                const shadowRoot = containerElement.shadowRoot;
-                                const selectedOption = shadowRoot.querySelector('option[selected]');
-                                const containerText = selectedOption.textContent.trim();
-                                // Make sure we in the minden site
-                                if(containerText !== "zones" && !containerText.includes('Minden')) {
-                                    mBox.style.display = 'none';
-                                    return;
-                                } else {
-                                    mBox.style.display = 'block';
-                                }
-                                try {
-                                    const containerNum = parseInt(containerText.split('_')[1].substring(1), 10); // Extract the number after 'C' and remove leading zeros
-                                    if (isNaN(containerNum) || !containerTempData[containerNum]) {
-                                        throw new Error('Invalid container number or missing temperature data');
-                                    }
-                                    const tempValue = containerTempData[containerNum].temp.toFixed(2);
-                                    p.textContent = tempValue;
-                                } catch (error) {
-                                    console.error('Error retrieving temperature data:', error);
-                                    p.textContent = '';
-                                }
-                            } else {
-                                p.textContent = '';
-                            }
-                        } );
-                    }
-                }, 1000);
-            }
-
-            // Add observer to detect when the container changes via #zoneList
-            const observer = new MutationObserver((mutationsList, observer) => {
-                var containerElement = document.querySelector('#zoneList');
-                if (containerElement) {
-                    const shadowRoot = containerElement.shadowRoot;
-                    const selectedOption = shadowRoot.querySelector('option[selected]');
-                    const containerText = selectedOption.textContent.trim();
-                    if (containerText !== lastContainer) {
-                        lastContainer = containerText;
-                        if(currentTempBox) {
-                            currentTempBox.remove();
-                        }
-                        CreateTemperatureDataBox();
-                    }
-                }
-            });
-
-            // Start observing the container
-            observer.observe(document.body, { childList: true, subtree: true });
-        }
 
         // Add temps for all containers if in overview page and are in minden
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview") && siteName.includes("Minden")) {
+            if(!savedFeatures["avgContainerTemps"]) {
+                return;
+            }
+           
             let lastRan = 0;
             function addTemperatureData() {
                 const containers = document.querySelectorAll('.stat-panel');
@@ -8300,7 +8458,9 @@ window.addEventListener('load', function () {
             if(logContent && logContent.textContent.includes("\n")) {
                 
                 // Scroll to bottom of the log content
-                logContent.scrollTop = logContent.scrollHeight;
+                if(savedFeatures["startAtLogBottom"]) {
+                    logContent.scrollTop = logContent.scrollHeight;
+                }
 
                 // On tab change
                 const tabs = document.querySelectorAll('.tab span');
@@ -8316,7 +8476,7 @@ window.addEventListener('load', function () {
 
                 // If we didn't already add the error tab, add it
                 const oldErrorTab = document.querySelector('[data-id="errors"]');
-                if (!oldErrorTab) {
+                if (!oldErrorTab && savedFeatures["minerLogErrorsInfo"]) {
                     // Search through the log and locate errors
                     const logText = logContent.innerText;
                     var errorsFound = runErrorScanLogic(logText);
@@ -8762,7 +8922,7 @@ window.addEventListener('load', function () {
             
             if (formsContent && formsTitle) {
                 const linkAlreadyExists = formsContent.querySelector('a[href="https://shop.bitmain.com/support/download"]');
-                if (linkAlreadyExists) { return; }
+                if (linkAlreadyExists || !savedFeatures["firmwareLinks"]) { return; }
                 const link = document.createElement('a');
                 link.href = 'https://shop.bitmain.com/support/download';
                 link.target = '_blank'; // Open in a new tab
@@ -8855,16 +9015,18 @@ window.addEventListener('load', function () {
                 return time;
             }
 
-            // Initial time
-            let currentTime = parseRunningTime();
-            currentTime = incrementTime(currentTime);
-            estimatedTimeElement.textContent = `Estimated Live: ${formatTime(currentTime)}`;
-
-            // Update the estimated time every second
-            lastUpTimeInterval = setInterval(() => {
+            if(savedFeatures["estimatedLiveTime"]) {
+                // Initial time
+                let currentTime = parseRunningTime();
                 currentTime = incrementTime(currentTime);
                 estimatedTimeElement.textContent = `Estimated Live: ${formatTime(currentTime)}`;
-            }, 1000);
+
+                // Update the estimated time every second
+                lastUpTimeInterval = setInterval(() => {
+                    currentTime = incrementTime(currentTime);
+                    estimatedTimeElement.textContent = `Estimated Live: ${formatTime(currentTime)}`;
+                }, 1000);
+            }
         }
 
         // Call the function to start updating the estimated time
