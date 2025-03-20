@@ -18,9 +18,12 @@
 // Remove all local storage items for this domain
 //localStorage.clear();
 
+// Measure the time taken to clear local storage
+console.time('Clear Local Storage');
 localStorage.removeItem("storedCompanies");
 localStorage.removeItem("selectedCompanyName");
 localStorage.removeItem("selectedSiteName");
+console.timeEnd('Clear Local Storage');
 
 // Print all local storage items for this domain
 console.log('Local Storage Items:', localStorage);
@@ -55,10 +58,6 @@ function overrideAxios() {
                     localStorage.removeItem("selectedCompanyName");
                     localStorage.removeItem("selectedSiteName");
                 }, 100);
-            },
-            '/Weather': (data) => {
-                console.log('Weather Data:', data);
-                data.siteName = `Demo Site`;
             },
             '/Companies': (data) => {
                 data.companies.forEach((company, index) => {
@@ -99,17 +98,14 @@ function overrideAxios() {
                 }
             },
             '/Layout': (data) => {
-                console.log('Layout Data:', data);
                 data.zones.forEach((zone, index) => {
                     zone.zoneName = zone.zoneName.replace(/^[^_]+/, 'Demo');
                     zone.agentName = zone.agentName.replace(/^[^_]+/, 'Demo');
                     zone.racks.forEach((rack, index) => {
-                        console.log('Rack:', rack);
                         rack.agents.forEach((agent, index) => {
                             //agent = agent.replace(/^[^_]+/, 'Demo');
                         });
                         rack.rows.forEach((row, index) => {
-                            console.log('Row:', row);
                             row.slotData.forEach((slot, index) => {
                                 slot.standardizedLocationId = slot.standardizedLocationId.replace(/^[^_]+/, 'Demo');
                             });
@@ -200,16 +196,16 @@ function overrideAxios() {
         // Check if the URL matches any of the patterns
         for (const pattern in urlPatterns) {
             if (url.includes(pattern)) {
-
-                console.log('Intercepted axios response for URL:', url);
-
-                // Call the original axios get method
+                //console.log('Intercepted axios response for URL:', url);
+                
                 return originalGet.apply(this, arguments).then(response => {
                     // Modify the response data using the corresponding function
-                    urlPatterns[pattern](response.data);
-
+                    if(urlPatterns[pattern]) {
+                        console.time('Modify Axios Response: ' + pattern);// Measure the time taken to modify the response
+                        urlPatterns[pattern](response.data);
+                        console.timeEnd('Modify Axios Response: ' + pattern);
+                    }
                     // Return the modified response
-                    console.log('Modified axios response:', response);
                     return response;
                 });
             }
@@ -225,6 +221,7 @@ overrideAxios();
 
 // Wait until user-wrapper class element exists and then grab it
 function waitForElement(selector, time, callback) {
+    // Measure the time taken to wait for the element
     let element = document.querySelector(selector);
     if(element) {
         // Run the callback function
@@ -242,29 +239,36 @@ function waitForElement(selector, time, callback) {
     }
 }
 waitForElement('.user-wrapper', 0, function(element) {
-    // Gets all m-text elements and replaces the text content of the element that contains 'Welcome'
+    // Measure the time taken to replace text content
+    console.time('Replace Welcome Text');
     const textElements = element.querySelectorAll('m-text');
     textElements.forEach(textElement => {
         if (textElement.textContent.includes('Welcome')) {
             textElement.textContent = 'Welcome User';
         }
     });
+    console.timeEnd('Replace Welcome Text');
 });
 
 waitForElement('#weatherLocation', 0, function(element) {
-    // Replace the weather location with Demo Site, also change the id so it doesn't get replaced again
+    // Measure the time taken to replace weather location
+    console.time('Replace Weather Location');
     element.id = 'weatherLocationDemo';
     element.textContent = 'Demo Site';
+    console.timeEnd('Replace Weather Location');
 });
 
 // Fix for the companies list in the users page
 const currentUrl = window.location.href;
 if (currentUrl.includes('Users')) {
     waitForElement('#companySelect', 0, function(selectElement) {
+        // Measure the time taken to replace company names
+        console.time('Replace Company Names');
         const options = selectElement.querySelectorAll('option');
         
         // if it is empty, then the companies have not been loaded yet
         if (options.length === 0) {
+            console.timeEnd('Replace Company Names');
             return false;
         }
 
@@ -274,5 +278,6 @@ if (currentUrl.includes('Users')) {
                 option.textContent = `Demo Company ${index}`;
             }
         });
+        console.timeEnd('Replace Company Names');
     });
 }
