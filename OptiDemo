@@ -251,8 +251,8 @@ waitForElement('.user-wrapper', 0, function(element) {
     });
 });
 
-waitForElement('#weatherLocation', 10, function(element) {
-    console.log('Weather Location Element:', element);
+waitForElement('#weatherLocation', 0, function(element) {
+    // Replace the weather location with Demo Site, also change the id so it doesn't get replaced again
     element.id = 'weatherLocationDemo';
     element.textContent = 'Demo Site';
 });
