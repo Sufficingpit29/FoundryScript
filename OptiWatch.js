@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Watch
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.7
 // @description  Consolidates all the sites together into a single tab.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -22,7 +22,7 @@ let loadingStatus;
 window.addEventListener('load', async function () {
 
     const userID = localStorage.getItem("OptiFleetID");
-
+    
     async function fetchData(url) {
         try {
             const response = await fetch(url);
@@ -168,9 +168,18 @@ window.addEventListener('load', async function () {
         }
 
         createOptiWatchButton();
-
+        
     } else if(currentURL.includes("OptiWatch")) {
         console.log('Opti-Watch popout window');
+
+        // Find hubspot-messages-iframe-container and remove it
+        const interval = setInterval(() => {
+            const hubspotMessagesIframeContainer = document.querySelector('#hubspot-messages-iframe-container');
+            if (hubspotMessagesIframeContainer) {
+                hubspotMessagesIframeContainer.remove();
+                clearInterval(interval);
+            }
+        }, 100);
 
         // Create a full overlay to block the page
         let overlay = document.createElement('div');
@@ -437,7 +446,7 @@ window.addEventListener('load', async function () {
                     statusIcon.appendChild(tooltip);
                 });
 
-
+               
 
                 // Add event listeners for tooltips after appending to the DOM
                 setTimeout(() => {
@@ -483,7 +492,7 @@ window.addEventListener('load', async function () {
                     // Change the + to a - when expanded
                     const expandIcon = companyTitle.querySelector('.expand-icon');
                     expandIcon.innerText = isExpanded ? '+' : '-';
-
+                  
                 });
 
                 for (const site of company.sites) {
@@ -882,7 +891,7 @@ window.addEventListener('load', async function () {
                 });
 
                 scrollPanel.scrollTop = scrollPos;
-
+                
                 // Wait a tick then set the opened expandables and scroll position
                 setTimeout(() => {
                     openedExpandables.forEach(index => {
