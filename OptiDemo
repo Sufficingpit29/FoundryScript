@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OptiFleet Demo Script
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  Replaces various elements to not display sensative information.
 // @author       Matthew Axtell
 // @run-at       document-start
@@ -49,9 +49,16 @@ function overrideAxios() {
                 // So we don't save the modified companies in local storage
                 setInterval(() => {
                     localStorage.removeItem("storedCompanies");
+                }, 100);
+
+                setTimeout(() => {
                     localStorage.removeItem("selectedCompanyName");
                     localStorage.removeItem("selectedSiteName");
                 }, 100);
+            },
+            '/Weather': (data) => {
+                console.log('Weather Data:', data);
+                data.siteName = `Demo Site`;
             },
             '/Companies': (data) => {
                 data.companies.forEach((company, index) => {
@@ -119,9 +126,6 @@ function overrideAxios() {
                 data.sites.forEach((site, index) => {
                     site.siteName = `Demo Site ${index + 1}`;
                 });
-            },
-            '/Weather': (data) => {
-                data.siteName = `Demo Site`;
             },
             '/Users?userId': (data) => {
                 data.users.forEach((user, index) => {
@@ -212,7 +216,6 @@ function overrideAxios() {
         }
 
         
-
         // If the URL does not match, call the original axios get method
         return originalGet.apply(this, arguments);
     };
@@ -246,6 +249,12 @@ waitForElement('.user-wrapper', 0, function(element) {
             textElement.textContent = 'Welcome User';
         }
     });
+});
+
+waitForElement('#weatherLocation', 10, function(element) {
+    console.log('Weather Location Element:', element);
+    element.id = 'weatherLocationDemo';
+    element.textContent = 'Demo Site';
 });
 
 // Fix for the companies list in the users page
