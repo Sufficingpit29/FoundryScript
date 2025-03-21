@@ -7274,6 +7274,8 @@ window.addEventListener('load', function () {
                                 const rect = tempElement.getBoundingClientRect();
                                 tooltip.style.top = `${rect.top + window.scrollY - tooltip.offsetHeight - 5}px`;
                                 tooltip.style.left = `${rect.left + window.scrollX + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
+                            } else {
+                                tooltip.style.display = 'none';
                             }
 
                             // Show tooltip on hover
