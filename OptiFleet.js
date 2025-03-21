@@ -1614,7 +1614,6 @@ window.addEventListener('load', function () {
             serviceInstance.get(`/sensors?siteId=${siteId}`)
                 .then((resp) => __awaiter(this, void 0, void 0, function* () {
                 const sensors = resp.sensors;
-                console.log("Sensors Data:", sensors);
                 // Loop through all the sensors and get the average for each container
                 /*
                 {
@@ -7216,7 +7215,6 @@ window.addEventListener('load', function () {
                     }
                     lastRan = Date.now();
                     retrieveContainerTempData((containerTempData) => {
-                        console.log(containerTempData);
                         containers.forEach(container => {
                             const containerNum = parseInt(container.querySelector('.m-heading').innerText.split('_')[1].substring(1));
                             if (isNaN(containerNum) || !containerTempData[containerNum]) {
@@ -7267,17 +7265,6 @@ window.addEventListener('load', function () {
                                 document.body.appendChild(tooltip);
                             }
 
-                            // if the mouse is hovered over it at this moment already, then show the tooltip
-                            if (tempElement.matches(':hover')) {
-                                tooltip.style.display = 'block';
-                                tooltip.textContent = tooltipText.trim();
-                                const rect = tempElement.getBoundingClientRect();
-                                tooltip.style.top = `${rect.top + window.scrollY - tooltip.offsetHeight - 5}px`;
-                                tooltip.style.left = `${rect.left + window.scrollX + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
-                            } else {
-                                tooltip.style.display = 'none';
-                            }
-
                             // Show tooltip on hover
                             tempElement.addEventListener('mouseover', (e) => {
                                 tooltip.style.display = 'block';
@@ -7291,6 +7278,20 @@ window.addEventListener('load', function () {
                             tempElement.addEventListener('mouseout', () => {
                                 tooltip.style.display = 'none';
                             });
+
+                            // if the mouse is hovered over it at this moment already, then show the tooltip
+                            if (tempElement.matches(':hover')) {
+                                // delay 1 ms (it might think a mouseout event happens when the temp updates?)
+                                setTimeout(() => {
+                                    tooltip.style.display = 'block';
+                                    tooltip.textContent = tooltipText.trim();
+                                    const rect = tempElement.getBoundingClientRect();
+                                    tooltip.style.top = `${rect.top + window.scrollY - tooltip.offsetHeight - 5}px`;
+                                    tooltip.style.left = `${rect.left + window.scrollX + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
+                                }, 1);
+                            } else {
+                                tooltip.style.display = 'none';
+                            }
 
 
                         });
