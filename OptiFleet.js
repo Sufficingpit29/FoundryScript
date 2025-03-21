@@ -1,14 +1,10 @@
 // To do:
-// Total up offline time for down scan
-// Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
-// Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
-
-// maybe only only hash rate for miners so we can see actual *real* low hashers
+// Maybe full site scan for bad/abnormal fans?
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.8.4
+// @version      6.8.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -85,6 +81,7 @@ const features = [
     { name: 'Averaged Container Temp', id: 'displayAvgContainerTemp', category: 'Issues' },
 
     // Individual miner page
+    { name: 'Add Customer Name', id: 'customerName', category: 'Individual Miner' },
     { name: 'Copy Buttons', id: 'copyButtons', category: 'Individual Miner' },
     { name: 'Sharepoint & Planner', id: 'quickSharepointPlanner', category: 'Individual Miner' },
     { name: 'Planner Card Info', id: 'plannerCardScanMiner', category: 'Individual Miner' },
@@ -2447,6 +2444,108 @@ window.addEventListener('load', function () {
                 document.getElementById('cancelBtn').addEventListener('click', cancelIssueLog);
                 document.getElementById('linksBtn').addEventListener('click', editLinks);
             }
+
+            /*
+            <div class="m-stack has-space-m">
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Model
+                    </div>
+
+                    <div class="miner-detail-info" id="modelInfo">
+                <div class="m-text is-size-xs">Antminer S19 XP (141 THs)</div>
+                <div class="m-text is-size-xs is-secondary">HKYQEAABBAAJG0JV5</div>
+            </div>
+                </div>
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Firmware
+                    </div>
+
+                    <div class="miner-detail-info" id="firmwareInfo">Tue Dec 31 16:23:33 CST 2024</div>
+                </div>
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Network
+                    </div>
+
+                    <div class="miner-detail-info" id="networkInfo">
+                <div><a class="m-link is-size-xs" href="http://root:root@10.6.68.228" target="_blank">10.6.68.228</a></div>
+                <div class="m-text is-size-xs is-secondary">44:D2:2D:7B:BD:09</div>
+            </div>
+                </div>
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Status
+                    </div>
+
+                    <div class="miner-detail-info" id="statusInfo">Online</div>
+                </div>
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Zone / Rack / Row / Position
+                    </div>
+
+                    <div class="miner-detail-info" id="positionInfo">Minden_C18 / 9 / 7 / 1</div>
+                </div>
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Active Pool
+                    </div>
+
+                    <div class="miner-detail-info" id="poolInfo">
+            <div class="m-text is-size-xs">btc.foundryusapool.com:3333</div>
+            <span class="m-text is-size-xs is-secondary" title="forchimindebtc1.68x228">forchimindebtc1.68x228</span>
+        </div>
+                </div>
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Power Mode / Rated / Target
+                    </div>
+
+                    <div class="miner-detail-info" id="powerInfo">Normal / 141 THs / 141 THs</div>
+                </div>
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Online Date
+                    </div>
+
+                    <div class="miner-detail-info" id="onlineDateInfo">12/21/2023 03:52 PM</div>
+                </div>
+                <div class="m-form-control">
+                    <div class="m-label is-secondary">
+                        Asset ID
+                    </div>
+
+                    <div class="miner-detail-info" id="assetIdInfo">609865</div>
+                </div>
+            </div>
+            */
+            function addCustomerNameText() {
+                if(!savedFeatures["customerName"]) { return; }
+
+                // Find modelInfo, then get the main m-stack parent, then add the customer name text to the end
+                const modelInfo = document.querySelector('#modelInfo');
+                if (modelInfo && unsafeWindow.im && unsafeWindow.im.miner && unsafeWindow.im.miner.subcustomerName) {
+                    const customerName = unsafeWindow.im.miner.subcustomerName;
+                    const customerNameElement = document.createElement('div');
+                    customerNameElement.className = 'm-form-control';
+                    customerNameElement.innerHTML = `
+                        <div class="m-label is-secondary">
+                            Customer
+                        </div>
+                        <div class="miner-detail-info">
+                            <div class="m-text is-size-xs">${customerName}</div>
+                        </div>
+                    `;
+                    modelInfo.closest('.m-stack').appendChild(customerNameElement);
+                } else {
+                    // Try again in 100ms
+                    setTimeout(addCustomerNameText, 100);
+                }
+            }
+            addCustomerNameText();
+            
 
             function addCopyButton(element, textToCopy) {
                 if (element.querySelector('.copyBtn')) {return};
