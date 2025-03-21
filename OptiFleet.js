@@ -3,13 +3,12 @@
 // Fully figure out temp too high/low for possible trigger reasons for Bad HB Chain/Voltage Abnormity
 // Maybe full site scan for bad/abnormal fans? (Maybe also just low hash/issues scan. Also maybe take in account planner cards if card exists for fan and has been completed, only measure after?)
 
-// prob work on better planner check for existing card
 // maybe only only hash rate for miners so we can see actual *real* low hashers
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.8.3
+// @version      6.8.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -7509,57 +7508,41 @@ window.addEventListener('load', function () {
                     }, 100);
                     return;
                 }
-
-                /*
+                
                 // Searches through the plannerTasks to find the card with the serial number that was edited last
                 let bucketNameLookup = {};
                 plannerBuckets.forEach(bucket => {
                     bucketNameLookup[bucket.id] = bucket.name;
                 });
 
-                // Loop through plannerTasks array
-                plannerTasks.forEach(task => {
-                    const completedDateTime = task.completedDateTime;
-                    if (completedDateTime) {
-                        return;
-                    }
-                    const taskName = task.title;
-                    const taskSplit = taskName.split('_');
-                    const serialNumber = taskSplit[0];
-                    const issue = taskName.split('_')[taskSplit.length - 1];
-                    const bucketID = task.bucketId;
-                    const columnTitle = bucketNameLookup[bucketID];
-                    const lastModifiedDateTime = task.lastModifiedDateTime;
-                    let cardExists = newPlannerData[serialNumber];
-                    if (cardExists) {
-                        let lastModified = new Date(lastModifiedDateTime);
-                        let lastModifiedCard = new Date(cardExists.lastModified);
-                        // If the last modified date is older than our already stored date, then skip
-                        if (lastModified < lastModifiedCard) {
-                            return;
-                        }
-                    }
-                            
-                    let cardData = {
-                        columnTitle: columnTitle,
-                        issue: issue,
-                        lastModified: lastModifiedDateTime,
-                    };
-                    newPlannerData[serialNumber] = cardData;
-                });
-                */
-               
                 // Set horizontal scroll to a bit more each time
                 if(curTry >= 4) {
-                    document.querySelector('.columnsList').scrollBy({ left: 100, behavior: 'smooth' });
+                    // Scroll smoothly to last column
+                    let columnTitles = document.querySelectorAll('.columnTitle');
+                    let lastColumn = columnTitles[columnTitles.length - 1];
+                    lastColumn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+
+                    //document.querySelector('.columnsList').scrollBy({ left: 100, behavior: 'smooth' });
                 }
+
+                /*
+                Scroll Left: 1859
+                Client Width: 421
+                Scroll Width: 2314
+                */
 
                 // Get all the cards and scroll to it if the same serial number is found
                 const cards = document.querySelectorAll('.taskBoardCard');
                 curTry++;
                 console.log("Checking for card with serial number:", serialNumber);
                 
-                if (curTry >= maxTries) {
+                // At/past max tries or we at the end of the scroll of .columnsList
+                let columnsList = document.querySelector('.columnsList');
+                let endOfScroll = columnsList.scrollWidth - columnsList.clientWidth <= columnsList.scrollLeft+35;
+                console.log("End of scroll:", endOfScroll);
+                console.log("Scroll Left:", columnsList.scrollLeft);
+                console.log("Scroll Width - Client Width:", columnsList.scrollWidth - columnsList.clientWidth);
+                if (curTry >= maxTries || endOfScroll && curTry >= 4) {
                     console.log("Max tries reached, card not found.");
 
                     // Reset the search bar
