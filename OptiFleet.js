@@ -7244,7 +7244,12 @@ window.addEventListener('load', function () {
                             // Add a tooltip hover effect on the tempElement
                             const tempDetails = containerTempData[containerNum].temps;
                             let tooltipText = '';
-                            for (const [sensorName, temp] of Object.entries(tempDetails)) {
+                            const sortedTemps = Object.entries(tempDetails).sort((a, b) => {
+                                const aRack = parseInt(a[0].match(/Rack (\d+)-/)[1]);
+                                const bRack = parseInt(b[0].match(/Rack (\d+)-/)[1]);
+                                return aRack - bRack;
+                            });
+                            for (const [sensorName, temp] of sortedTemps) {
                                 tooltipText += `${sensorName}: ${temp.toFixed(2)}°F\n`;
                             }
 
