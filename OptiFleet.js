@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.8.2
+// @version      6.8.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -427,11 +427,13 @@ const errorsToSearch = {
 
     'Hashboard Model Mismatch': {
         icon: "https://img.icons8.com/?size=100&id=Aqjz8Pn0nyLl&format=png&color=FFFFFF",
-        start: "board_name:",
-        start: ["board_name:", "load machine"],
+        start: ["board_name:", "load machine", "different board name for"],
         end: "machine : ",
+        type: "Main",
         conditions: (text) => {
-            if(text.includes("board_name")) {
+            if(text.includes("different board name for")) {
+                return true;
+            } else if(text.includes("board_name")) {
                 // Extract the miner and board name from the text 2025-02-14 05:29:17 miner:BHB56804,board_name:BHB56804
                 const minerName = text.split("miner:")[1].split(",")[0].replace(/\r?\n|\r/g, '');
                 const boardName = text.split("board_name:")[1].replace(/\r?\n|\r/g, '');
@@ -7500,13 +7502,50 @@ window.addEventListener('load', function () {
                 filterTextBox.style.backgroundColor = '#c3b900';
 
                 // If we don't have plannerTasks data yet, then no elements are made to check yet.
-                if(!plannerTasks) {
+                if(!plannerTasks || !plannerBuckets) {
                     console.log("Planner tasks not found, trying again in 100ms.");
                     setTimeout(() => {
                         FindIfCardExists(serialNumber, findCallback);
                     }, 100);
                     return;
                 }
+
+                // Searches through the plannerTasks to find the card with the serial number that was edited last
+                let bucketNameLookup = {};
+                plannerBuckets.forEach(bucket => {
+                    bucketNameLookup[bucket.id] = bucket.name;
+                });
+
+                // Loop through plannerTasks array
+                plannerTasks.forEach(task => {
+                    const completedDateTime = task.completedDateTime;
+                    if (completedDateTime) {
+                        return;
+                    }
+                    const taskName = task.title;
+                    const taskSplit = taskName.split('_');
+                    const serialNumber = taskSplit[0];
+                    const issue = taskName.split('_')[taskSplit.length - 1];
+                    const bucketID = task.bucketId;
+                    const columnTitle = bucketNameLookup[bucketID];
+                    const lastModifiedDateTime = task.lastModifiedDateTime;
+                    let cardExists = newPlannerData[serialNumber];
+                    if (cardExists) {
+                        let lastModified = new Date(lastModifiedDateTime);
+                        let lastModifiedCard = new Date(cardExists.lastModified);
+                        // If the last modified date is older than our already stored date, then skip
+                        if (lastModified < lastModifiedCard) {
+                            return;
+                        }
+                    }
+                            
+                    let cardData = {
+                        columnTitle: columnTitle,
+                        issue: issue,
+                        lastModified: lastModifiedDateTime,
+                    };
+                    newPlannerData[serialNumber] = cardData;
+                });
 
                 // Set horizontal scroll to a bit more each time
                 if(curTry >= 4) {
