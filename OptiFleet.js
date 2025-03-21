@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.8.5
+// @version      6.8.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -70,15 +70,16 @@ const features = [
     // Overview Page
     { name: 'Averaged Container Temps', id: 'avgContainerTemps', category: 'Overview' },
 
+    // Miner List
+    { name: 'Miner Name Link', id: 'minerNameLink', category: 'Miner Table' },
+    { name: 'Breaker Number', id: 'breakerNumber', category: 'Miner Table' },
+
     // Issues page
     { name: 'Down Scan', id: 'downScan', category: 'Issues' },
     { name: 'Error Scan', id: 'errorScan', category: 'Issues' },
     { name: 'Auto Reboot', id: 'autoReboot', category: 'Issues' },
     { name: 'Planner Card Scan', id: 'plannerCardScan', category: 'Issues' },
     { name: 'Export Selected Miners', id: 'exportSelectedMiners', category: 'Issues' },
-    { name: 'Miner Name Link', id: 'minerNameLink', category: 'Issues' },
-    { name: 'Breaker Number', id: 'breakerNumber', category: 'Issues' },
-    { name: 'Averaged Container Temp', id: 'displayAvgContainerTemp', category: 'Issues' },
 
     // Individual miner page
     { name: 'Add Customer Name', id: 'customerName', category: 'Individual Miner' },
@@ -1613,7 +1614,7 @@ window.addEventListener('load', function () {
             serviceInstance.get(`/sensors?siteId=${siteId}`)
                 .then((resp) => __awaiter(this, void 0, void 0, function* () {
                 const sensors = resp.sensors;
-
+                console.log("Sensors Data:", sensors);
                 // Loop through all the sensors and get the average for each container
                 /*
                 {
@@ -1631,11 +1632,13 @@ window.addEventListener('load', function () {
                     var containerName = sensor.sensorName.split(' ')[1];
                     containerTempData[containerName] = containerTempData[containerName] || {
                         "temp": 0,
-                        "count": 0
+                        "count": 0,
+                        "temps": {}
                     };
 
                     containerTempData[containerName].temp += sensor.temp;
                     containerTempData[containerName].count++;
+                    containerTempData[containerName].temps[sensor.sensorName] = sensor.temp;
                 }
 
                 // Loop through the containerTempData and get the average for each container
@@ -3060,6 +3063,209 @@ window.addEventListener('load', function () {
             });
         }
 
+        var minersListTableLookup = {};
+
+        function getCurrentMinerList(baseDocument) {
+            if(!baseDocument) {
+                baseDocument = document;
+            }
+
+            var minerGrid = baseDocument.querySelector('#minerList');
+            if (!minerGrid) {
+                minerGrid = baseDocument.querySelector('#minerGrid');
+            }
+
+            if (minerGrid) {
+                // Loop through all the columns and store the index for each column & name
+                var columnIndexes = {};
+                const gridHeader = minerGrid.querySelector('.k-grid-header');
+                var columns = Array.from(gridHeader.querySelector('[role="row"]').children);
+                columns.forEach((column, index) => {
+                    // Get the title of the column, and store the index
+                    const title = column.getAttribute('data-title');
+                    columnIndexes[title] = index;
+                });
+
+                const rows = minerGrid.querySelectorAll('[role="row"]');
+                // Loop through all the rows and store the data for each miner
+                rows.forEach(row => {
+                    const uid = row.getAttribute('data-uid');
+                    let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
+              
+                    // Loop through columnIndexes and get the data for each column
+                    for (const [key, colIndex] of Object.entries(columnIndexes)) {
+                        let colRowElement = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(colIndex+1)) + ')');
+                        if (minerLinkElement && colRowElement) {
+                            // Store the data in the minersListTableLookup 
+                            const minerID = minerLinkElement.getAttribute('data-miner-id');
+                            minersListTableLookup[minerID] = minersListTableLookup[minerID] || {};
+                            minersListTableLookup[minerID][key] = colRowElement;
+                        }
+                    }
+                });
+            }
+        }
+
+        // Wait until HTML element with #minerList is loaded
+        function addBreakerNumberToSlotID() {
+            const minerListCheck = setInterval(() => {
+                const minerList = document.querySelector('#minerList') || document.querySelector('#minerGrid');
+                if (minerList) {
+                    clearInterval(minerListCheck);
+                    
+                    
+                    let plannerCardsDataAll = {};
+                    function updatePlannerLink(plannerElement) {
+                        
+                        let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
+                        let currentTime = new Date().getTime();
+                        let timeDiff = (currentTime - lastCollectionTime) / 1000;
+                        const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60*4});
+                        const retrievalInterval = plannerCardConfig.retrieveInterval*60;
+                        if (timeDiff > retrievalInterval) {
+                            plannerElement.textContent = '';
+
+                            // Remove the clickable link stuff
+                            plannerElement.style.cursor = 'default';
+                            plannerElement.onclick = null;
+                            plannerElement.style.color = 'white';
+                            plannerElement.style.textDecoration = 'none';
+                            return;
+                        }
+
+                        let serialNumber = plannerElement.getAttribute('data-serial-number');
+                        let cardData = plannerCardsDataAll[serialNumber];
+                        if (cardData) {
+                            let issue = (cardData.issue || "");
+                            if(issue) {
+                                issue = " - (" + issue + ")";
+                            }
+                            let columnTitle = cardData.columnTitle;
+                            plannerElement.textContent = columnTitle + issue;
+
+                            // Make it a clickable link
+                            plannerElement.style.cursor = 'pointer';
+                            plannerElement.onclick = function() {
+                                // Reset these so they don't screw up stuff just in case
+                                GM_SuperValue.set("taskName", "");
+                                GM_SuperValue.set("taskNotes", "");
+                                GM_SuperValue.set("taskComment", "");
+                                GM_SuperValue.set("detailsData", {});
+
+                                GM_SuperValue.set("locatePlannerCard", {
+                                    serialNumber: serialNumber,
+                                    columnTitle: columnTitle
+                                });
+
+                                var url = cardData.url;
+                                window.open(url, '_blank');
+                            };
+
+                            // Make it blue and underlined
+                            plannerElement.style.color = '#0078d4';
+                            plannerElement.style.textDecoration = 'underline';
+                        } else {
+                            plannerElement.textContent = 'No Card Found';
+
+                            // Remove the clickable link stuff
+                            plannerElement.style.cursor = 'default';
+                            plannerElement.onclick = null;
+                            plannerElement.style.color = 'white';
+                            plannerElement.style.textDecoration = 'none';
+                        }
+                    }
+
+                    updatePlannerCardsData = function() {
+                        console.log("Updating Planner Cards Data");
+                        for(var key in urlLookupPlanner) {
+                            let plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
+                            let collectDataSuperValueID = "plannerCardsData_" + plannerID;
+                            let data = GM_SuperValue.get(collectDataSuperValueID, {});
+                            // combine into plannerCardsData
+                            plannerCardsDataAll = {...plannerCardsDataAll, ...data};
+                        }
+
+                        // Loop through all planner-elements and update the text
+                        const plannerElements = document.querySelectorAll('.planner-element');
+                        for (const plannerElement of plannerElements) {
+                            updatePlannerLink(plannerElement);
+                        }
+                    }
+                    updatePlannerCardsData();
+                    const updateCardList = setInterval(() => {
+                        updatePlannerCardsData();
+                    }, 10000);
+                    
+                    // Add mutation observer to the minerList
+                    const observer = new MutationObserver(() => {
+                        getCurrentMinerList();
+                        
+                        // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
+                        for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
+                            const modelCell = minerData['Model'];
+                            const slotIDCell = minerData['Slot ID'];
+                            const statusCell = minerData['Status'];
+
+                            // Get the serial number from the model cell, second child is the serial number
+                            const modelNameElement = modelCell.children[0];
+                            const serialNumber = modelCell.children[1].innerText;
+                            const slotID = slotIDCell.innerText;
+                            const status = statusCell.innerText;
+                            //console.log("serialNumber", serialNumber);
+
+                            // Set the model name to be a link to the miner page
+                            if (modelNameElement && savedFeatures["minerNameLink"]) {
+                                // Make it green with a underline when hovered over
+                                modelNameElement.style.color = '#17b26a';
+                                modelNameElement.style.cursor = 'pointer';
+                                modelNameElement.onclick = function() {
+                                    window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`, '_blank');
+                                };
+
+                                modelNameElement.onmouseover = function() {
+                                    modelNameElement.style.textDecoration = 'underline';
+                                };
+
+                                modelNameElement.onmouseout = function() {
+                                    modelNameElement.style.textDecoration = 'none';
+                                };
+                            }
+
+                            // Check if slotID has minden in it
+                            if (!slotID.includes('Minden')) {
+                                continue;
+                            }
+
+                            var splitSlotID = slotID.split('-');
+                            var row = Number(splitSlotID[2]);
+                            var col = Number(splitSlotID[3]);
+                            var rowWidth = 4;
+                            var breakerNum = (row-1)*rowWidth + col;
+
+                            // if breakerNum isn't NAN
+                            if (!isNaN(breakerNum) && savedFeatures["breakerNumber"]) {
+                                var newElement = document.createElement('div');
+                                newElement.textContent = 'Breaker Number: ' + breakerNum;
+                                minerData['Slot ID'].appendChild(newElement);
+                            }
+
+                            // Add the Planner Link too
+                            if (!statusCell.querySelector('.planner-element')) {
+                                var plannerElement = document.createElement('div');
+                                plannerElement.textContent = 'Planner Card: Checking...';
+                                plannerElement.classList.add('planner-element');
+                                plannerElement.setAttribute('data-serial-number', serialNumber);
+                                statusCell.appendChild(plannerElement);
+
+                                updatePlannerLink(plannerElement);
+                            }
+                        }
+                    });
+                    observer.observe(minerList, { childList: true, subtree: true });
+                }
+            }, 500);
+        }
+
         //--------------------------------------------
         // Scan Logic/Auto Reboot Logic
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
@@ -3122,316 +3328,6 @@ window.addEventListener('load', function () {
             }
 
             // -- Add Breaker Number to Slot ID --
-
-            var minersListTableLookup = {};
-
-            function getCurrentMinerList(baseDocument) {
-                if(!baseDocument) {
-                    baseDocument = document;
-                }
-
-                var minerGrid = baseDocument.querySelector('#minerList');
-                if (!minerGrid) {
-                    minerGrid = baseDocument.querySelector('#minerGrid');
-                }
-
-                if (minerGrid) {
-                    // Loop through all the columns and store the index for each column & name
-                    var columnIndexes = {};
-                    const gridHeader = minerGrid.querySelector('.k-grid-header');
-                    var columns = Array.from(gridHeader.querySelector('[role="row"]').children);
-                    columns.forEach((column, index) => {
-                        // Get the title of the column, and store the index
-                        const title = column.getAttribute('data-title');
-                        columnIndexes[title] = index;
-                    });
-
-                    const rows = minerGrid.querySelectorAll('[role="row"]');
-                    // Loop through all the rows and store the data for each miner
-                    rows.forEach(row => {
-                        const uid = row.getAttribute('data-uid');
-                        let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
-                        /* was the replacement for the 3 dots icon, removed for now
-                        // for first index add a link icon element that opens the miner page
-                        if(minerLinkElement && !minerLinkElement.addedLinkIcon) {
-                            minerLinkElement.addedLinkIcon = true;
-                            const linkIcon = document.createElement('a');
-                            linkIcon.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerLinkElement.getAttribute('data-miner-id')}`;
-                            linkIcon.target = '_blank';
-                            linkIcon.style.cursor = 'pointer';
-                            linkIcon.style.marginRight = '5px';
-                            linkIcon.style.width = '24px';
-                            linkIcon.style.height = '24px';
-                            linkIcon.style.verticalAlign = 'middle';
-                            linkIcon.oncontextmenu = function(event) {
-                                event.stopPropagation(); // Prevent the custom context menu from opening
-                            };
-                            linkIcon.onclick = function(event) {
-                                event.stopPropagation(); // Prevent the custom context menu from opening
-                            };
-
-                            const img = document.createElement('img');
-                            img.src = 'https://img.icons8.com/?size=100&id=82787&format=png&color=FFFFFF';
-                            img.style.width = '100%';
-                            img.style.height = '100%';
-                            linkIcon.appendChild(img);
-
-                            minerLinkElement.prepend(linkIcon);
-
-                            // Delete the default 3 dots icon
-                            const defaultIcon = minerLinkElement.querySelector('m-icon[name="more-vertical"]');
-                            if (defaultIcon) {
-                                defaultIcon.style.display = 'none';
-                            }
-
-                            row.addEventListener('contextmenu', (event) => {
-                                event.preventDefault();
-                                defaultIcon.click();
-
-                                // Find the context menu (id issueMenu) and move it to the mouse position
-                                const contextMenu = document.getElementById('issueMenu');
-                                if (contextMenu) {
-                                    contextMenu.style.position = 'fixed';
-                                    contextMenu.style.top = event.clientY + 'px';
-                                    contextMenu.style.left = event.clientX + 'px';
-
-                                    // If it goes off the screen, move it back on
-                                    if (event.clientX + contextMenu.offsetWidth > window.innerWidth) {
-                                        contextMenu.style.left = (window.innerWidth - contextMenu.offsetWidth) + 'px';
-                                    }
-                                    if (event.clientY + contextMenu.offsetHeight > window.innerHeight) {
-                                        contextMenu.style.top = (window.innerHeight - contextMenu.offsetHeight) + 'px';
-                                    }
-                                }
-                            });
-                        }
-                        */
-                        // Loop through columnIndexes and get the data for each column
-                        for (const [key, colIndex] of Object.entries(columnIndexes)) {
-                            let colRowElement = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(colIndex+1)) + ')');
-                            if (minerLinkElement && colRowElement) {
-                                // Store the data in the minersListTableLookup 
-                                const minerID = minerLinkElement.getAttribute('data-miner-id');
-                                minersListTableLookup[minerID] = minersListTableLookup[minerID] || {};
-                                minersListTableLookup[minerID][key] = colRowElement;
-                            }
-                        }
-                    });
-                }
-            }
-
-            // Wait until HTML element with #minerList is loaded
-            function addBreakerNumberToSlotID() {
-                const minerListCheck = setInterval(() => {
-                    const minerList = document.querySelector('#minerList');
-                    if (minerList) {
-                        clearInterval(minerListCheck);
-                        
-                        
-                        let plannerCardsDataAll = {};
-                        function updatePlannerLink(plannerElement) {
-                            
-                            let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
-                            let currentTime = new Date().getTime();
-                            let timeDiff = (currentTime - lastCollectionTime) / 1000;
-                            const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60*4});
-                            const retrievalInterval = plannerCardConfig.retrieveInterval*60;
-                            if (timeDiff > retrievalInterval) {
-                                plannerElement.textContent = '';
-
-                                // Remove the clickable link stuff
-                                plannerElement.style.cursor = 'default';
-                                plannerElement.onclick = null;
-                                plannerElement.style.color = 'white';
-                                plannerElement.style.textDecoration = 'none';
-                                return;
-                            }
-
-                            let serialNumber = plannerElement.getAttribute('data-serial-number');
-                            let cardData = plannerCardsDataAll[serialNumber];
-                            if (cardData) {
-                                let issue = (cardData.issue || "");
-                                if(issue) {
-                                    issue = " - (" + issue + ")";
-                                }
-                                let columnTitle = cardData.columnTitle;
-                                plannerElement.textContent = columnTitle + issue;
-
-                                // Make it a clickable link
-                                plannerElement.style.cursor = 'pointer';
-                                plannerElement.onclick = function() {
-                                    // Reset these so they don't screw up stuff just in case
-                                    GM_SuperValue.set("taskName", "");
-                                    GM_SuperValue.set("taskNotes", "");
-                                    GM_SuperValue.set("taskComment", "");
-                                    GM_SuperValue.set("detailsData", {});
-
-                                    GM_SuperValue.set("locatePlannerCard", {
-                                        serialNumber: serialNumber,
-                                        columnTitle: columnTitle
-                                    });
-
-                                    var url = cardData.url;
-                                    window.open(url, '_blank');
-                                };
-
-                                // Make it blue and underlined
-                                plannerElement.style.color = '#0078d4';
-                                plannerElement.style.textDecoration = 'underline';
-                            } else {
-                                plannerElement.textContent = 'No Card Found';
-
-                                // Remove the clickable link stuff
-                                plannerElement.style.cursor = 'default';
-                                plannerElement.onclick = null;
-                                plannerElement.style.color = 'white';
-                                plannerElement.style.textDecoration = 'none';
-                            }
-                        }
-
-                        updatePlannerCardsData = function() {
-                            console.log("Updating Planner Cards Data");
-                            for(var key in urlLookupPlanner) {
-                                let plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
-                                let collectDataSuperValueID = "plannerCardsData_" + plannerID;
-                                let data = GM_SuperValue.get(collectDataSuperValueID, {});
-                                // combine into plannerCardsData
-                                plannerCardsDataAll = {...plannerCardsDataAll, ...data};
-                            }
-
-                            // Loop through all planner-elements and update the text
-                            const plannerElements = document.querySelectorAll('.planner-element');
-                            for (const plannerElement of plannerElements) {
-                                updatePlannerLink(plannerElement);
-                            }
-                        }
-                        updatePlannerCardsData();
-                        const updateCardList = setInterval(() => {
-                            updatePlannerCardsData();
-                        }, 10000);
-                        
-                        // Add mutation observer to the minerList
-                        const observer = new MutationObserver(() => {
-                            getCurrentMinerList();
-                            
-                            // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
-                            for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
-                                const modelCell = minerData['Model'];
-                                const slotIDCell = minerData['Slot ID'];
-                                const statusCell = minerData['Status'];
-
-                                // Get the serial number from the model cell, second child is the serial number
-                                const modelNameElement = modelCell.children[0];
-                                const serialNumber = modelCell.children[1].innerText;
-                                const slotID = slotIDCell.innerText;
-                                const status = statusCell.innerText;
-                                //console.log("serialNumber", serialNumber);
-
-                                // Set the model name to be a link to the miner page
-                                if (modelNameElement && savedFeatures["minerNameLink"]) {
-                                    // Make it green with a underline when hovered over
-                                    modelNameElement.style.color = '#17b26a';
-                                    modelNameElement.style.cursor = 'pointer';
-                                    modelNameElement.onclick = function() {
-                                        window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`, '_blank');
-                                    };
-
-                                    modelNameElement.onmouseover = function() {
-                                        modelNameElement.style.textDecoration = 'underline';
-                                    };
-
-                                    modelNameElement.onmouseout = function() {
-                                        modelNameElement.style.textDecoration = 'none';
-                                    };
-                                }
-
-                                // Check if slotID has minden in it
-                                if (!slotID.includes('Minden')) {
-                                    continue;
-                                }
-
-                                var splitSlotID = slotID.split('-');
-                                var row = Number(splitSlotID[2]);
-                                var col = Number(splitSlotID[3]);
-                                var rowWidth = 4;
-                                var breakerNum = (row-1)*rowWidth + col;
-
-                                // if breakerNum isn't NAN
-                                if (!isNaN(breakerNum) && savedFeatures["breakerNumber"]) {
-                                    var newElement = document.createElement('div');
-                                    newElement.textContent = 'Breaker Number: ' + breakerNum;
-                                    minerData['Slot ID'].appendChild(newElement);
-                                }
-
-                                // Add the Planner Link too
-                                if (!statusCell.querySelector('.planner-element')) {
-                                    var plannerElement = document.createElement('div');
-                                    plannerElement.textContent = 'Planner Card: Checking...';
-                                    plannerElement.classList.add('planner-element');
-                                    plannerElement.setAttribute('data-serial-number', serialNumber);
-                                    statusCell.appendChild(plannerElement);
-
-                                    updatePlannerLink(plannerElement);
-                                }
-                            }
-                            
-                            if(siteName.includes("Minden") && savedFeatures["displayAvgContainerTemp"]) {
-                                // Container Temp
-                                retrieveContainerTempData((containerTempData) => {
-                                    for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
-                                        const slotID = minerData['Slot ID'].textContent;
-                                        var containerText = slotID.split("_")[1].split("-")[0].replace(/\D/g, '');
-                                        var containerNum = containerText.replace(/^0+/, '');
-            
-                                        // Check if slotID has minden in it
-                                        if (!slotID.includes('Minden')) {
-                                            continue;
-                                        }
-                                        // This is very broken and messed up now
-                                        const containerTemp = containerTempData[containerNum].temp.toFixed(2);
-                                        let statsElement = minerData['Stats'].querySelector('.miner-stats');
-                                        if(!statsElement) {
-                                            statsElement = minerData['Stats'];
-                                        }
-                                        let curTextContent = "";
-                                        if(statsElement.children.length > 0) {
-                                            curTextContent = statsElement.children[0].textContent;
-                                        }
-                                        // random test number between 0 and 100
-                                        if (containerTemp && !curTextContent.includes('C')) { // doesn't contain added text already
-                                        
-                                            //statsElement.children[0].textContent = "Boards: " + curTextContent;
-
-                                            var newElement = document.createElement('div');
-                                            newElement.innerHTML = `<span>C${containerText}:</span> <span>${containerTemp}F</span>`;
-                                            statsElement.prepend(newElement);
-
-                                            // Set the text color of the temp based on the container temp
-                                            const tempSpans = newElement.querySelectorAll('span');
-                                            const tempSpan1 = tempSpans[0];
-                                            const tempSpan2 = tempSpans[1];
-                                            tempSpan1.style.color = '#B2B2B8';
-                                            if (containerTemp > 80) {
-                                                tempSpan2.style.color = 'red';
-                                                tempSpan2.textContent += ' 🔥';
-                                            } else if (containerTemp > 70) {
-                                                tempSpan2.style.color = 'yellow';
-                                                tempSpan2.textContent += ' ⚠️';
-                                            } else if (containerTemp <= 25) {
-                                                tempSpan2.style.color = '#38a9ff';
-                                                tempSpan2.textContent += ' ❄️';
-                                            } else {
-                                                tempSpan2.style.color = 'white';
-                                            }
-                                        }
-                                    }
-                                }); 
-                            }
-                        });
-                        observer.observe(minerList, { childList: true, subtree: true });
-                    }
-                }, 500);
-            }
             addBreakerNumberToSlotID();
 
             // -- Scan Logic --
@@ -6905,9 +6801,13 @@ window.addEventListener('load', function () {
             }, 1000);
         }
         
+        if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/List")) {
+            // -- Add Breaker Number to Slot ID --
+            addBreakerNumberToSlotID();
+        }
+
         // Individual Miner Page added data boxes
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Miners/IndividualMiner")) {
-
             function addDataBox(title, data, updateFunc, updateInterval) {
                 // Add new m-box to m-grid-list
                 const mGridList = document.querySelector('.m-grid-list');
@@ -7316,6 +7216,7 @@ window.addEventListener('load', function () {
                     }
                     lastRan = Date.now();
                     retrieveContainerTempData((containerTempData) => {
+                        console.log(containerTempData);
                         containers.forEach(container => {
                             const containerNum = parseInt(container.querySelector('.m-heading').innerText.split('_')[1].substring(1));
                             if (isNaN(containerNum) || !containerTempData[containerNum]) {
@@ -7341,6 +7242,55 @@ window.addEventListener('load', function () {
                             } else {
                                 tempElement.style.color = 'white';
                             }
+
+                            // Add a tooltip hover effect on the tempElement
+                            const tempDetails = containerTempData[containerNum].temps;
+                            let tooltipText = '';
+                            for (const [sensorName, temp] of Object.entries(tempDetails)) {
+                                tooltipText += `${sensorName}: ${temp.toFixed(2)}°F\n`;
+                            }
+
+                            // Create a tooltip element
+                            let tooltip = document.querySelector('.tempDataTooltip_' + containerNum);
+                            if (!tooltip) {
+                                tooltip = document.createElement('div');
+                                tooltip.className = 'tempDataTooltip_' + containerNum;
+                                tooltip.style.position = 'absolute';
+                                tooltip.style.backgroundColor = '#333';
+                                tooltip.style.color = '#fff';
+                                tooltip.style.padding = '5px';
+                                tooltip.style.borderRadius = '5px';
+                                tooltip.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
+                                tooltip.style.whiteSpace = 'pre-wrap';
+                                tooltip.style.display = 'none';
+                                tooltip.style.zIndex = '1000';
+                                document.body.appendChild(tooltip);
+                            }
+
+                            // if the mouse is hovered over it at this moment already, then show the tooltip
+                            if (tempElement.matches(':hover')) {
+                                tooltip.style.display = 'block';
+                                tooltip.textContent = tooltipText.trim();
+                                const rect = tempElement.getBoundingClientRect();
+                                tooltip.style.top = `${rect.top + window.scrollY - tooltip.offsetHeight - 5}px`;
+                                tooltip.style.left = `${rect.left + window.scrollX + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
+                            }
+
+                            // Show tooltip on hover
+                            tempElement.addEventListener('mouseover', (e) => {
+                                tooltip.style.display = 'block';
+                                tooltip.textContent = tooltipText.trim();
+                                const rect = tempElement.getBoundingClientRect();
+                                tooltip.style.top = `${rect.top + window.scrollY - tooltip.offsetHeight - 5}px`;
+                                tooltip.style.left = `${rect.left + window.scrollX + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
+                            });
+
+                            // Hide tooltip on mouseout
+                            tempElement.addEventListener('mouseout', () => {
+                                tooltip.style.display = 'none';
+                            });
+
+
                         });
                     });
                 }
