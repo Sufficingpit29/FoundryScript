@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.8.8
+// @version      6.8.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2301,7 +2301,6 @@ window.addEventListener('load', function () {
                                     <button type="button" id="submitBtn2" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Planner</button>
                                     <button type="button" id="cancelBtn" style="background-color: #f44336; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; margin-left: 10px;">Close</button>
                                 </div>
-                                <button type="button" id="linksBtn" style="background-color: #4287f5; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Edit Links</button>
                             </div>
                         </form>
                     </div>
@@ -2337,14 +2336,41 @@ window.addEventListener('load', function () {
                     }*/
                 });
 
-                // Hide the Edit Links button for the meantime
-                popupElement.querySelector('#linksBtn').style.display = 'none';
+                // Get the customer name of this miner and set the type to that, if it matches one of our options
+                const customerName = unsafeWindow.im.miner.subcustomerName;
+                const typeOptions = popupElement.querySelector('#type').options;
+                let foundType = false;
+                for (let i = 0; i < typeOptions.length; i++) {
+                    if (customerName.includes(typeOptions[i].value)) {
+                        typeOptions[i].selected = true;
+                        foundType = true;
+                        break;
+                    }
+                }
+
+                // If we didn't find the type, highlight the type input
+                if (!foundType) {
+                    popupElement.querySelector('#type').style.backgroundColor = '#c82333';
+                    setTimeout(function() {
+                        popupElement.querySelector('#type').style.transition = 'background-color 1s ease';
+                        popupElement.querySelector('#type').style.backgroundColor = '#222';
+                    }, 1000);
+
+                    // Set that it is unknown
+                    popupElement.querySelector('#type').value = '';
+                }
 
                 // Function to submit Issue and Log
                 function submitIssueLog(onlyPlanner) {
                     const issue = document.getElementById("issue").value;
                     const log = document.getElementById("log").value;
                     const type = document.getElementById("type").value;
+
+                    // make sure type is not unknown
+                    if(type === "") {
+                        alert("Please select a valid type.");
+                        return;
+                    }
 
                     const hbSerialNumber = document.getElementById("hbSerialNumber").value;
                     const hbModel = document.getElementById("hbModel").value;
@@ -2366,73 +2392,6 @@ window.addEventListener('load', function () {
                     popupElement.remove();
                 }
 
-                // Function to edit links
-                function editLinks() {
-                    popupElement.remove();
-
-                    // Creates a side panel element with links to Excel that can be edited and saved
-                    const sidePanel = document.createElement('div');
-                    const bitmainLink = urlLookupExcel["Bitmain"];
-                    const fortitudeLink = urlLookupExcel["Fortitude"];
-                    const rammLink = urlLookupExcel["RAMM"];
-                    sidePanel.innerHTML = `
-                        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #333; color: white; padding: 20px;">
-                            <h1>Edit Links</h1>
-                            <form id="linksForm">
-                                <div style="margin-bottom: 10px;">
-                                    <label for="bitmain" style="display: block; font-weight: bold;">Bitmain:</label>
-                                    <input type="text" id="bitmain" name="bitmain" required style="width: 100%; padding: 5px; color: white;" value="${bitmainLink}">
-                                </div>
-                                <div style="margin-bottom: 10px;">
-                                    <label for="fortitude" style="display: block; font-weight: bold;">Fortitude:</label>
-                                    <input type="text" id="fortitude" name="fortitude" required style="width: 100%; padding: 5px; color: white;" value="${fortitudeLink}">
-                                </div>
-                                <div style="margin-bottom: 10px;">
-                                    <label for="ramm" style="display: block; font-weight: bold;">RAMM:</label>
-                                    <input type="text" id="ramm" name="ramm" required style="width: 100%; padding: 5px; color: white;" value="${rammLink}">
-                                </div>
-                                <div style="display: flex; gap: 10px;">
-                                    <button type="button" id="saveBtn" style="background-color: #4CAF50; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Save</button>
-                                    <button type="button" id="cancelBtn" style="background-color: #f44336; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease;">Cancel</button>
-                                    <a href="${defaultExcelLink}" target="_blank" style="background-color: #0078d4; color: white; border: none; border-radius: 3px; padding: 5px 10px; cursor: pointer; transition: background-color 0.3s ease; text-decoration: none;">Site Ops</a>
-                                </div>
-                            </form>
-                        </div>
-                    `;
-                    document.body.appendChild(sidePanel);
-
-                    // Add event listeners to select text on focus
-                    document.getElementById('bitmain').addEventListener('focus', function() {
-                        this.select();
-                    });
-                    document.getElementById('fortitude').addEventListener('focus', function() {
-                        this.select();
-                    });
-                    document.getElementById('ramm').addEventListener('focus', function() {
-                        this.select();
-                    });
-
-                    function saveLinks() {
-                        const bitmainLink = document.getElementById("bitmain").value;
-                        const fortitudeLink = document.getElementById("fortitude").value;
-                        const rammLink = document.getElementById("ramm").value;
-
-                        GM_SuperValue.set("bitmainLink", bitmainLink !== "" ? bitmainLink : defaultExcelLink);
-                        GM_SuperValue.set("fortitudeLink", fortitudeLink !== "" ? fortitudeLink : defaultExcelLink);
-                        GM_SuperValue.set("rammLink", rammLink !== "" ? rammLink : defaultExcelLink);
-
-                        urlLookupExcel["Bitmain"] = bitmainLink !== "" ? bitmainLink : defaultExcelLink;
-                        urlLookupExcel["Fortitude"] = fortitudeLink !== "" ? fortitudeLink : defaultExcelLink;
-                        urlLookupExcel["RAMM"] = rammLink !== "" ? rammLink : defaultExcelLink;
-                        sidePanel.remove();
-                    }
-
-                    document.getElementById('saveBtn').addEventListener('click', saveLinks);
-                    document.getElementById('cancelBtn').addEventListener('click', () => {
-                        sidePanel.remove();
-                    });
-                }
-
                 // Append the popup element to the document body
                 document.body.appendChild(popupElement);
 
@@ -2444,85 +2403,8 @@ window.addEventListener('load', function () {
                     submitIssueLog(true);
                 });
                 document.getElementById('cancelBtn').addEventListener('click', cancelIssueLog);
-                document.getElementById('linksBtn').addEventListener('click', editLinks);
             }
 
-            /*
-            <div class="m-stack has-space-m">
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Model
-                    </div>
-
-                    <div class="miner-detail-info" id="modelInfo">
-                <div class="m-text is-size-xs">Antminer S19 XP (141 THs)</div>
-                <div class="m-text is-size-xs is-secondary">HKYQEAABBAAJG0JV5</div>
-            </div>
-                </div>
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Firmware
-                    </div>
-
-                    <div class="miner-detail-info" id="firmwareInfo">Tue Dec 31 16:23:33 CST 2024</div>
-                </div>
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Network
-                    </div>
-
-                    <div class="miner-detail-info" id="networkInfo">
-                <div><a class="m-link is-size-xs" href="http://root:root@10.6.68.228" target="_blank">10.6.68.228</a></div>
-                <div class="m-text is-size-xs is-secondary">44:D2:2D:7B:BD:09</div>
-            </div>
-                </div>
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Status
-                    </div>
-
-                    <div class="miner-detail-info" id="statusInfo">Online</div>
-                </div>
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Zone / Rack / Row / Position
-                    </div>
-
-                    <div class="miner-detail-info" id="positionInfo">Minden_C18 / 9 / 7 / 1</div>
-                </div>
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Active Pool
-                    </div>
-
-                    <div class="miner-detail-info" id="poolInfo">
-            <div class="m-text is-size-xs">btc.foundryusapool.com:3333</div>
-            <span class="m-text is-size-xs is-secondary" title="forchimindebtc1.68x228">forchimindebtc1.68x228</span>
-        </div>
-                </div>
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Power Mode / Rated / Target
-                    </div>
-
-                    <div class="miner-detail-info" id="powerInfo">Normal / 141 THs / 141 THs</div>
-                </div>
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Online Date
-                    </div>
-
-                    <div class="miner-detail-info" id="onlineDateInfo">12/21/2023 03:52 PM</div>
-                </div>
-                <div class="m-form-control">
-                    <div class="m-label is-secondary">
-                        Asset ID
-                    </div>
-
-                    <div class="miner-detail-info" id="assetIdInfo">609865</div>
-                </div>
-            </div>
-            */
             function addCustomerNameText() {
                 if(!savedFeatures["customerName"]) { return; }
 
