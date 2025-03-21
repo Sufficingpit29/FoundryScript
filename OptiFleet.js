@@ -9,7 +9,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.8.1
+// @version      6.8.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -497,6 +497,11 @@ const errorsToSearch = {
         start: "Exit due to Unable to Generate Given Target Hashrate",
         type: "Main",
         onlySeparate: true
+    },
+    'But got voltage': { //bitmain_get_sample_voltage
+        icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
+        start: "bitmain_get_sample_voltage",
+        type: "Main",
     },
     'Voltage Abnormity': {
         icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
@@ -7917,10 +7922,18 @@ window.addEventListener('load', function () {
                     }, 500);
                     return;
                 }
-
                 addSlotIDsToPlannerCards();
             }
             wonkyEdgeCaseFixForSlotIDs();
+
+            // Run wonkyedgecasefixforslotids if the url changes
+            let lastURL = window.location.href;
+            setInterval(() => {
+                if (lastURL !== window.location.href) {
+                    lastURL = window.location.href;
+                    wonkyEdgeCaseFixForSlotIDs();
+                }
+            }, 500);
             
             // Set up only run addSlotIDToCard when either a card is changed/added
             const cardObserver = new MutationObserver((mutationsList, observer) => {
