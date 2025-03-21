@@ -478,7 +478,7 @@ const errorsToSearch = {
     'SOC INIT Fail': {
         icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
         start: "ERROR_SOC_INIT",
-        end: ["ERROR_SOC_INIT", "stop_mining: soc init failed!"],
+        end: ["ERROR_SOC_INIT", "stop_mining: soc init failed!", "stop_mining: basic init failed!"],
         type: "Main",
         onlySeparate: true
     },
@@ -7510,6 +7510,7 @@ window.addEventListener('load', function () {
                     return;
                 }
 
+                /*
                 // Searches through the plannerTasks to find the card with the serial number that was edited last
                 let bucketNameLookup = {};
                 plannerBuckets.forEach(bucket => {
@@ -7546,7 +7547,8 @@ window.addEventListener('load', function () {
                     };
                     newPlannerData[serialNumber] = cardData;
                 });
-
+                */
+               
                 // Set horizontal scroll to a bit more each time
                 if(curTry >= 4) {
                     document.querySelector('.columnsList').scrollBy({ left: 100, behavior: 'smooth' });
