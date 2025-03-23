@@ -3057,7 +3057,6 @@ window.addEventListener('load', function () {
                     }
 
                     updatePlannerCardsData = function() {
-                        console.log("Updating Planner Cards Data");
                         for(var key in urlLookupPlanner) {
                             let plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
                             let collectDataSuperValueID = "plannerCardsData_" + plannerID;
@@ -3076,7 +3075,7 @@ window.addEventListener('load', function () {
                     const updateCardList = setInterval(() => {
                         updatePlannerCardsData();
                     }, 10000);
-                    
+
                     // Add mutation observer to the minerList
                     const observer = new MutationObserver(() => {
                         getCurrentMinerList();
@@ -3088,7 +3087,7 @@ window.addEventListener('load', function () {
                             const statusCell = minerData['Status'];
 
                             // Get the serial number from the model cell, second child is the serial number
-                            const modelNameElement = modelCell.children[0];
+                            let modelNameElement = modelCell.children[0];
                             const serialNumber = modelCell.children[1].innerText;
                             const slotID = slotIDCell.innerText;
                             const status = statusCell.innerText;
@@ -3096,12 +3095,23 @@ window.addEventListener('load', function () {
 
                             // Set the model name to be a link to the miner page
                             if (modelNameElement && savedFeatures["minerNameLink"]) {
+                                // change model name to a link if it isn't already  
+                                if(modelNameElement.tagName !== 'A') {
+                                    const newElement = document.createElement('a');
+                                    newElement.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
+                                    newElement.target = '_blank';
+                                    for (const attribute of modelNameElement.attributes) {
+                                        newElement.setAttribute(attribute.name, attribute.value);
+                                    }
+                                    newElement.innerHTML = modelNameElement.innerHTML;
+                                    modelNameElement.replaceWith(newElement);
+                                    modelNameElement = newElement;
+                                }
+
                                 // Make it green with a underline when hovered over
                                 modelNameElement.style.color = '#17b26a';
                                 modelNameElement.style.cursor = 'pointer';
-                                modelNameElement.onclick = function() {
-                                    window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`, '_blank');
-                                };
+                                modelNameElement.style.textDecoration = 'none'; // remove the initial underline
 
                                 modelNameElement.onmouseover = function() {
                                     modelNameElement.style.textDecoration = 'underline';
