@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.8.9
+// @version      6.9.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -7081,15 +7081,31 @@ window.addEventListener('load', function () {
                 containers.forEach(container => {
                     // Add the temperature title if it doesn't exist
                     if (!container.querySelector('.temp-text-title')) {
-                        const tempElement = document.createElement('div');
-                        tempElement.className = 'temp-text-title';
-                        tempElement.innerText = 'Temperature:';
-                        tempElement.style.marginTop = '10px';
+                        const tempTitleElement = document.createElement('div');
+                        tempTitleElement.className = 'temp-text-title';
+                        tempTitleElement.innerText = 'Averaged Temperature:';
+                        tempTitleElement.style.marginTop = '10px';
                         // set the color to a light orange
-                        tempElement.style.color = '#ff7f50';
-                        container.appendChild(tempElement);
+                        tempTitleElement.style.color = '#ff7f50';
+                        container.appendChild(tempTitleElement);
                     }
                 });
+
+                function setColorAndEmoji(tempValue) {
+                    let color = 'white';
+                    let emoji = '';
+                    if (tempValue > 80) {
+                        color = 'red';
+                        emoji = ' 🔥';
+                    } else if (tempValue > 70) {
+                        color = 'yellow';
+                        emoji = ' ⚠️';
+                    } else if (tempValue <= 25) {
+                        color = '#38a9ff';
+                        emoji = ' ❄️';
+                    }
+                    return { color, emoji };
+                }
 
                 function getTemp() {
                     if (Date.now() - lastRan < 5000) {
@@ -7098,6 +7114,11 @@ window.addEventListener('load', function () {
                     lastRan = Date.now();
                     retrieveContainerTempData((containerTempData) => {
                         containers.forEach(container => {
+
+                            // Get the temp-text-title element and reset it to the default
+                            const tempTitleElement = container.querySelector('.temp-text-title');
+                            tempTitleElement.innerText = 'Averaged Temperature:';
+
                             const containerNum = parseInt(container.querySelector('.m-heading').innerText.split('_')[1].substring(1));
                             if (isNaN(containerNum) || !containerTempData[containerNum]) {
                                 return;
@@ -7109,19 +7130,9 @@ window.addEventListener('load', function () {
                                 tempElement.className = 'temp-text';
                                 container.appendChild(tempElement);
                             }
-                            tempElement.innerText = tempValue + '°F';
-                            if (tempValue > 80) {
-                                tempElement.style.color = 'red';
-                                tempElement.textContent += ' 🔥';
-                            } else if (tempValue > 70) {
-                                tempElement.style.color = 'yellow';
-                                tempElement.textContent += ' ⚠️';
-                            } else if (tempValue <= 25) {
-                                tempElement.style.color = '#38a9ff';
-                                tempElement.textContent += ' ❄️';
-                            } else {
-                                tempElement.style.color = 'white';
-                            }
+                            const { color, emoji: mainEmoji } = setColorAndEmoji(tempValue);
+                            tempElement.innerText = tempValue + '°F' + mainEmoji;
+                            tempElement.style.color = color;
 
                             // Add a tooltip hover effect on the tempElement
                             const tempDetails = containerTempData[containerNum].temps;
@@ -7131,8 +7142,33 @@ window.addEventListener('load', function () {
                                 const bRack = parseInt(b[0].match(/Rack (\d+)-/)[1]);
                                 return aRack - bRack;
                             });
+
+                            let newMainTemp = tempValue;
+                            let newMainColor = color;
+                            let newMainEmoji = mainEmoji;
+                            let titleText = "";
                             for (const [sensorName, temp] of sortedTemps) {
-                                tooltipText += `${sensorName}: ${temp.toFixed(2)}°F\n`;
+                                const { color, emoji } = setColorAndEmoji(temp);
+                                tooltipText += `<span style="color: ${color};">${sensorName}: ${temp.toFixed(2)}°F${emoji}</span>\n`;
+
+                                // Scuffed logic for knowing if the main temp should be updated to show the highest or lowest temp
+                                if((emoji === ' 🔥' && (mainEmoji === "" || mainEmoji === " ⚠️" ) || emoji === ' ⚠️' && mainEmoji === "") && temp > newMainTemp) {
+                                    newMainTemp = temp;
+                                    titleText = "Highest Temperature:";
+                                    newMainColor = color;
+                                    newMainEmoji = emoji;
+                                } else if(mainEmoji === "" && emoji === ' ❄️' && temp < newMainTemp) {
+                                    newMainTemp = temp;
+                                    titleText = "Lowest Temperature:";
+                                    newMainColor = color;
+                                    newMainEmoji = emoji;
+                                }
+                            }
+
+                            if(newMainTemp !== tempValue) {
+                                tempTitleElement.innerText = titleText;
+                                tempElement.innerText = newMainTemp + '°F' + newMainEmoji;
+                                tempElement.style.color = newMainColor;
                             }
 
                             // Create a tooltip element
@@ -7155,7 +7191,7 @@ window.addEventListener('load', function () {
                             // Show tooltip on hover
                             tempElement.addEventListener('mouseover', (e) => {
                                 tooltip.style.display = 'block';
-                                tooltip.textContent = tooltipText.trim();
+                                tooltip.innerHTML = tooltipText.trim();
                                 const rect = tempElement.getBoundingClientRect();
                                 tooltip.style.top = `${rect.top + window.scrollY - tooltip.offsetHeight - 5}px`;
                                 tooltip.style.left = `${rect.left + window.scrollX + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
@@ -7171,7 +7207,7 @@ window.addEventListener('load', function () {
                                 // delay 1 ms (it might think a mouseout event happens when the temp updates?)
                                 setTimeout(() => {
                                     tooltip.style.display = 'block';
-                                    tooltip.textContent = tooltipText.trim();
+                                    tooltip.innerHTML = tooltipText.trim();
                                     const rect = tempElement.getBoundingClientRect();
                                     tooltip.style.top = `${rect.top + window.scrollY - tooltip.offsetHeight - 5}px`;
                                     tooltip.style.left = `${rect.left + window.scrollX + (rect.width / 2) - (tooltip.offsetWidth / 2)}px`;
@@ -7179,8 +7215,6 @@ window.addEventListener('load', function () {
                             } else {
                                 tooltip.style.display = 'none';
                             }
-
-
                         });
                     });
                 }
