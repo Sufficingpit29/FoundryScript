@@ -1,10 +1,10 @@
 // To do:
-// Maybe full site scan for bad/abnormal fans?
+// Maybe add a "real lower hashers" tab
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.9.2
+// @version      6.9.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
