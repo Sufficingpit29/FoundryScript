@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.9.0
+// @version      6.9.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -7591,9 +7591,10 @@ window.addEventListener('load', function () {
                 console.log("Locate Planner Card Data: ", locatePlannerCardData);
                 if (serialNumber) {
                     FindIfCardExists(serialNumber, (container, textContent, columnTitle_Card) => {
+                        /* NOT SURE IF THIS IS WHAT BREAKING STUFF
                         if(columnTitle_Card !== columnTitle) {
                             return;
-                        }
+                        }*/
                         // Give a slightly animated border, where a glow effect pulses around the card
                         const border = document.createElement('div');
                         border.style.position = 'absolute';
