@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.9.1
+// @version      6.9.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -73,6 +73,7 @@ const features = [
     // Miner List
     { name: 'Miner Name Link', id: 'minerNameLink', category: 'Miner Table' },
     { name: 'Breaker Number', id: 'breakerNumber', category: 'Miner Table' },
+    { name: 'Realtime Hashrate', id: 'realtimeHashrate', category: 'Miner Table' },
 
     // Issues page
     { name: 'Down Scan', id: 'downScan', category: 'Issues' },
@@ -1769,28 +1770,45 @@ window.addEventListener('load', function () {
             return [cleanedText, minerDetails];
         }
 
+        // Hash Rate Types
+        const hashRateTypes = {
+            'H': 1,
+            'KH': 1e3,
+            'MH': 1e6,
+            'GH': 1e9,
+            'TH': 1e12,
+            'PH': 1e15,
+            'EH': 1e18,
+            'ZH': 1e21,
+        };
+
+        // Function to convert hash rates between types
+        function convertRates(hashRate, fromType, toType) {
+            const hashRateFrom = hashRateTypes[fromType];
+            const hashRateTo = hashRateTypes[toType];
+
+            return (hashRate * hashRateFrom) / hashRateTo;
+        }
+
+        // Convert the hash rate to the best type
+        function convertHashRate(hashRate, fromType) {
+            // Run through the hash rate types until we find the best one to display
+            var hashType = 'H';
+            hashRate = convertRates(hashRate, fromType, hashType);
+            for (const [key, value] of Object.entries(hashRateTypes)) {
+                if (hashRate >= value) {
+                    hashType = key;
+                }
+            }
+
+            // Convert the hash rate to the best type
+            hashRate = convertRates(hashRate, 'H', hashType).toFixed(2);
+
+            return [hashRate, hashType];
+        }
+
         // Non-Bitcoin Hash Rate Logic
         if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
-
-            // Hash Rate Types
-            const hashRateTypes = {
-                'H': 1,
-                'KH': 1e3,
-                'MH': 1e6,
-                'GH': 1e9,
-                'TH': 1e12,
-                'PH': 1e15,
-                'EH': 1e18,
-                'ZH': 1e21,
-            };
-
-            // Function to convert hash rates between types
-            function convertRates(hashRate, fromType, toType) {
-                const hashRateFrom = hashRateTypes[fromType];
-                const hashRateTo = hashRateTypes[toType];
-
-                return (hashRate * hashRateFrom) / hashRateTo;
-            }
 
             // Function to add another hash rate info element to the page
             function addHashRateInfoElement(title, totalHashRate, totalHashRatePotential, totalMiners) {
@@ -3078,6 +3096,7 @@ window.addEventListener('load', function () {
 
                     // Add mutation observer to the minerList
                     const observer = new MutationObserver(() => {
+
                         getCurrentMinerList();
                         
                         // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
@@ -3085,12 +3104,15 @@ window.addEventListener('load', function () {
                             const modelCell = minerData['Model'];
                             const slotIDCell = minerData['Slot ID'];
                             const statusCell = minerData['Status'];
+                            const hashCell = minerData['Hashrate'];
+                            const networkCell = minerData['Network'];
 
                             // Get the serial number from the model cell, second child is the serial number
                             let modelNameElement = modelCell.children[0];
                             const serialNumber = modelCell.children[1].innerText;
                             const slotID = slotIDCell.innerText;
                             const status = statusCell.innerText;
+                            const ipAdress = networkCell.children[0].innerText;
                             //console.log("serialNumber", serialNumber);
 
                             // Set the model name to be a link to the miner page
@@ -3120,6 +3142,88 @@ window.addEventListener('load', function () {
                                 modelNameElement.onmouseout = function() {
                                     modelNameElement.style.textDecoration = 'none';
                                 };
+                            }
+
+                            // Gets the realtime hash rate
+                            if (hashCell && savedFeatures["realtimeHashrate"] && !hashCell.querySelector('.realtime-hashrate-tooltip')) {
+                                // Add a hoverable element for the tooltip
+                                const tooltipTrigger = document.createElement('div');
+                                tooltipTrigger.textContent = hashCell.textContent.trim();
+                                tooltipTrigger.style.cursor = 'pointer';
+                                tooltipTrigger.style.position = 'relative';
+                                tooltipTrigger.style.display = 'inline-block';
+                                hashCell.textContent = ''; // Clear the original text
+                                hashCell.appendChild(tooltipTrigger);
+
+                                // Create the tooltip element
+                                const tooltip = document.createElement('div');
+                                tooltip.textContent = 'Realtime: Checking...';
+                                tooltip.classList.add('realtime-hashrate-tooltip');
+                                tooltip.style.position = 'fixed'; // Use fixed positioning to overlay over everything
+                                tooltip.style.backgroundColor = '#333';
+                                tooltip.style.color = '#fff';
+                                tooltip.style.padding = '10px';
+                                tooltip.style.borderRadius = '5px';
+                                tooltip.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
+                                tooltip.style.whiteSpace = 'nowrap';
+                                tooltip.style.zIndex = '10000'; // Ensure it overlays over everything
+                                tooltip.style.display = 'none';
+                                tooltipTrigger.appendChild(tooltip);
+
+                                // Position the tooltip dynamically on hover
+                                tooltipTrigger.addEventListener('mouseenter', (event) => {
+                                    const rect = tooltipTrigger.getBoundingClientRect();
+                                    tooltip.style.top = `${rect.bottom + window.scrollY}px`;
+                                    tooltip.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
+                                    tooltip.style.transform = 'translateX(-50%)';
+                                    tooltip.style.display = 'block';
+                                });
+
+                                // Hide the tooltip when the mouse leaves
+                                tooltipTrigger.addEventListener('mouseleave', () => {
+                                    tooltip.style.display = 'none';
+                                });
+
+                                function fetchRealtimeHashRate(tooltipElement, ip) {
+                                    const ipHref = "http://root:root@" + ip + '/cgi-bin/stats.cgi';
+                                        fetchGUIData(ipHref)
+                                        .then(response => {
+                                            // Convert the response from json if possible
+                                            if (response && !response.STATS) {
+                                                response = JSON.parse(response);
+                                            }
+
+                                            let realTime = response.STATS[0].rate_avg;
+                                            let [newRate, hashType] = convertHashRate(realTime, "GH");
+                                            realTime = newRate + " " + hashType;
+                                            if (realTime) {
+                                                tooltipElement.textContent = 'Realtime: ' + realTime;
+                                            } else {
+                                                tooltipElement.textContent = 'Realtime: N/A';
+                                            }
+                                        })
+                                        .catch(error => {
+                                            console.error(error);
+                                        });
+                                }
+                                let fetchInterval;
+
+                                // Show tooltip and start fetching realtime hash rate
+                                tooltipTrigger.addEventListener('mouseenter', () => {
+                                    tooltip.style.display = 'block';
+                                    fetchRealtimeHashRate(tooltip, ipAdress);
+
+                                    // Start fetching realtime hash rate
+                                    fetchInterval = setInterval(() => {
+                                        fetchRealtimeHashRate(tooltip, ipAdress);
+                                    }, 5000); // Fetch every 5 seconds
+                                });
+
+                                // Hide tooltip and stop fetching
+                                tooltipTrigger.addEventListener('mouseleave', () => {
+                                    tooltip.style.display = 'none';
+                                    clearInterval(fetchInterval);
+                                });
                             }
 
                             // Check if slotID has minden in it
