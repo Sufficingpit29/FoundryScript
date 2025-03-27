@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.9.3
+// @version      6.9.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -3145,48 +3145,19 @@ window.addEventListener('load', function () {
                             }
 
                             // Gets the realtime hash rate
-                            if (hashCell && savedFeatures["realtimeHashrate"] && !hashCell.querySelector('.realtime-hashrate-tooltip')) {
-                                // Add a hoverable element for the tooltip
-                                const tooltipTrigger = document.createElement('div');
-                                tooltipTrigger.textContent = hashCell.textContent.trim();
-                                tooltipTrigger.style.cursor = 'pointer';
-                                tooltipTrigger.style.position = 'relative';
-                                tooltipTrigger.style.display = 'inline-block';
-                                hashCell.textContent = ''; // Clear the original text
-                                hashCell.appendChild(tooltipTrigger);
+                            if (hashCell && savedFeatures["realtimeHashrate"] && !hashCell.querySelector('.realtime-hashrate')) {
+                                // Create a new element for the realtime hash rate
+                                const realtimeHashrateElement = document.createElement('div');
+                                realtimeHashrateElement.textContent = 'Realtime: Checking...';
+                                realtimeHashrateElement.classList.add('realtime-hashrate');
+                                realtimeHashrateElement.style.color = '#fff';
+                                realtimeHashrateElement.style.fontSize = '0.9em';
+                                realtimeHashrateElement.style.marginTop = '5px';
+                                hashCell.appendChild(realtimeHashrateElement);
 
-                                // Create the tooltip element
-                                const tooltip = document.createElement('div');
-                                tooltip.textContent = 'Realtime: Checking...';
-                                tooltip.classList.add('realtime-hashrate-tooltip');
-                                tooltip.style.position = 'fixed'; // Use fixed positioning to overlay over everything
-                                tooltip.style.backgroundColor = '#333';
-                                tooltip.style.color = '#fff';
-                                tooltip.style.padding = '10px';
-                                tooltip.style.borderRadius = '5px';
-                                tooltip.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
-                                tooltip.style.whiteSpace = 'nowrap';
-                                tooltip.style.zIndex = '10000'; // Ensure it overlays over everything
-                                tooltip.style.display = 'none';
-                                tooltipTrigger.appendChild(tooltip);
-
-                                // Position the tooltip dynamically on hover
-                                tooltipTrigger.addEventListener('mouseenter', (event) => {
-                                    const rect = tooltipTrigger.getBoundingClientRect();
-                                    tooltip.style.top = `${rect.bottom + window.scrollY}px`;
-                                    tooltip.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
-                                    tooltip.style.transform = 'translateX(-50%)';
-                                    tooltip.style.display = 'block';
-                                });
-
-                                // Hide the tooltip when the mouse leaves
-                                tooltipTrigger.addEventListener('mouseleave', () => {
-                                    tooltip.style.display = 'none';
-                                });
-
-                                function fetchRealtimeHashRate(tooltipElement, ip) {
+                                function fetchRealtimeHashRate(element, ip) {
                                     const ipHref = "http://root:root@" + ip + '/cgi-bin/stats.cgi';
-                                        fetchGUIData(ipHref)
+                                    fetchGUIData(ipHref)
                                         .then(response => {
                                             // Convert the response from json if possible
                                             if (response && !response.STATS) {
@@ -3197,33 +3168,42 @@ window.addEventListener('load', function () {
                                             let [newRate, hashType] = convertHashRate(realTime, "GH");
                                             realTime = newRate + " " + hashType;
                                             if (realTime) {
-                                                tooltipElement.textContent = 'Realtime: ' + realTime;
+                                                element.textContent = 'Realtime: ' + realTime;
                                             } else {
-                                                tooltipElement.textContent = 'Realtime: N/A';
+                                                element.textContent = 'Realtime: N/A';
                                             }
                                         })
                                         .catch(error => {
                                             console.error(error);
+                                            element.textContent = 'Realtime: Error';
                                         });
                                 }
-                                let fetchInterval;
 
-                                // Show tooltip and start fetching realtime hash rate
-                                tooltipTrigger.addEventListener('mouseenter', () => {
-                                    tooltip.style.display = 'block';
-                                    fetchRealtimeHashRate(tooltip, ipAdress);
+                                // Observer to check if the element is in view
+                                const observer = new IntersectionObserver((entries) => {
+                                    entries.forEach(entry => {
+                                        if (entry.isIntersecting) {
+                                            // Element is in view, start fetching realtime hash rate
+                                            fetchRealtimeHashRate(realtimeHashrateElement, ipAdress);
 
-                                    // Start fetching realtime hash rate
-                                    fetchInterval = setInterval(() => {
-                                        fetchRealtimeHashRate(tooltip, ipAdress);
-                                    }, 5000); // Fetch every 5 seconds
+                                            // Start periodic updates
+                                            if (!realtimeHashrateElement.fetchInterval) {
+                                                realtimeHashrateElement.fetchInterval = setInterval(() => {
+                                                    fetchRealtimeHashRate(realtimeHashrateElement, ipAdress);
+                                                }, 5000); // Fetch every 5 seconds
+                                            }
+                                        } else {
+                                            // Element is out of view, stop fetching
+                                            if (realtimeHashrateElement.fetchInterval) {
+                                                clearInterval(realtimeHashrateElement.fetchInterval);
+                                                realtimeHashrateElement.fetchInterval = null;
+                                            }
+                                        }
+                                    });
                                 });
 
-                                // Hide tooltip and stop fetching
-                                tooltipTrigger.addEventListener('mouseleave', () => {
-                                    tooltip.style.display = 'none';
-                                    clearInterval(fetchInterval);
-                                });
+                                // Observe the realtime hash rate element
+                                observer.observe(realtimeHashrateElement);
                             }
 
                             // Check if slotID has minden in it
