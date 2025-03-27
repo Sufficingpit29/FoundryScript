@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Watch
 // @namespace    http://tampermonkey.net/
-// @version      0.7
+// @version      0.7.1
 // @description  Consolidates all the sites together into a single tab.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -517,7 +517,7 @@ window.addEventListener('load', async function () {
                     siteTitle.style.color = '#fff';
                     siteTitle.style.marginLeft = '10px';
                     siteTitle.style.marginBottom = '5px';
-                    siteTitle.innerText = site.siteName;
+                    siteTitle.innerText = site.siteName + ' - [' + site.agentName + ']';
 
                     // Create "Auto-Reboot Element" button
                     let autoRebootButton = doc.createElement('button');
