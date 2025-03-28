@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      6.9.3
+// @version      7.0.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -73,7 +73,7 @@ const features = [
     // Miner List
     { name: 'Miner Name Link', id: 'minerNameLink', category: 'Miner Table' },
     { name: 'Breaker Number', id: 'breakerNumber', category: 'Miner Table' },
-    { name: 'Realtime Hashrate', id: 'realtimeHashrate', category: 'Miner Table' },
+    { name: 'Realtime Hashrate', id: 'realtimeHashrateData', category: 'Miner Table', startOff: true },
 
     // Issues page
     { name: 'Down Scan', id: 'downScan', category: 'Issues' },
@@ -105,7 +105,7 @@ const categories = [...new Set(features.map(feature => feature.category))];
 const savedFeatures = GM_SuperValue.get('features', {});
 features.forEach(feature => {
     if (savedFeatures[feature.id] === undefined) {
-        savedFeatures[feature.id] = true; // Default to enabled if not set
+        savedFeatures[feature.id] = feature.startOff ? false : true;
     }
 });
 GM_SuperValue.set('features', savedFeatures); // Save the default features
@@ -364,27 +364,47 @@ window.addEventListener('load', function() {
 
 const username = 'root';
 const password = 'root';
-function fetchGUIData(url) {
+async function fetchGUIData(url) {
     return new Promise((resolve, reject) => {
+        // First, ping the IP to check if it exists
+        const ip = new URL(url).hostname;
         GM_xmlhttpRequest({
-            method: 'GET',
-            url: url,
-            user: username,
-            password: password,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            onload: function(response) {
-                if (response.status >= 200 && response.status < 300) {
-                    resolve(response.responseText);
-                } else if (response.status === 401) {
-                    reject('Authentication failed. Please check your username and password.');
+            method: 'HEAD',
+            url: `http://${ip}`,
+            timeout: 8000, // Set a timeout for the ping
+            onload: function(pingResponse) {
+                if ((pingResponse.status >= 200 && pingResponse.status < 400) || pingResponse.status === 401) {
+                    // If the ping is successful, proceed with fetching the GUI data
+                    GM_xmlhttpRequest({
+                        method: 'GET',
+                        url: url,
+                        user: username,
+                        password: password,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        onload: function(response) {
+                            if (response.status >= 200 && response.status < 300) {
+                                resolve(response.responseText);
+                            } else if (response.status === 401) {
+                                reject('Authentication failed. Please check your username and password.');
+                            } else {
+                                reject(`HTTP error! status: ${response.status}`);
+                            }
+                        },
+                        onerror: function(error) {
+                            reject('There was a problem with the fetch operation:', error);
+                        }
+                    });
                 } else {
-                    reject(`HTTP error! status: ${response.status}`);
+                    reject(`Ping failed! Unable to reach IP: ${ip} status: ${pingResponse.status}`);
                 }
             },
-            onerror: function(error) {
-                reject('There was a problem with the fetch operation:', error);
+            ontimeout: function() {
+                reject(`Ping timeout! Unable to reach IP: ${ip}`);
+            },
+            onerror: function() {
+                reject(`Ping error! Unable to reach IP: ${ip}`);
             }
         });
     });
@@ -3112,7 +3132,7 @@ window.addEventListener('load', function () {
                             const serialNumber = modelCell.children[1].innerText;
                             const slotID = slotIDCell.innerText;
                             const status = statusCell.innerText;
-                            const ipAdress = networkCell.children[0].innerText;
+                            const ipAddress = networkCell.children[0].innerText;
                             //console.log("serialNumber", serialNumber);
 
                             // Set the model name to be a link to the miner page
@@ -3144,91 +3164,174 @@ window.addEventListener('load', function () {
                                 };
                             }
 
+                            // Check if slotID has minden in it
+                            if (!slotID.includes('Minden')) {
+                                continue;
+                            }
+
                             // Gets the realtime hash rate
-                            if (hashCell && savedFeatures["realtimeHashrate"] && !hashCell.querySelector('.realtime-hashrate-tooltip')) {
-                                // Add a hoverable element for the tooltip
-                                const tooltipTrigger = document.createElement('div');
-                                tooltipTrigger.textContent = hashCell.textContent.trim();
-                                tooltipTrigger.style.cursor = 'pointer';
-                                tooltipTrigger.style.position = 'relative';
-                                tooltipTrigger.style.display = 'inline-block';
-                                hashCell.textContent = ''; // Clear the original text
-                                hashCell.appendChild(tooltipTrigger);
+                            if (hashCell && savedFeatures["realtimeHashrateData"] && !hashCell.querySelector('.realtime-hashrate')) {
+                                // Create a new element for the realtime hash rate
+                                const realtimeHashrateElement = document.createElement('div');
+                                realtimeHashrateElement.textContent = 'Realtime: Checking...';
+                                realtimeHashrateElement.classList.add('realtime-hashrate');
+                                realtimeHashrateElement.style.color = '#fff';
+                                realtimeHashrateElement.style.fontSize = '0.9em';
+                                realtimeHashrateElement.style.marginTop = '5px';
+                                hashCell.appendChild(realtimeHashrateElement);
 
-                                // Create the tooltip element
-                                const tooltip = document.createElement('div');
-                                tooltip.textContent = 'Realtime: Checking...';
-                                tooltip.classList.add('realtime-hashrate-tooltip');
-                                tooltip.style.position = 'fixed'; // Use fixed positioning to overlay over everything
-                                tooltip.style.backgroundColor = '#333';
-                                tooltip.style.color = '#fff';
-                                tooltip.style.padding = '10px';
-                                tooltip.style.borderRadius = '5px';
-                                tooltip.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
-                                tooltip.style.whiteSpace = 'nowrap';
-                                tooltip.style.zIndex = '10000'; // Ensure it overlays over everything
-                                tooltip.style.display = 'none';
-                                tooltipTrigger.appendChild(tooltip);
-
-                                // Position the tooltip dynamically on hover
-                                tooltipTrigger.addEventListener('mouseenter', (event) => {
-                                    const rect = tooltipTrigger.getBoundingClientRect();
-                                    tooltip.style.top = `${rect.bottom + window.scrollY}px`;
-                                    tooltip.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
-                                    tooltip.style.transform = 'translateX(-50%)';
-                                    tooltip.style.display = 'block';
-                                });
-
-                                // Hide the tooltip when the mouse leaves
-                                tooltipTrigger.addEventListener('mouseleave', () => {
-                                    tooltip.style.display = 'none';
-                                });
-
-                                function fetchRealtimeHashRate(tooltipElement, ip) {
-                                    const ipHref = "http://root:root@" + ip + '/cgi-bin/stats.cgi';
-                                        fetchGUIData(ipHref)
+                                function fetchRealtimeHashRate(element, ip) {
+                                    const ipHref = "http://" + ip + '/cgi-bin/stats.cgi';
+                                    fetchGUIData(ipHref)
                                         .then(response => {
                                             // Convert the response from json if possible
                                             if (response && !response.STATS) {
                                                 response = JSON.parse(response);
                                             }
 
-                                            let realTime = response.STATS[0].rate_avg;
-                                            let [newRate, hashType] = convertHashRate(realTime, "GH");
-                                            realTime = newRate + " " + hashType;
-                                            if (realTime) {
-                                                tooltipElement.textContent = 'Realtime: ' + realTime;
+                                            let totalHash = 0;
+                                            let chains = [];
+                                            for (let i = 0; i < response.STATS[0].chain.length; i++) {
+                                                totalHash += response.STATS[0].chain[i].rate_real;
+                                                chains.push({
+                                                    real: response.STATS[0].chain[i].rate_real,
+                                                    ideal: response.STATS[0].chain[i].rate_ideal,
+                                                    asics: response.STATS[0].chain[i].asic_num,
+                                                    percentage: (response.STATS[0].chain[i].rate_real / response.STATS[0].chain[i].rate_ideal) * 100
+                                                });
+                                            }
+                                            let totalHashIdeal = response.STATS[0].rate_ideal;
+                                            let totalHashPercentage = (totalHash / totalHashIdeal) * 100;
+                                            totalHashPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage;
+                                            let [newRate, hashType] = convertHashRate(totalHash, "GH");
+                                            totalHash = newRate + " " + hashType;
+                                            if (totalHash) { 
+                                                element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
+                                                element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n\n";
+                                                element.hashboardRates += chains.map((chain, index) => 
+                                                    `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
+                                                ).join('\n');
+                                                element.tooltip.textContent = element.hashboardRates
                                             } else {
-                                                tooltipElement.textContent = 'Realtime: N/A';
+                                                element.textContent = 'Realtime: N/A';
+                                                element.hashboardRates = 'Realtime data not available.';
                                             }
                                         })
                                         .catch(error => {
-                                            console.error(error);
+                                            console.log("Error fetching realtime hash rate: ", error);
+                                            element.textContent = 'Realtime: Error';
+                                            element.hashboardRates = 'Error fetching data.\nMiner is offline or unreachable.';
+                                            element.tooltip.textContent = element.hashboardRates;
                                         });
                                 }
-                                let fetchInterval;
 
-                                // Show tooltip and start fetching realtime hash rate
-                                tooltipTrigger.addEventListener('mouseenter', () => {
+                                // Create a tooltip element
+                                const tooltip = document.createElement('div');
+                                tooltip.style.position = 'fixed';
+                                tooltip.style.backgroundColor = '#333';
+                                tooltip.style.color = '#fff';
+                                tooltip.style.padding = '10px';
+                                tooltip.style.borderRadius = '5px';
+                                tooltip.style.boxShadow = '0 0 10px rgba(0, 0, 0, 0.5)';
+                                tooltip.style.fontSize = '0.9em';
+                                tooltip.style.whiteSpace = 'pre-line';
+                                tooltip.style.display = 'none';
+                                tooltip.style.zIndex = '9999';
+                                tooltip.textContent = 'Loading...';
+                                document.body.appendChild(tooltip);
+
+                                realtimeHashrateElement.tooltip = tooltip;
+
+                                // Observer to check if the element is in view
+                                let lastInteraction = 0;
+                                const observer = new IntersectionObserver((entries) => {
+                                    let interactionStart = new Date().getTime();
+                                    lastInteraction = interactionStart;
+                                    entries.forEach(entry => {
+                                        if (entry.isIntersecting) {
+                                            realtimeHashrateElement.lastSeen = interactionStart;
+                                        }
+                                        setTimeout(() => {
+                                            if (entry.isIntersecting && lastInteraction === interactionStart) {
+
+                                                let timeDelay = 0;
+                                                if(status !== "Online") {
+                                                    timeDelay = 1;
+                                                    realtimeHashrateElement.textContent = 'Skipped: ' + status;
+                                                    realtimeHashrateElement.tooltip.textContent = "Skipped check because OptiFleet status: " + status;
+                                                    return
+                                                }
+
+                                                setTimeout(() => {
+                                                    // Element is in view, start fetching realtime hash rate
+                                                    fetchRealtimeHashRate(realtimeHashrateElement, ipAddress);
+                                                }, timeDelay * 800);
+
+                                                // Start periodic updates
+                                                if (!realtimeHashrateElement.fetchInterval) {
+                                                    realtimeHashrateElement.fetchInterval = setInterval(() => {
+                                                        setTimeout(() => {
+                                                            if(realtimeHashrateElement.fetchInterval) {
+                                                                fetchRealtimeHashRate(realtimeHashrateElement, ipAddress);
+                                                            }
+                                                        }, timeDelay * 800);
+                                                    }, 6000); // Fetch every 6 seconds
+                                                }
+                                            }
+                                        }, 800);
+                                        if (!entry.isIntersecting) {
+                                            // Element is out of view, stop fetching
+                                            if (realtimeHashrateElement.fetchInterval) {
+                                                clearInterval(realtimeHashrateElement.fetchInterval);
+                                                realtimeHashrateElement.fetchInterval = null;
+                                                setTimeout(() => {
+                                                    // Been 30 seconds since last seen, clear the text
+                                                    if (realtimeHashrateElement.lastSeen && new Date().getTime() - realtimeHashrateElement.lastSeen > 30000) {
+                                                        realtimeHashrateElement.textContent = 'Realtime: Checking...';
+                                                        realtimeHashrateElement.tooltip.textContent = 'Loading...';
+                                                    }
+                                                }, 32000);
+                                            }
+                                        }
+                                    });
+                                });
+
+                                // Observe the realtime hash rate element
+                                observer.observe(realtimeHashrateElement);
+
+                                // Add hover event to show tooltip
+                                realtimeHashrateElement.addEventListener('mouseenter', (event) => {
                                     tooltip.style.display = 'block';
-                                    fetchRealtimeHashRate(tooltip, ipAdress);
-
-                                    // Start fetching realtime hash rate
-                                    fetchInterval = setInterval(() => {
-                                        fetchRealtimeHashRate(tooltip, ipAdress);
-                                    }, 5000); // Fetch every 5 seconds
+                                    tooltip.style.left = `${event.clientX + 10}px`;
+                                    tooltip.style.top = `${event.clientY + 10}px`;
                                 });
 
-                                // Hide tooltip and stop fetching
-                                tooltipTrigger.addEventListener('mouseleave', () => {
+                                realtimeHashrateElement.addEventListener('mousemove', (event) => {
+                                    const tooltipWidth = tooltip.offsetWidth;
+                                    const tooltipHeight = tooltip.offsetHeight;
+                                    const windowWidth = window.innerWidth;
+                                    const windowHeight = window.innerHeight;
+
+                                    let left = event.clientX + 10;
+                                    let top = event.clientY + 10;
+
+                                    // Adjust if tooltip goes outside the right edge of the window
+                                    if (left + tooltipWidth > windowWidth) {
+                                        left = event.clientX - tooltipWidth - 10;
+                                    }
+
+                                    // Adjust if tooltip goes outside the bottom edge of the window
+                                    if (top + tooltipHeight > windowHeight) {
+                                        top = event.clientY - tooltipHeight - 10;
+                                    }
+
+                                    tooltip.style.left = `${left}px`;
+                                    tooltip.style.top = `${top}px`;
+                                });
+
+                                realtimeHashrateElement.addEventListener('mouseleave', () => {
                                     tooltip.style.display = 'none';
-                                    clearInterval(fetchInterval);
                                 });
-                            }
-
-                            // Check if slotID has minden in it
-                            if (!slotID.includes('Minden')) {
-                                continue;
                             }
 
                             var splitSlotID = slotID.split('-');
