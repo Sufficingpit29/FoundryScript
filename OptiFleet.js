@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.0.1
+// @version      7.0.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1419,10 +1419,7 @@ window.addEventListener('load', function () {
         }
 
         // Check if minden
-        if( siteName.includes("Minden") ) {
-            if(!savedFeatures["alertSystem"]) {
-                return;
-            }
+        if( siteName.includes("Minden") && savedFeatures["alertSystem"] ) {
 
             // Miner issue notification every minute
             setInterval(function() {
