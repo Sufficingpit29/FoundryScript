@@ -1,10 +1,10 @@
 // To do:
-// Maybe add a "real lower hashers" tab
+// Maybe add a "real lower hashers" tab?
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.0.0
+// @version      7.0.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -366,7 +366,7 @@ const username = 'root';
 const password = 'root';
 async function fetchGUIData(url) {
     return new Promise((resolve, reject) => {
-        // First, ping the IP to check if it exists
+        // First, ping the IP to check if it exists (wacky workaround since GM_xmlhttpRequest doesn't support parallel requests, not that this really fixes it all that well)
         const ip = new URL(url).hostname;
         GM_xmlhttpRequest({
             method: 'HEAD',
@@ -6204,9 +6204,6 @@ window.addEventListener('load', function () {
                                                         </span>
                                                         <span class="error-serialnumber-text" style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
                                                             ${minerSerialNumber}
-                                                        </span>
-                                                        <span class="error-hashboard-text" style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: left; left: 5px;">
-                                                            ${hashboardModel}
                                                         </span>
                                                         <span style="background-color: #333; padding: 5px; border-radius: 5px; outline: 1px solid #000; margin-left: 5px; float: right;">
                                                             ${paddedSlotIDBreaker}
