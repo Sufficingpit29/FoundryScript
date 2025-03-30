@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.0.2
+// @version      7.0.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1235,11 +1235,7 @@ window.addEventListener('load', function () {
         
         
         // Add a small edit button to bottom right
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues") && siteName.includes("Minden")) {
-
-            if(!savedFeatures["alertSystem"]) {
-                return;
-            }
+        if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues") && siteName.includes("Minden") && savedFeatures["alertSystem"]) {
 
             // Find hubspot-messages-iframe-container and remove it
             const interval = setInterval(() => {
