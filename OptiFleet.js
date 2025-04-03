@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.2.5
+// @version      7.2.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -5962,7 +5962,7 @@ window.addEventListener('load', function () {
                                             resolve();
                                         })
                                         .catch(() => {
-                                            setPreviousLogDone(miner.id, "✖", "Failed to load miner GUI.");
+                                            setPreviousLogDone(miner.id, "✖", "Failed to load miner GUI Data...");
                                             failLoadCount++;
                                             resolve();
                                         });
@@ -5970,7 +5970,7 @@ window.addEventListener('load', function () {
                             }
 
                             // Process miners
-                            processMinerQueue(errorScanMiners, 9, processMiner, progressFill, percentageText);
+                            processMinerQueue(errorScanMiners, 6, processMiner, progressFill, percentageText);
 
                             const checkScanDoneInterval = setInterval(() => {
                                 let doneNum = errorScanMiners.length + activeFetches;
