@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.2.4
+// @version      7.2.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -366,14 +366,14 @@ window.addEventListener('load', function() {
 
 const username = 'root';
 const password = 'root';
-async function fetchGUIData(url, responseType, type) {
+async function fetchGUIData(url, responseType, type, timeout) {
     return new Promise((resolve, reject) => {
         // First, ping the IP to check if it exists (wacky workaround since GM_xmlhttpRequest doesn't support parallel requests, not that this really fixes it all that well)
         const ip = new URL(url).hostname;
         GM_xmlhttpRequest({
             method: 'HEAD',
             url: `http://${ip}`,
-            timeout: 8000, // Set a timeout for the ping
+            timeout: timeout || 8000, // Set a timeout for the ping
             onload: function(pingResponse) {
                 if ((pingResponse.status >= 200 && pingResponse.status < 400) || pingResponse.status === 401) {
                     // If the ping is successful, proceed with fetching the GUI data
@@ -430,10 +430,14 @@ async function fetchGUIData(url, responseType, type) {
 }
 
 function fetchAndCombineLogs(ip) {
+    if(ip.includes("http")) {
+        ip = new URL(ip).hostname;
+    }
+
     const ipHref = `http://${ip}/files/logs/logs-202504022359.tar.gz`;
     const ipHref2 = `http://${ip}/files/logs/foundryminerExec.log`;
 
-    return fetchGUIData(ipHref, "arraybuffer", "tar.gz")
+    return fetchGUIData(ipHref, "arraybuffer", "tar.gz", 16000)
         .then(response => {
             // Gets all miner logs with "foundryminerExec" in the name
             const minerLogs = response.filter(file => file.name.includes("foundryminerExec"));
@@ -445,7 +449,6 @@ function fetchAndCombineLogs(ip) {
 
             return fetchGUIData(ipHref2).then(currentLog => {
                 const fullLogString = logString + "\n" + currentLog;
-                console.log("Full log string:", fullLogString);
                 return fullLogString;
             });
         })
@@ -790,9 +793,9 @@ const errorsToSearch = {
     },
 }
 
-function runErrorScanLogic(logText) {
+function runErrorScanLogic(logText, excludeUnknown) {
     console.log('Running error scan logic');
-    console.log('Log text:', logText);
+    //console.log('Log text:', logText);
     // Search through the log and locate errors
     var showOnceErrors = {};
     var errorsFound = []; // Array to store the errors found
@@ -942,28 +945,30 @@ function runErrorScanLogic(logText) {
     }
 
     // Find all the times 'error' or 'fail' or 'not found' is mentioned in the log if it isn't already found in the defined errors, mark is as an Unknown Error
-    const errorRegex = /error/gi;
-    const failRegex = /fail/gi;
-    const notFoundRegex = /not found/gi; // disabled for now
-    const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
-    for (const match of errorMatches) {
-        // Check if the error is already found
-        const matchIndex = match.index;
-        if (!errorsFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
-            // Find the start and end of the line
-            const start = logText.lastIndexOf('\n', matchIndex) + 1;
-            const end = logText.indexOf('\n', matchIndex) + 1;
-            const errorText = logText.substring(start, end);
+    if(!excludeUnknown) {
+        const errorRegex = /error/gi;
+        const failRegex = /fail/gi;
+        const notFoundRegex = /not found/gi; // disabled for now
+        const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
+        for (const match of errorMatches) {
+            // Check if the error is already found
+            const matchIndex = match.index;
+            if (!errorsFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
+                // Find the start and end of the line
+                const start = logText.lastIndexOf('\n', matchIndex) + 1;
+                const end = logText.indexOf('\n', matchIndex) + 1;
+                const errorText = logText.substring(start, end);
 
-            // Add the error to the list of errors
-            errorsFound.push({
-                name: 'Unknown Error',
-                icon: "https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF",
-                text: errorText.trimEnd(),
-                start: start,
-                end: end,
-                type: "Other"
-            });
+                // Add the error to the list of errors
+                errorsFound.push({
+                    name: 'Unknown Error',
+                    icon: "https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF",
+                    text: errorText.trimEnd(),
+                    start: start,
+                    end: end,
+                    type: "Other"
+                });
+            }
         }
     }
     
@@ -2749,7 +2754,7 @@ window.addEventListener('load', function () {
                                 return;
                             }
 
-                            function SetUpLog(responseText) {
+                            function SetUpLog(responseText, excludeUnknown) {
                                 // Remove the loading text and spinner
                                 customTabContainer.removeChild(loadingText);
                                 customTabContainer.removeChild(loadingSpinner);
@@ -2804,7 +2809,7 @@ window.addEventListener('load', function () {
 
                                 // Create the error tabs
                                 const logText = logElement.innerText;
-                                var errorsFound = runErrorScanLogic(logText);
+                                var errorsFound = runErrorScanLogic(logText, excludeUnknown);
                                 if(errorsFound.length === 0) {
                                     return;
                                 }
@@ -3001,7 +3006,7 @@ window.addEventListener('load', function () {
                                 const ip = new URL(ipHref).hostname;
                                 const responseText = fetchAndCombineLogs(ip);
                                 responseText.then(responseText => { 
-                                    SetUpLog(responseText);
+                                    SetUpLog(responseText, true);
                                 }).catch(error => {
                                     console.error(error);
                                 });
@@ -5937,18 +5942,11 @@ window.addEventListener('load', function () {
                                     const firmware = miner.firmwareVersion;
                                     const isFoundry = firmware.includes("FoSMiner");
 
-                                    if (GM_SuperValue.get('excludeFoundryFirmware', false) && isFoundry) {
-                                        setPreviousLogDone(miner.id, "↷", "Skipping Foundry firmware miner.");
-                                        failLoadCount++;
-                                        resolve();
-                                        return;
-                                    }
-
                                     const fetchLogs = isFoundry ? fetchAndCombineLogs : fetchGUIData;
                                     fetchLogs(ipHref)
                                         .then(responseText => {
                                             responseText = cleanErrors(responseText);
-                                            let errorsFound = runErrorScanLogic(responseText);
+                                            let errorsFound = runErrorScanLogic(responseText, isFoundry);
                                             if (!GM_SuperValue.get('includeOtherErrors', false)) {
                                                 errorsFound = errorsFound.filter(error => error.type === 'Main');
                                             }
@@ -5972,7 +5970,7 @@ window.addEventListener('load', function () {
                             }
 
                             // Process miners
-                            processMinerQueue(errorScanMiners, 12, processMiner, progressFill, percentageText);
+                            processMinerQueue(errorScanMiners, 9, processMiner, progressFill, percentageText);
 
                             const checkScanDoneInterval = setInterval(() => {
                                 let doneNum = errorScanMiners.length + activeFetches;
