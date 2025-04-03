@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.0.3
+// @version      7.2.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -26,6 +26,8 @@
 // @require      https://cdn.datatables.net/colreorder/1.6.2/js/dataTables.colReorder.min.js
 // @require      https://cdn.datatables.net/responsive/2.4.0/js/dataTables.responsive.min.js
 // @require      https://cdn.jsdelivr.net/npm/datatables.net-colresize/js/dataTables.colResize.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js
+// @require      https://raw.githubusercontent.com/InvokIT/js-untar/refs/heads/master/build/dist/untar.js
 // @resource     https://cdn.datatables.net/1.13.1/css/jquery.dataTables.min.css
 // @resource     https://cdn.datatables.net/colreorder/1.6.2/css/colReorder.dataTables.min.css
 // @resource     https://cdn.datatables.net/responsive/2.4.0/css/responsive.dataTables.min.css
@@ -364,7 +366,7 @@ window.addEventListener('load', function() {
 
 const username = 'root';
 const password = 'root';
-async function fetchGUIData(url) {
+async function fetchGUIData(url, responseType, type) {
     return new Promise((resolve, reject) => {
         // First, ping the IP to check if it exists (wacky workaround since GM_xmlhttpRequest doesn't support parallel requests, not that this really fixes it all that well)
         const ip = new URL(url).hostname;
@@ -380,12 +382,29 @@ async function fetchGUIData(url) {
                         url: url,
                         user: username,
                         password: password,
+                        responseType: responseType || 'text',
                         headers: {
                             'X-Requested-With': 'XMLHttpRequest'
                         },
                         onload: function(response) {
                             if (response.status >= 200 && response.status < 300) {
-                                resolve(response.responseText);
+                                if(responseType === 'arraybuffer' && type === 'tar.gz') {
+                                    // Extract the logs from the response (uncompress the .gz and get the various .log files)
+                                    try {
+                                        // Step 1: Decompress the .gz file
+                                        const decompressedData = pako.inflate(new Uint8Array(response.response));
+                            
+                                        // Step 2: Parse the .tar archive
+                                        untar(decompressedData.buffer)
+                                            .then(files => {
+                                                resolve(files);
+                                            })
+                                    } catch (error) {
+                                        console.error("Error processing .tar.gz file:", error);
+                                    }
+                                } else {
+                                    resolve(response.responseText);
+                                }
                             } else if (response.status === 401) {
                                 reject('Authentication failed. Please check your username and password.');
                             } else {
@@ -408,6 +427,32 @@ async function fetchGUIData(url) {
             }
         });
     });
+}
+
+function fetchAndCombineLogs(ip) {
+    const ipHref = `http://${ip}/files/logs/logs-202504022359.tar.gz`;
+    const ipHref2 = `http://${ip}/files/logs/foundryminerExec.log`;
+
+    return fetchGUIData(ipHref, "arraybuffer", "tar.gz")
+        .then(response => {
+            // Gets all miner logs with "foundryminerExec" in the name
+            const minerLogs = response.filter(file => file.name.includes("foundryminerExec"));
+            const lastLogFile = minerLogs[minerLogs.length - 1];
+            
+            // Convert ArrayBuffer of lastLogFile.buffer to string
+            const decoder = new TextDecoder('utf-8');
+            const logString = decoder.decode(lastLogFile.buffer);
+
+            return fetchGUIData(ipHref2).then(currentLog => {
+                const fullLogString = logString + "\n" + currentLog;
+                console.log("Full log string:", fullLogString);
+                return fullLogString;
+            });
+        })
+        .catch(error => {
+            console.error(error);
+            throw error;
+        });
 }
 
 // Where we define the different error strctures to locate
@@ -967,6 +1012,13 @@ function cleanErrors(logText) {
     });
 
     logText = logLines.join('\n');
+
+    // Removes previous logs starts for Foundry GUI logs
+    const startIndex = logText.lastIndexOf("----------Start");
+    if (startIndex !== -1) {
+        logText = logText.substring(startIndex);
+    }
+
     return logText;
 }
 
@@ -1416,7 +1468,6 @@ window.addEventListener('load', function () {
 
         // Check if minden
         if( siteName.includes("Minden") && savedFeatures["alertSystem"] ) {
-
             // Miner issue notification every minute
             setInterval(function() {
                 minerIssueNotification()
@@ -1817,7 +1868,7 @@ window.addEventListener('load', function () {
             // Convert the hash rate to the best type
             hashRate = convertRates(hashRate, 'H', hashType).toFixed(2);
 
-            return [hashRate, hashType];
+            return [parseFloat(hashRate), hashType];
         }
 
         // Non-Bitcoin Hash Rate Logic
@@ -2697,255 +2748,272 @@ window.addEventListener('load', function () {
                                 customTabContainer.appendChild(offlineMessage);
                                 return;
                             }
-                            
-                            const ipHref = ipElement.href.replace('root:root@', '') + '/cgi-bin/log.cgi';
-                            fetchGUIData(ipHref)
-                                .then(responseText => {
-                                    // Remove the loading text and spinner
-                                    customTabContainer.removeChild(loadingText);
-                                    customTabContainer.removeChild(loadingSpinner);
 
-                                    // Create a sleek log element
-                                    const logElement = document.createElement('div');
-                                    logElement.style.cssText = `
-                                        background-color: #18181b;
-                                        color: #fff;
-                                        padding: 20px;
+                            function SetUpLog(responseText) {
+                                // Remove the loading text and spinner
+                                customTabContainer.removeChild(loadingText);
+                                customTabContainer.removeChild(loadingSpinner);
+
+                                // Create a sleek log element
+                                const logElement = document.createElement('div');
+                                logElement.style.cssText = `
+                                    background-color: #18181b;
+                                    color: #fff;
+                                    padding: 20px;
+                                    border-radius: 10px;
+                                    max-height: 400px;
+                                    overflow-y: auto;
+                                    overflow-x: auto;
+                                    font-family: 'Courier New', Courier, monospace;
+                                    white-space: pre;
+                                    width: 100%;
+                                    scrollbar-width: thin;
+                                    scrollbar-color: #888 #333;
+                                `;
+                                
+                                responseText = responseText.trim();
+                                responseText = cleanErrors(responseText);
+                                let orignalLogText = responseText;
+                                logElement.textContent = orignalLogText;
+                                customTabContainer.appendChild(logElement);
+
+                                // Add custom scrollbar styles
+                                const style = document.createElement('style');
+                                style.textContent = `
+                                    ::-webkit-scrollbar {
+                                        width: 8px;
+                                        height: 8px;
+                                    }
+                                    ::-webkit-scrollbar-track {
+                                        background: #333;
                                         border-radius: 10px;
-                                        max-height: 400px;
-                                        overflow-y: auto;
-                                        overflow-x: auto;
-                                        font-family: 'Courier New', Courier, monospace;
-                                        white-space: pre;
-                                        width: 100%;
-                                        scrollbar-width: thin;
-                                        scrollbar-color: #888 #333;
-                                    `;
-                                    
-                                    responseText = responseText.trim();
-                                    responseText = cleanErrors(responseText);
-                                    let orignalLogText = responseText;
-                                    logElement.textContent = orignalLogText;
-                                    customTabContainer.appendChild(logElement);
+                                    }
+                                    ::-webkit-scrollbar-thumb {
+                                        background-color: #888;
+                                        border-radius: 10px;
+                                        border: 2px solid #333;
+                                    }
+                                    ::-webkit-scrollbar-thumb:hover {
+                                        background-color: #555;
+                                    }
+                                `;
+                                document.head.appendChild(style);
 
-                                    // Add custom scrollbar styles
-                                    const style = document.createElement('style');
-                                    style.textContent = `
-                                        ::-webkit-scrollbar {
-                                            width: 8px;
-                                            height: 8px;
-                                        }
-                                        ::-webkit-scrollbar-track {
-                                            background: #333;
-                                            border-radius: 10px;
-                                        }
-                                        ::-webkit-scrollbar-thumb {
-                                            background-color: #888;
-                                            border-radius: 10px;
-                                            border: 2px solid #333;
-                                        }
-                                        ::-webkit-scrollbar-thumb:hover {
-                                            background-color: #555;
-                                        }
-                                    `;
-                                    document.head.appendChild(style);
+                                // Scroll to bottom of log
+                                logElement.scrollTop = logElement.scrollHeight;
 
-                                    // Scroll to bottom of log
-                                    logElement.scrollTop = logElement.scrollHeight;
+                                // Create the error tabs
+                                const logText = logElement.innerText;
+                                var errorsFound = runErrorScanLogic(logText);
+                                if(errorsFound.length === 0) {
+                                    return;
+                                }
 
-                                    // Create the error tabs
-                                    const logText = logElement.innerText;
-                                    var errorsFound = runErrorScanLogic(logText);
-                                    if(errorsFound.length === 0) {
+                                // Add divider to m-nav
+                                const mnav = document.querySelector('.m-nav');
+                                const divider = document.createElement('div');
+                                divider.className = 'm-divider has-space-m';
+                                divider.classList.add('error-divider');
+                                mnav.appendChild(divider);
+            
+                                function createErrorTab(title, errors, defaultOpen = false) {
+
+                                    // If there are no errors
+                                    if(errors.length === 0) {
                                         return;
                                     }
 
-                                    // Add divider to m-nav
-                                    const mnav = document.querySelector('.m-nav');
-                                    const divider = document.createElement('div');
-                                    divider.className = 'm-divider has-space-m';
-                                    divider.classList.add('error-divider');
-                                    mnav.appendChild(divider);
-                
-                                    function createErrorTab(title, errors, defaultOpen = false) {
+                                    const errorTab = document.createElement('div');
+                                    errorTab.className = 'm-nav-group';
+                                    errorTab.classList.add('error-tab');
 
-                                        // If there are no errors
-                                        if(errors.length === 0) {
-                                            return;
-                                        }
-
-                                        const errorTab = document.createElement('div');
-                                        errorTab.className = 'm-nav-group';
-                                        errorTab.classList.add('error-tab');
-
-                                        // Create the header with the dynamic title
-                                        const header = `
-                                            <div class="m-nav-group-header">
-                                                <div class="m-nav-group-label">
-                                                    <m-icon name="error" size="l" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-                                                    ${title}
-                                                </div>
-                                                <m-icon name="chevron-down" data-dashlane-shadowhost="true" data-dashlane-observed="true" class="flip"></m-icon>
+                                    // Create the header with the dynamic title
+                                    const header = `
+                                        <div class="m-nav-group-header">
+                                            <div class="m-nav-group-label">
+                                                <m-icon name="error" size="l" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                                                ${title}
                                             </div>
-                                        `;
+                                            <m-icon name="chevron-down" data-dashlane-shadowhost="true" data-dashlane-observed="true" class="flip"></m-icon>
+                                        </div>
+                                    `;
+                                
+                                    // Create the group items with icons dynamically
+                                    const items = errors.map((error, index) => `
+                                        <div class="m-nav-group-item" style="display: flex; align-items: center;">
+                                            <img src="${error.icon}" width="16" height="16" style="margin-right: 8px;" />
+                                            <a href="#" class="m-nav-item" data-error-index="${index}">${error.textReturn}</a>
+                                        </div>
+                                    `).join('');
                                     
-                                        // Create the group items with icons dynamically
-                                        const items = errors.map((error, index) => `
-                                            <div class="m-nav-group-item" style="display: flex; align-items: center;">
-                                                <img src="${error.icon}" width="16" height="16" style="margin-right: 8px;" />
-                                                <a href="#" class="m-nav-item" data-error-index="${index}">${error.textReturn}</a>
+                                    // Combine all parts into the final HTML
+                                    errorTab.innerHTML = `
+                                        ${header}
+                                        <div class="m-nav-group-section" style="display: none;">
+                                            <div class="m-nav-group-items">
+                                                ${items}
                                             </div>
-                                        `).join('');
-                                        
-                                        // Combine all parts into the final HTML
-                                        errorTab.innerHTML = `
-                                            ${header}
-                                            <div class="m-nav-group-section" style="display: none;">
-                                                <div class="m-nav-group-items">
-                                                    ${items}
-                                                </div>
-                                            </div>
-                                        `;
-                                    
-                                        // Add collapse and open logic
-                                        const headerElement = errorTab.querySelector('.m-nav-group-header');
-                                        const sectionElement = errorTab.querySelector('.m-nav-group-section');
-                                        const chevronIcon = errorTab.querySelector('.m-nav-group-header m-icon');
-                                    
-                                        headerElement.addEventListener('click', () => {
-                                            const isOpen = sectionElement.style.display === 'block';
-                                            sectionElement.style.display = isOpen ? 'none' : 'block';
-                                            chevronIcon.classList.toggle('flip', !isOpen);
-                                        });
+                                        </div>
+                                    `;
+                                
+                                    // Add collapse and open logic
+                                    const headerElement = errorTab.querySelector('.m-nav-group-header');
+                                    const sectionElement = errorTab.querySelector('.m-nav-group-section');
+                                    const chevronIcon = errorTab.querySelector('.m-nav-group-header m-icon');
+                                
+                                    headerElement.addEventListener('click', () => {
+                                        const isOpen = sectionElement.style.display === 'block';
+                                        sectionElement.style.display = isOpen ? 'none' : 'block';
+                                        chevronIcon.classList.toggle('flip', !isOpen);
+                                    });
 
-                                        if (defaultOpen) {
-                                            sectionElement.style.display = 'block';
-                                            chevronIcon.classList.add('flip');
-                                        }
-                                    
-                                        // Add click event listener to each error item
-                                        const errorItems = errorTab.querySelectorAll('.m-nav-item');
-                                        errorItems.forEach(item => {
-                                            item.addEventListener('click', (event) => {
-                                                event.preventDefault();
-                                                const errorIndex = event.target.getAttribute('data-error-index');
-                                                const error = errors[errorIndex];
-                                                handleErrorClick(error, orignalLogText);
-                                            });
-                                        });
-                                    
-                                        mnav.appendChild(errorTab);
-                                        return errorTab;
+                                    if (defaultOpen) {
+                                        sectionElement.style.display = 'block';
+                                        chevronIcon.classList.add('flip');
                                     }
-                                    
-                                    function handleErrorClick(error, orignalLogText) {
-                                        // Reset log text
-                                        while (logElement.firstChild) {
-                                            logElement.removeChild(logElement.firstChild);
-                                        }
-                                        logElement.textContent = orignalLogText;
-                                    
-                                        // Create a new element to highlight the error
-                                        const errorElement = document.createElement('span');
-                                        errorElement.style.backgroundColor = '#FF2323';
-                                        
-                                        const errorTextNode = document.createElement('span');
-                                        errorTextNode.style.fontWeight = 'bolder';
-                                        errorTextNode.style.textShadow = '1px 1px 2px black';
-                                        errorTextNode.style.color = 'white';
-                                        errorTextNode.textContent = error.text;
-                                        errorElement.appendChild(errorTextNode);
-                                        errorElement.style.width = logElement.scrollWidth + 'px';
-                                        errorElement.style.display = 'block';
-                                    
-                                        // Create a copy button
-                                        const copyButton = document.createElement('button');
-                                        copyButton.textContent = 'Copy';
-                                        copyButton.style.position = 'absolute';
-                                        copyButton.style.bottom = '0';
-                                        copyButton.style.right = '0';
-                                        copyButton.style.backgroundColor = 'transparent';
-                                        copyButton.style.border = 'none';
-                                        copyButton.style.color = 'black';
-                                        copyButton.style.cursor = 'pointer';
-                                        copyButton.style.padding = '5px';
-                                        copyButton.style.fontSize = '12px';
-                                        copyButton.style.fontWeight = 'bold';
-                                        copyButton.style.zIndex = '1';
-                                        copyButton.addEventListener('click', () => {
-                                            // disable default behavior
+                                
+                                    // Add click event listener to each error item
+                                    const errorItems = errorTab.querySelectorAll('.m-nav-item');
+                                    errorItems.forEach(item => {
+                                        item.addEventListener('click', (event) => {
                                             event.preventDefault();
-
-                                            // copy text to clipboard
-                                            if (navigator.clipboard) {
-                                                navigator.clipboard.writeText(error.text).then(() => {
-                                                    console.log('Text copied to clipboard');
-                                                }).catch(err => {
-                                                    console.error('Failed to copy text: ', err);
-                                                });
-                                            } else {
-                                                const textArea = document.createElement('textarea');
-                                                textArea.value = error.text;
-                                                document.body.appendChild(textArea);
-                                                textArea.select();
-                                                try {
-                                                    document.execCommand('copy');
-                                                    console.log('Text copied to clipboard');
-                                                } catch (err) {
-                                                    console.error('Failed to copy text: ', err);
-                                                }
-                                                document.body.removeChild(textArea);
-                                            }
-                                            copyButton.textContent = 'Copied!';
-                                            setTimeout(() => {
-                                                copyButton.textContent = 'Copy';
-                                            }, 1000);
+                                            const errorIndex = event.target.getAttribute('data-error-index');
+                                            const error = errors[errorIndex];
+                                            handleErrorClick(error, orignalLogText);
                                         });
-                                    
-                                        errorElement.style.position = 'relative';
-                                        errorElement.appendChild(copyButton);
-                                    
-                                        errorElement.addEventListener('mouseover', () => {
-                                            copyButton.style.display = 'block';
-                                        });
-                                    
-                                        errorElement.addEventListener('mouseout', () => {
-                                            copyButton.style.display = 'none';
-                                        });
-                                    
-                                        copyButton.addEventListener('mouseover', () => {
-                                            copyButton.style.color = 'green';
-                                        });
-                                    
-                                        copyButton.addEventListener('mouseout', () => {
-                                            copyButton.style.color = 'black';
-                                        });
-                                    
-                                        // Replace the error text in the log with the highlighted version
-                                        const logTextNode = logElement.childNodes[0];
-                                        const beforeErrorText = logTextNode.textContent.substring(0, error.start);
-                                        const afterErrorText = logTextNode.textContent.substring(error.end);
-
-                                        logTextNode.textContent = beforeErrorText;
-                                        
-                                        logElement.insertBefore(errorElement, logTextNode.nextSibling);
-                                        logElement.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
-                                        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    });
+                                
+                                    mnav.appendChild(errorTab);
+                                    return errorTab;
+                                }
+                                
+                                function handleErrorClick(error, orignalLogText) {
+                                    // Reset log text
+                                    while (logElement.firstChild) {
+                                        logElement.removeChild(logElement.firstChild);
                                     }
+                                    logElement.textContent = orignalLogText;
+                                
+                                    // Create a new element to highlight the error
+                                    const errorElement = document.createElement('span');
+                                    errorElement.style.backgroundColor = '#FF2323';
                                     
-                                    const infoTab = createErrorTab("Info", errorsFound.filter(error => error.type === "Info"), true);
-                                    const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"), true);
-                                    const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
+                                    const errorTextNode = document.createElement('span');
+                                    errorTextNode.style.fontWeight = 'bolder';
+                                    errorTextNode.style.textShadow = '1px 1px 2px black';
+                                    errorTextNode.style.color = 'white';
+                                    errorTextNode.textContent = error.text;
+                                    errorElement.appendChild(errorTextNode);
+                                    errorElement.style.width = logElement.scrollWidth + 'px';
+                                    errorElement.style.display = 'block';
+                                
+                                    // Create a copy button
+                                    const copyButton = document.createElement('button');
+                                    copyButton.textContent = 'Copy';
+                                    copyButton.style.position = 'absolute';
+                                    copyButton.style.bottom = '0';
+                                    copyButton.style.right = '0';
+                                    copyButton.style.backgroundColor = 'transparent';
+                                    copyButton.style.border = 'none';
+                                    copyButton.style.color = 'black';
+                                    copyButton.style.cursor = 'pointer';
+                                    copyButton.style.padding = '5px';
+                                    copyButton.style.fontSize = '12px';
+                                    copyButton.style.fontWeight = 'bold';
+                                    copyButton.style.zIndex = '1';
+                                    copyButton.addEventListener('click', () => {
+                                        // disable default behavior
+                                        event.preventDefault();
 
-                                    // Scroll to show new tabs
-                                    otherTab.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                        // copy text to clipboard
+                                        if (navigator.clipboard) {
+                                            navigator.clipboard.writeText(error.text).then(() => {
+                                                console.log('Text copied to clipboard');
+                                            }).catch(err => {
+                                                console.error('Failed to copy text: ', err);
+                                            });
+                                        } else {
+                                            const textArea = document.createElement('textarea');
+                                            textArea.value = error.text;
+                                            document.body.appendChild(textArea);
+                                            textArea.select();
+                                            try {
+                                                document.execCommand('copy');
+                                                console.log('Text copied to clipboard');
+                                            } catch (err) {
+                                                console.error('Failed to copy text: ', err);
+                                            }
+                                            document.body.removeChild(textArea);
+                                        }
+                                        copyButton.textContent = 'Copied!';
+                                        setTimeout(() => {
+                                            copyButton.textContent = 'Copy';
+                                        }, 1000);
+                                    });
+                                
+                                    errorElement.style.position = 'relative';
+                                    errorElement.appendChild(copyButton);
+                                
+                                    errorElement.addEventListener('mouseover', () => {
+                                        copyButton.style.display = 'block';
+                                    });
+                                
+                                    errorElement.addEventListener('mouseout', () => {
+                                        copyButton.style.display = 'none';
+                                    });
+                                
+                                    copyButton.addEventListener('mouseover', () => {
+                                        copyButton.style.color = 'green';
+                                    });
+                                
+                                    copyButton.addEventListener('mouseout', () => {
+                                        copyButton.style.color = 'black';
+                                    });
+                                
+                                    // Replace the error text in the log with the highlighted version
+                                    const logTextNode = logElement.childNodes[0];
+                                    const beforeErrorText = logTextNode.textContent.substring(0, error.start);
+                                    const afterErrorText = logTextNode.textContent.substring(error.end);
 
-                                    // Scroll to show console log
-                                    logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                                })
-                                .catch(error => {
+                                    logTextNode.textContent = beforeErrorText;
+                                    
+                                    logElement.insertBefore(errorElement, logTextNode.nextSibling);
+                                    logElement.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
+                                    errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }
+                                
+                                const infoTab = createErrorTab("Info", errorsFound.filter(error => error.type === "Info"), true);
+                                const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"), true);
+                                const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
+
+                                // Scroll to show new tabs
+                                otherTab.scrollIntoView({ behavior: 'smooth', block: 'end' });
+
+                                // Scroll to show console log
+                                logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                            }
+                            
+                            // firmwareInfoElement
+                            const firmwareInfoElement = document.querySelector('#firmwareInfo');
+                            const firmwareInfo = firmwareInfoElement ? firmwareInfoElement.innerText : "Unknown";
+                            const ipHref = ipElement.href.replace('root:root@', '') + '/cgi-bin/log.cgi';
+                            if(firmwareInfo.includes("FoSMiner")) {
+                                const ip = new URL(ipHref).hostname;
+                                const responseText = fetchAndCombineLogs(ip);
+                                responseText.then(responseText => { 
+                                    SetUpLog(responseText);
+                                }).catch(error => {
                                     console.error(error);
                                 });
+                            } else {
+                                fetchGUIData(ipHref)
+                                    .then(responseText => {
+                                        SetUpLog(responseText);
+                                    })
+                                    .catch(error => {
+                                        console.error(error);
+                                    });
+                            }
                         }
                     }, 500);
                 });
@@ -3119,6 +3187,7 @@ window.addEventListener('load', function () {
                             const statusCell = minerData['Status'];
                             const hashCell = minerData['Hashrate'];
                             const networkCell = minerData['Network'];
+                            const firmWareCell = minerData['Firmware'];
 
                             // Get the serial number from the model cell, second child is the serial number
                             let modelNameElement = modelCell.children[0];
@@ -3126,6 +3195,8 @@ window.addEventListener('load', function () {
                             const slotID = slotIDCell.innerText;
                             const status = statusCell.innerText;
                             const ipAddress = networkCell.children[0].innerText;
+                            const firmwareWare = firmWareCell.innerText;
+                            const isFoundryGUI = firmwareWare.includes("FoS");
                             //console.log("serialNumber", serialNumber);
 
                             // Set the model name to be a link to the miner page
@@ -3173,49 +3244,109 @@ window.addEventListener('load', function () {
                                 realtimeHashrateElement.style.marginTop = '5px';
                                 hashCell.appendChild(realtimeHashrateElement);
 
-                                function fetchRealtimeHashRate(element, ip) {
-                                    const ipHref = "http://" + ip + '/cgi-bin/stats.cgi';
-                                    fetchGUIData(ipHref)
-                                        .then(response => {
-                                            // Convert the response from json if possible
-                                            if (response && !response.STATS) {
-                                                response = JSON.parse(response);
-                                            }
+                                function fetchRealtimeHashRate(element, ip, isFoundryGUI) {
+                                    if(!isFoundryGUI) {
+                                        const ipHref = "http://" + ip + '/cgi-bin/stats.cgi';
+                                        fetchGUIData(ipHref)
+                                            .then(response => {
+                                                // Convert the response from json if possible
+                                                if (response && !response.STATS) {
+                                                    response = JSON.parse(response);
+                                                }
 
-                                            let totalHash = 0;
-                                            let chains = [];
-                                            for (let i = 0; i < response.STATS[0].chain.length; i++) {
-                                                totalHash += response.STATS[0].chain[i].rate_real;
-                                                chains.push({
-                                                    real: response.STATS[0].chain[i].rate_real,
-                                                    ideal: response.STATS[0].chain[i].rate_ideal,
-                                                    asics: response.STATS[0].chain[i].asic_num,
-                                                    percentage: (response.STATS[0].chain[i].rate_real / response.STATS[0].chain[i].rate_ideal) * 100
+                                                let totalHash = 0;
+                                                let chains = [];
+                                                for (let i = 0; i < response.STATS[0].chain.length; i++) {
+                                                    totalHash += response.STATS[0].chain[i].rate_real;
+                                                    chains.push({
+                                                        real: response.STATS[0].chain[i].rate_real,
+                                                        ideal: response.STATS[0].chain[i].rate_ideal,
+                                                        asics: response.STATS[0].chain[i].asic_num,
+                                                        percentage: (response.STATS[0].chain[i].rate_real / response.STATS[0].chain[i].rate_ideal) * 100
+                                                    });
+                                                }
+                                                let totalHashIdeal = response.STATS[0].rate_ideal;
+                                                let totalHashPercentage = (totalHash / totalHashIdeal) * 100;
+                                                totalHashPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage;
+                                                let [newRate, hashType] = convertHashRate(totalHash, "GH");
+                                                totalHash = newRate + " " + hashType;
+                                                if (totalHash) { 
+                                                    element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
+                                                    element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n\n";
+                                                    element.hashboardRates += chains.map((chain, index) => 
+                                                        `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
+                                                    ).join('\n');
+                                                    element.tooltip.textContent = element.hashboardRates
+                                                } else {
+                                                    element.textContent = 'Realtime: N/A';
+                                                    element.hashboardRates = 'Realtime data not available.';
+                                                }
+                                            })
+                                            .catch(error => {
+                                                console.log("Error fetching realtime hash rate: ", error);
+                                                element.textContent = 'Realtime: Error';
+                                                element.hashboardRates = 'Error fetching data.\nMiner is offline or unreachable.';
+                                                element.tooltip.textContent = element.hashboardRates;
+                                            });
+                                    } else {
+                                        const ipHref = 'http://' + ip + '/cgi-bin/stats.cgi';
+                                        fetchGUIData(ipHref)
+                                            .then(response => {
+                                                // Extract relevant data from the response
+                                                if (response && !response.STATS) {
+                                                    response = JSON.parse(response);
+                                                }
+                                                console.log("response", response);
+
+                                                const stats = response.STATS[1];
+                                                console.log("stats", stats);
+                                                const totalHash = convertRates(stats["total rate"], "TH", "H"); // Convert to H/s
+                                                const totalHashIdeal = convertRates(stats["total_rateideal"], "GH", "H"); // Convert to H/s
+                                                const totalHashPercentage = (totalHash / totalHashIdeal) * 100;
+
+                                                const chains = [];
+                                                const chainRates = [
+                                                    parseFloat(stats["chain_rate1"]),
+                                                    parseFloat(stats["chain_rate2"]),
+                                                    parseFloat(stats["chain_rate3"]),
+                                                ];
+                                                let [idealRatePerChain, idealRatePerChainHashType] = convertHashRate(totalHashIdeal / chainRates.length, "H");
+                                                idealRatePerChain = Math.floor(idealRatePerChain)
+
+                                                chainRates.forEach((rate, index) => {
+                                                    const oCount = (stats[`chain_acs${index + 1}`].match(/o/g) || []).length;
+                                                    const chainRate = convertRates(rate, "TH", idealRatePerChainHashType);
+                                                    chains.push({
+                                                        real: chainRate,
+                                                        ideal: idealRatePerChain,
+                                                        asics: oCount,
+                                                        percentage: (chainRate / idealRatePerChain) * 100
+                                                    });
                                                 });
-                                            }
-                                            let totalHashIdeal = response.STATS[0].rate_ideal;
-                                            let totalHashPercentage = (totalHash / totalHashIdeal) * 100;
-                                            totalHashPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage;
-                                            let [newRate, hashType] = convertHashRate(totalHash, "GH");
-                                            totalHash = newRate + " " + hashType;
-                                            if (totalHash) { 
-                                                element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
-                                                element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n\n";
-                                                element.hashboardRates += chains.map((chain, index) => 
-                                                    `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
-                                                ).join('\n');
-                                                element.tooltip.textContent = element.hashboardRates
-                                            } else {
-                                                element.textContent = 'Realtime: N/A';
-                                                element.hashboardRates = 'Realtime data not available.';
-                                            }
-                                        })
-                                        .catch(error => {
-                                            console.log("Error fetching realtime hash rate: ", error);
-                                            element.textContent = 'Realtime: Error';
-                                            element.hashboardRates = 'Error fetching data.\nMiner is offline or unreachable.';
-                                            element.tooltip.textContent = element.hashboardRates;
-                                        });
+
+                                                let [newRate, hashType] = convertHashRate(totalHash, "H");
+                                                const formattedHash = `${newRate} ${hashType}`;
+                                                const formattedPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage.toFixed(2);
+
+                                                if (totalHash) {
+                                                    element.textContent = `Realtime: ${formattedPercentage}%`;
+                                                    element.hashboardRates = `Total: ${formattedHash} / ${formattedPercentage}%\n\n`;
+                                                    element.hashboardRates += chains.map((chain, index) =>
+                                                        `HB${index + 1}: ${(chain.real).toFixed(0)} ${idealRatePerChainHashType} / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
+                                                    ).join('\n');
+                                                    element.tooltip.textContent = element.hashboardRates;
+                                                } else {
+                                                    element.textContent = 'Realtime: N/A';
+                                                    element.hashboardRates = 'Realtime data not available.';
+                                                }
+                                            })
+                                            .catch(error => {
+                                                console.log("Error fetching realtime hash rate: ", error);
+                                                element.textContent = 'Realtime: Error';
+                                                element.hashboardRates = 'Error fetching data.\nMiner is offline or unreachable.';
+                                                element.tooltip.textContent = element.hashboardRates;
+                                            });
+                                    }
                                 }
 
                                 // Create a tooltip element
@@ -3257,7 +3388,7 @@ window.addEventListener('load', function () {
 
                                                 setTimeout(() => {
                                                     // Element is in view, start fetching realtime hash rate
-                                                    fetchRealtimeHashRate(realtimeHashrateElement, ipAddress);
+                                                    fetchRealtimeHashRate(realtimeHashrateElement, ipAddress, isFoundryGUI);
                                                 }, timeDelay * 800);
 
                                                 // Start periodic updates
@@ -3265,7 +3396,7 @@ window.addEventListener('load', function () {
                                                     realtimeHashrateElement.fetchInterval = setInterval(() => {
                                                         setTimeout(() => {
                                                             if(realtimeHashrateElement.fetchInterval) {
-                                                                fetchRealtimeHashRate(realtimeHashrateElement, ipAddress);
+                                                                fetchRealtimeHashRate(realtimeHashrateElement, ipAddress, isFoundryGUI);
                                                             }
                                                         }, timeDelay * 800);
                                                     }, 6000); // Fetch every 6 seconds
@@ -5656,10 +5787,13 @@ window.addEventListener('load', function () {
                                         <input type="checkbox" id="includeOtherErrors" style="margin-right: 10px;">
                                         <label for="includeOtherErrors">Include 'Other' Errors</label>
                                     </div>
+                                    <div class="m-menu-item">
+                                        <input type="checkbox" id="excludeFoundryFirmware" style="margin-right: 10px;">
+                                        <label for="excludeFoundryFirmware">Exclude Foundry Firmware</label>
+                                    </div>
                                 </div>
                             </div>
                         `;
-
                         // If includeOtherErrors data is saved, set the checkbox to checked
                         if (GM_SuperValue.get('includeOtherErrors', false)) {
                             errorScanDropdown.querySelector('#includeOtherErrors').checked = true;
@@ -5674,23 +5808,70 @@ window.addEventListener('load', function () {
                             }
                             GM_SuperValue.set('includeOtherErrors', checkbox.checked);
                         });
-                        
+
+                        // If excludeFoundryFirmware data is saved, set the checkbox to checked
+                        if (GM_SuperValue.get('excludeFoundryFirmware', false)) {
+                            errorScanDropdown.querySelector('#excludeFoundryFirmware').checked = true;
+                        }
+
+                        // Add event listener for the excludeFoundryFirmware m-menu-item
+                        let excludeFoundryMenu = errorScanDropdown.querySelector('.m-menu-item:nth-child(4)');
+                        excludeFoundryMenu.addEventListener('click', function(event) {
+                            const checkbox = errorScanDropdown.querySelector('#excludeFoundryFirmware');
+                            if (event.target === excludeFoundryMenu) {
+                                checkbox.checked = !checkbox.checked;
+                            }
+                            GM_SuperValue.set('excludeFoundryFirmware', checkbox.checked);
+                        });
                         // Add the auto reboot button to the right of the dropdown
                         actionsDropdown.before(errorScanDropdown);
+                    }
+
+                    // Introduce a queue system for managing multiple fetches
+                    let activeFetches = 0;
+                    function processMinerQueue(minerQueue, maxConcurrentFetches, processMiner, progressFill, percentageText) {
+                        let originalLength = minerQueue.length;
+                        function next() {
+                            if (minerQueue.length === 0 && activeFetches === 0) {
+                                // All miners processed
+                                return;
+                            }
+
+                            while (activeFetches < maxConcurrentFetches && minerQueue.length > 0) {
+                                const miner = minerQueue.shift();
+                                activeFetches++;
+                                processMiner(miner)
+                                    .finally(() => {
+                                        activeFetches--;
+                                        next();
+
+                                        let doneNum = minerQueue.length + activeFetches;
+
+                                        // Update the percentage text
+                                        percentageText.textContent = `${Math.round(((originalLength - doneNum) / originalLength) * 100)}% (${originalLength - doneNum}/${originalLength})`;
+                            
+                                        // Update the progress bar
+                                        progressFill.style.width = `${((originalLength - doneNum) / originalLength) * 100}%`;
+                            
+                                    });
+                            }
+                        }
+
+                        next();
                     }
 
                     errorScan = function(allScan) {
                         let [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone] = createScanOverlayUI();
                         retrieveIssueMiners((issueMiners) => {
                             let currentCheckLoadedInterval = null;
-                    
+
                             // Animate the dots cycling
                             let dots = 0;
                             let scanningInterval = setInterval(() => {
                                 dots = (dots + 1) % 4;
                                 scanningText.textContent = 'Scanning' + '.'.repeat(dots);
                             }, 500);
-                    
+
                             // Add 'cancel' button to bottom left of the scanning element
                             const cancelButton = document.createElement('button');
                             cancelButton.classList.add('m-button');
@@ -5701,178 +5882,119 @@ window.addEventListener('load', function () {
                             cancelButton.textContent = 'Cancel';
                             cancelButton.onclick = function() {
                                 clearInterval(currentCheckLoadedInterval);
-                                currentCheckLoadedInterval = null;
                                 clearInterval(scanningInterval);
                                 scanningElement.remove();
                                 progressLog.remove();
-                                // loop through openedWindows
-                                openedWindows.forEach(curWindow => {
-                                    if (curWindow.window) {
-                                        curWindow.window.close();
-                                    }
-                                });
                             };
                             scanningElement.appendChild(cancelButton);
-                    
+
                             // Hover effect for the cancel button
                             cancelButton.addEventListener('mouseenter', function() {
                                 this.style.backgroundColor = '#ff5e57';
                             });
-                    
+
                             cancelButton.addEventListener('mouseleave', function() {
                                 this.style.backgroundColor = '#ff3832';
                             });
-                    
-                            // Only get the actual non hashing miners
+
+                            // Filter miners based on conditions
                             offlineMiners = issueMiners.filter(miner => miner.statusName === 'Offline');
-                            if(!allScan) {
+                            if (!allScan) {
                                 issueMiners = issueMiners.filter(miner => miner.hashrate === 0 || miner.issueType === 'Non Hashing');
                             }
-                            
+
+                            if (GM_SuperValue.get('excludeFoundryFirmware', false)) {
+                                issueMiners = issueMiners.filter(miner => !miner.firmwareVersion.includes("FoSMiner"));
+                            }
+
                             let errorScanMiners = structuredClone(issueMiners);
                             GM_SuperValue.set('errorsFound', {});
-                    
+
                             if (issueMiners.length === 0 && offlineMiners.length === 0) {
                                 clearInterval(scanningInterval);
                                 scanningText.textContent = '[No miners to scan]';
                                 return;
                             }
-                    
+
                             const scanMinersLookup = {};
                             issueMiners.forEach(miner => {
                                 scanMinersLookup[miner.id] = structuredClone(miner);
                             });
-                    
-                            let openedWindows = [];
+
                             let currentlyScanning = {};
                             GM_SuperValue.set('currentlyScanning', currentlyScanning);
-                    
-                            let maxScan = 1; // currently WIP, anythign above 1 will cause issues
-                    
-                            // fill the openedWindows array with false
-                            for (let i = 0; i < maxScan; i++) {
-                                openedWindows.push({window: false, nextReady: false});
-                            }
-                    
+
                             let failLoadCount = 0;
                             let offlineCount = offlineMiners.length;
                             let noErrorCount = 0;
-                            let handledOffline = false;
-                    
-                            function openMinerGUILog() {
-                                if(!handledOffline) {
-                                    handledOffline = true;
-                                    if(offlineMiners.length > 0) {
-                                        offlineMiners.forEach(miner => {
-                                            addToProgressLog(miner);
-                                            setPreviousLogDone(miner.id, "✖", "Miner Offline, according to OptiFleet.");
-                    
-                                            // Remove the miner from the errorScanMiners array
-                                            errorScanMiners = errorScanMiners.filter(errorMiner => errorMiner.id !== miner.id);
-                    
-                                            // Add the miner being offline to the errorsFound object
-                                            const errorsFound = GM_SuperValue.get('errorsFound', {});
-                                            errorsFound[miner.id] = [{
-                                                name: "Miner Offline, according to OptiFleet.",
-                                                short: "Miner Offline",
-                                                icon: "https://img.icons8.com/?size=100&id=111057&format=png&color=FFFFFF"
-                                            }];
-                                            GM_SuperValue.set('errorsFound', errorsFound);
-                                        });
-                                    }
-                                }
-                    
-                                // Update the percentage text
-                                percentageText.textContent = `${Math.round(((issueMiners.length - errorScanMiners.length) / issueMiners.length) * 100)}% (${issueMiners.length - errorScanMiners.length}/${issueMiners.length})`;
-                    
-                                // Update the progress bar
-                                progressFill.style.width = `${((issueMiners.length - errorScanMiners.length) / issueMiners.length) * 100}%`;
-                    
-                                // Check if there are no miners left to scan
-                                if (errorScanMiners.length === 0) {
-                                    return;
-                                }
-                                
-                                // Get first miner
-                                let currentMiner = errorScanMiners[0];
-                                for (let i = 1; i < errorScanMiners.length; i++) {
-                                    if(currentlyScanning[currentMiner.ipAddress]) {
-                                        currentMiner = errorScanMiners[i];
-                                        if (i === errorScanMiners.length - 1) {
-                                            return;
-                                        }
-                                    } else {
-                                        break;
-                                    }
-                                }
-                    
-                                const minerIP = currentMiner.ipAddress;
-                                addToProgressLog(currentMiner);
-                                //console.log(`Fast scanning miner: ${minerIP}`);
-                                //let ipHref = `http://${minerIP}/cgi-bin/hlog.cgi`; // history log for testing
-                                let ipHref = `http://${minerIP}/cgi-bin/log.cgi`;
-                                fetchGUIData(ipHref)
-                                    .then(responseText => {
-                                        responseText = cleanErrors(responseText);
-                                        //console.log(`Received response for miner: ${minerIP}`);
-                                        let errorsFound = runErrorScanLogic(responseText);
-                                        if(!GM_SuperValue.get('includeOtherErrors', false)) {
-                                            errorsFound = errorsFound.filter(error => error.type === 'Main');
-                                        } /*else {
-                                            errorsFound = errorsFound.filter(error => error.type === 'Main' || error.type === 'Other');
-                                        }*/
-                                        //console.log("Errors Found:", errorsFound);
-                                        if(errorsFound.length > 0) {
-                                            const errorsFoundObj = GM_SuperValue.get('errorsFound', {});
-                                            errorsFoundObj[currentMiner.id] = errorsFound;
-                                            GM_SuperValue.set('errorsFound', errorsFoundObj);
-                                            setPreviousLogDone(currentMiner.id, "✔", errorsFound.filter(error => error.type !== 'Info').map(error => `• ${error.name}`).join('\n'));
-                                        } else {
-                                            setPreviousLogDone(currentMiner.id, "✔", "No Errors Found");
-                                            noErrorCount++;
-                                        }
 
-                                        // Clear the responseText to free up memory
-                                        responseText = null;
+                            function processMiner(miner) {
+                                return new Promise((resolve) => {
+                                    const minerIP = miner.ipAddress;
+                                    addToProgressLog(miner);
 
-                                        errorScanMiners.shift();
-                                        openMinerGUILog();
-                                    })
-                                    .catch(error => {
-                                        //console.log(`Error fetching data for miner: ${minerIP}`, error);
-                                        setPreviousLogDone(currentMiner.id, "✖", "Failed to load miner GUI.");
+                                    let ipHref = `http://${minerIP}/cgi-bin/log.cgi`;
+                                    const firmware = miner.firmwareVersion;
+                                    const isFoundry = firmware.includes("FoSMiner");
+
+                                    if (GM_SuperValue.get('excludeFoundryFirmware', false) && isFoundry) {
+                                        setPreviousLogDone(miner.id, "↷", "Skipping Foundry firmware miner.");
                                         failLoadCount++;
-                                        errorScanMiners.shift();
-                                        openMinerGUILog();
-                                    });
+                                        resolve();
+                                        return;
+                                    }
+
+                                    const fetchLogs = isFoundry ? fetchAndCombineLogs : fetchGUIData;
+                                    fetchLogs(ipHref)
+                                        .then(responseText => {
+                                            responseText = cleanErrors(responseText);
+                                            let errorsFound = runErrorScanLogic(responseText);
+                                            if (!GM_SuperValue.get('includeOtherErrors', false)) {
+                                                errorsFound = errorsFound.filter(error => error.type === 'Main');
+                                            }
+                                            if (errorsFound.length > 0) {
+                                                const errorsFoundObj = GM_SuperValue.get('errorsFound', {});
+                                                errorsFoundObj[miner.id] = errorsFound;
+                                                GM_SuperValue.set('errorsFound', errorsFoundObj);
+                                                setPreviousLogDone(miner.id, "✔", errorsFound.filter(error => error.type !== 'Info').map(error => `• ${error.name}`).join('\n'));
+                                            } else {
+                                                setPreviousLogDone(miner.id, "✔", "No Errors Found");
+                                                noErrorCount++;
+                                            }
+                                            resolve();
+                                        })
+                                        .catch(() => {
+                                            setPreviousLogDone(miner.id, "✖", "Failed to load miner GUI.");
+                                            failLoadCount++;
+                                            resolve();
+                                        });
+                                });
                             }
-                            
-                            for (let i = 0; i < maxScan; i++) {
-                                openMinerGUILog();
-                            }
-                    
+
+                            // Process miners
+                            processMinerQueue(errorScanMiners, 12, processMiner, progressFill, percentageText);
+
                             const checkScanDoneInterval = setInterval(() => {
-                                let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
-                                if(errorScanMiners.length === 0 && Object.keys(currentlyScanning).length === 0) {
+                                let doneNum = errorScanMiners.length + activeFetches;
+                                if (doneNum === 0) {
+                                    clearInterval(scanningInterval);
+                                    clearInterval(checkScanDoneInterval);
+                                    cancelButton.remove();
+                                    // ...existing code for displaying results...
+                                    let errorsFoundSave = GM_SuperValue.get('errorsFound', {});
                                     if(Object.keys(errorsFoundSave).length === 0) {
                                         clearInterval(scanningInterval);
                                         scanningText.textContent = '[No errors found]';
                                     }
-                    
+
                                     clearInterval(checkScanDoneInterval);
-                    
-                                    openedWindows.forEach(curWindow => {
-                                        if (curWindow.window) {
-                                            curWindow.window.close();
-                                        }
-                                    });
-                    
+
                                     cancelButton.remove();
-                    
+
                                     const cols = ['Miner Errors'];
                                     createPopUpTable(`Error Log Scan Results`, cols, false, (popupResultElement) => {
                                         const firstDiv = popupResultElement.querySelector('div');
-                    
+
                                         function setUpRowData(row, currentMiner, error) {
                                             let minerID = currentMiner.id;
                                             row.innerHTML = `
@@ -5907,10 +6029,10 @@ window.addEventListener('load', function () {
                                                     copyButton.textContent = 'Copy';
                                                 }, 1000);
                                             });
-                    
+
                                             row.minerID = minerID;
                                             row.minerDataCopy = structuredClone(currentMiner);
-                    
+
                                             if(!error.text) {
                                                 row.innerHTML = `
                                                     <td style="text-align: left; position: relative;">
@@ -5964,7 +6086,7 @@ window.addEventListener('load', function () {
                                                 observer.observe(row, { childList: true });
                                             }
                                         }
-                    
+
                                         const containerDiv = document.createElement('div');
                                         containerDiv.style.cssText = `
                                             display: flex;
@@ -5975,7 +6097,7 @@ window.addEventListener('load', function () {
                                             margin-top: 10px;
                                             align-self: flex-start;
                                         `;
-                    
+
                                         const failLoadCountText = document.createElement('div');
                                         failLoadCountText.style.cssText = `
                                             padding: 5px;
@@ -5984,7 +6106,7 @@ window.addEventListener('load', function () {
                                             font-size: 0.8em;
                                         `;
                                         failLoadCountText.textContent = `GUI Load Fails: ${failLoadCount}`;
-                    
+
                                         const offlineCountText = document.createElement('div');
                                         offlineCountText.style.cssText = `
                                             padding: 5px;
@@ -5993,7 +6115,7 @@ window.addEventListener('load', function () {
                                             font-size: 0.8em;
                                         `;
                                         offlineCountText.textContent = `Offline Miners: ${offlineCount}`;
-                    
+
                                         const noErrorCountText = document.createElement('div');
                                         noErrorCountText.style.cssText = `
                                             padding: 5px;
@@ -6002,12 +6124,12 @@ window.addEventListener('load', function () {
                                             font-size: 0.8em;
                                         `;
                                         noErrorCountText.textContent = `No Errors Found Miners: ${noErrorCount}`;
-                    
+
                                         containerDiv.appendChild(failLoadCountText);
                                         containerDiv.appendChild(offlineCountText);
                                         containerDiv.appendChild(noErrorCountText);
                                         firstDiv.appendChild(containerDiv);
-                    
+
                                         const finishedButton = document.createElement('button');
                                         finishedButton.id = 'finishedHardReboots';
                                         finishedButton.style.cssText = `
@@ -6024,9 +6146,9 @@ window.addEventListener('load', function () {
                                         `;
                                         finishedButton.textContent = 'Close Error Scan Results';
                                         firstDiv.appendChild(finishedButton);
-                    
+
                                         firstDiv.style.left = '41%'
-                    
+
                                         const finishedErrorScan = popupResultElement.querySelector('#finishedHardReboots');
                                         finishedErrorScan.addEventListener('mouseenter', function() {
                                             this.style.backgroundColor = '#45a049';
@@ -6041,9 +6163,9 @@ window.addEventListener('load', function () {
                                             popupResultElement.remove();
                                             popupResultElement = null;
                                         };
-                    
+
                                         const popupTableBody = popupResultElement.querySelector('tbody');
-                    
+
                                         issueMiners.forEach(miner => {
                                             const minerID = miner.id;
                                             const errors = errorsFoundSave[minerID] || [];
@@ -6055,7 +6177,7 @@ window.addEventListener('load', function () {
                                                 popupTableBody.appendChild(row);
                                             });
                                         });
-                    
+
                                         const allRows = Array.from(popupTableBody.querySelectorAll('tr'));
                                         for (let i = 0; i < allRows.length; i++) {
                                             const currentRow = allRows[i];
@@ -6064,18 +6186,18 @@ window.addEventListener('load', function () {
                                             let minerID = currentRow.minerID;
                                             let model = currentMiner.modelName;
                                             let slotID = currentMiner.locationName;
-                    
+
                                             let paddedSlotIDBreaker = padSlotID(slotID);       
-                    
+
                                             let minerSerialNumber = currentMiner.serialNumber;
                                             let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                    
+
                                             if (!previousRow || currentRow.minerID !== previousRow.minerID) {
                                                 let GUILink = `http://${currentMiner.username}:${currentMiner.passwd}@${currentMiner.ipAddress}/#blog`;
                                                 if(currentMiner.firmwareVersion.includes('BCFMiner')) {
                                                     GUILink = `http://${currentMiner.username}:${currentMiner.passwd}@${currentMiner.ipAddress}/#/logs`;
                                                 }
-                    
+
                                                 const errorData = errorsFoundSave[minerID] || [];
                                                 let errorCount = errorData.length;
                                                 if(errorCount === 1 && !errorData[0].text) {
@@ -6099,7 +6221,7 @@ window.addEventListener('load', function () {
                                                         }
                                                     });
                                                 }
-                    
+
                                                 const iconSpan = document.createElement('span');
                                                 iconSpan.style.cssText = `
                                                     display: inline-block;
@@ -6124,12 +6246,12 @@ window.addEventListener('load', function () {
                                                         <img src="${icon.icon}" style="width: 18px; height: 18px; margin-right: 5px; margin-left: 0px;"/>
                                                     `;
                                                     iconSpan.appendChild(iconDiv);
-                    
+
                                                     if(icon.count < 2) {
                                                         iconDiv.querySelector('span').remove();
-                    
+
                                                         let imgElement = iconDiv.querySelector('img');
-                    
+
                                                         iconDiv.style.paddingLeft = '2px';
                                                         iconDiv.style.paddingRight = '2px';
                                                         iconDiv.style.marginLeft = '0px';
@@ -6138,12 +6260,12 @@ window.addEventListener('load', function () {
                                                         imgElement.style.marginRight = '0px';
                                                         imgElement.style.paddingLeft = '0px';
                                                         imgElement.style.paddingRight = '0px';
-                    
+
                                                         if(iconLinks.length > 1 && icon === iconLinks[0]) {
                                                             iconDiv.style.marginLeft = '1px';
                                                         }
                                                     }
-                    
+
                                                     const iconDivTooltip = iconDiv.querySelector('span');
                                                     const tooltip = document.createElement('div');
                                                     tooltip.style.cssText = `
@@ -6159,23 +6281,23 @@ window.addEventListener('load', function () {
                                                     `;
                                                     tooltip.textContent = icon.name;
                                                     document.body.appendChild(tooltip);
-                    
+
                                                     iconDiv.addEventListener('mouseenter', () => {
                                                         tooltip.style.display = 'block';
-                    
+
                                                         const iconRect = iconDiv.getBoundingClientRect();
                                                         const containerRect = iconDiv.offsetParent.getBoundingClientRect();
-                    
+
                                                         const tooltipOffset = 5;
                                                         tooltip.style.top = `${iconRect.top}px`;
                                                         tooltip.style.left = `${iconRect.right}px`; 
                                                     });
-                    
+
                                                     iconDiv.addEventListener('mouseleave', () => {
                                                         tooltip.style.display = 'none';
                                                     });
                                                 });
-                    
+
                                                 let errorCountText = "Error Count: " + errorCount;
                                                 if(errorCount === '?') {
                                                     errorCountText = errorData[0].short || errorData[0].name || "Error Count: ?";
@@ -6207,7 +6329,7 @@ window.addEventListener('load', function () {
                                                     </td>
                                                 `;
                                                 newRow.querySelector('td').appendChild(iconSpan);
-                    
+
                                                 const toggleButtonSpan = document.createElement('span');
                                                 toggleButtonSpan.style.cssText = `
                                                     padding: 5px;
@@ -6217,7 +6339,7 @@ window.addEventListener('load', function () {
                                                     float: left;
                                                     left: 5px;
                                                 `;
-                    
+
                                                 const style = document.createElement('style');
                                                 style.textContent = `
                                                     .unselectable {
@@ -6228,7 +6350,7 @@ window.addEventListener('load', function () {
                                                     }
                                                 `;
                                                 document.head.appendChild(style);
-                    
+
                                                 const toggleButton = document.createElement('button');
                                                 toggleButton.textContent = '-';
                                                 toggleButton.style.cssText = `
@@ -6246,20 +6368,20 @@ window.addEventListener('load', function () {
                                                     justify-content: center;
                                                     align-items: center;
                                                 `;
-                    
+
                                                 newRow.querySelector('td').prepend(toggleButtonSpan);
                                                 toggleButtonSpan.appendChild(toggleButton);
                                                 
                                                 newRow.classList.add('unselectable');
-                    
+
                                                 toggleButton.addEventListener('mouseenter', function() {
                                                     this.style.backgroundColor = '#005a9e';
                                                 });
-                    
+
                                                 toggleButton.addEventListener('mouseleave', function() {
                                                     this.style.backgroundColor = '#0078d4';
                                                 });
-                    
+
                                                 let lastClickTime = 0;
                                                 function expandCollapseRows() {
                                                     const currentTime = new Date().getTime();
@@ -6275,20 +6397,20 @@ window.addEventListener('load', function () {
                                                         nextRow = nextRow.nextElementSibling;
                                                     }
                                                 }
-                    
+
                                                 toggleButton.addEventListener('click', function() {
                                                     expandCollapseRows();
                                                 });
                                                 currentRow.before(newRow);
-                    
+
                                                 toggleButton.click();
-                    
+
                                                 newRow.addEventListener('click', function() {
                                                     expandCollapseRows();
                                                 });
                                             }
                                         }
-                    
+
                                         const setMaxWidth = (selector) => {
                                             const elements = Array.from(popupTableBody.querySelectorAll(selector));
                                             const maxWidth = Math.max(...elements.map(text => text.offsetWidth));
@@ -6297,7 +6419,7 @@ window.addEventListener('load', function () {
                                                 text.style.textAlign = 'center';
                                             });
                                         };
-                    
+
                                         setMaxWidth('.error-count-text');
                                         setMaxWidth('.error-guilink-text');
                                         setMaxWidth('.error-link-text');
@@ -6306,9 +6428,9 @@ window.addEventListener('load', function () {
                                     });
                                 }
                             }, 100);
-                    
                         });
                     };
+
 
                     if(siteName.includes("Minden")) {
                         // Create a auto reboot button to the right of the dropdown
