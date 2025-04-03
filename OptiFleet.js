@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.2.7
+// @version      7.2.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -91,7 +91,6 @@ const features = [
     { name: 'Planner Card Info', id: 'plannerCardScanMiner', category: 'Individual Miner' },
     { name: 'Breaker Number', id: 'breakerNumberMiner', category: 'Individual Miner' },
     { name: 'Times Down', id: 'downCount', category: 'Individual Miner' },
-    { name: 'Soft Reboot Count', id: 'softRebootCount', category: 'Individual Miner' },
     { name: 'Last Soft Reboot', id: 'lastSoftReboot', category: 'Individual Miner' },
     { name: 'Current Log Tab', id: 'currentLogTab', category: 'Individual Miner' },
 
@@ -537,8 +536,8 @@ const errorsToSearch = {
     },
     'Fan Speed Error': {
         icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
-        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /\[WARN\] FAN \d+ Fail/],
-        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", " has failed to run at expected RPM"],
+        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /Fan \d+ Fail/, /FAN \d+ Fail/],
+        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", " has failed to run at expected RPM", "Expected RPM"],
         type: "Main",
     },
     'SOC INIT Fail': {
@@ -2918,16 +2917,28 @@ window.addEventListener('load', function () {
                                     const copyButton = document.createElement('button');
                                     copyButton.textContent = 'Copy';
                                     copyButton.style.position = 'absolute';
-                                    copyButton.style.bottom = '0';
-                                    copyButton.style.right = '0';
-                                    copyButton.style.backgroundColor = 'transparent';
+                                    copyButton.style.bottom = '2px';
+                                    copyButton.style.left = '2px';
+                                    copyButton.style.backgroundColor = '#4CAF50'; // Green background
                                     copyButton.style.border = 'none';
-                                    copyButton.style.color = 'black';
+                                    copyButton.style.color = 'white'; // White text
                                     copyButton.style.cursor = 'pointer';
-                                    copyButton.style.padding = '5px';
-                                    copyButton.style.fontSize = '12px';
+                                    copyButton.style.padding = '6px 6px';
+                                    copyButton.style.fontSize = '10px';
                                     copyButton.style.fontWeight = 'bold';
+                                    copyButton.style.borderRadius = '5px'; // Rounded corners
+                                    copyButton.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)'; // Subtle shadow
                                     copyButton.style.zIndex = '1';
+
+                                    // Add hover effect
+                                    copyButton.addEventListener('mouseover', () => {
+                                        copyButton.style.backgroundColor = '#45a049'; // Darker green on hover
+                                    });
+
+                                    copyButton.addEventListener('mouseout', () => {
+                                        copyButton.style.backgroundColor = '#4CAF50'; // Original green when not hovering
+                                    });
+
                                     copyButton.addEventListener('click', () => {
                                         // disable default behavior
                                         event.preventDefault();
@@ -2968,13 +2979,11 @@ window.addEventListener('load', function () {
                                     errorElement.addEventListener('mouseout', () => {
                                         copyButton.style.display = 'none';
                                     });
-                                
-                                    copyButton.addEventListener('mouseover', () => {
-                                        copyButton.style.color = 'green';
-                                    });
-                                
-                                    copyButton.addEventListener('mouseout', () => {
-                                        copyButton.style.color = 'black';
+
+                                    // Also copy if you right click on the error
+                                    errorElement.addEventListener('contextmenu', (event) => {
+                                        event.preventDefault();
+                                        copyButton.click();
                                     });
                                 
                                     // Replace the error text in the log with the highlighted version
@@ -2994,10 +3003,13 @@ window.addEventListener('load', function () {
                                 const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
 
                                 // Scroll to show new tabs
-                                otherTab.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });
+                                otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });
 
                                 // Scroll to show console log
-                                logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                setTimeout(() => {
+                                    logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                }, 200);
                             }
                             
                             // firmwareInfoElement
@@ -3211,16 +3223,28 @@ window.addEventListener('load', function () {
                                     const copyButton = document.createElement('button');
                                     copyButton.textContent = 'Copy';
                                     copyButton.style.position = 'absolute';
-                                    copyButton.style.bottom = '0';
-                                    copyButton.style.right = '0';
-                                    copyButton.style.backgroundColor = 'transparent';
+                                    copyButton.style.bottom = '2px';
+                                    copyButton.style.left = '2px';
+                                    copyButton.style.backgroundColor = '#4CAF50'; // Green background
                                     copyButton.style.border = 'none';
-                                    copyButton.style.color = 'black';
+                                    copyButton.style.color = 'white'; // White text
                                     copyButton.style.cursor = 'pointer';
-                                    copyButton.style.padding = '5px';
-                                    copyButton.style.fontSize = '12px';
+                                    copyButton.style.padding = '6px 6px';
+                                    copyButton.style.fontSize = '10px';
                                     copyButton.style.fontWeight = 'bold';
+                                    copyButton.style.borderRadius = '5px'; // Rounded corners
+                                    copyButton.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)'; // Subtle shadow
                                     copyButton.style.zIndex = '1';
+
+                                    // Add hover effect
+                                    copyButton.addEventListener('mouseover', () => {
+                                        copyButton.style.backgroundColor = '#45a049'; // Darker green on hover
+                                    });
+
+                                    copyButton.addEventListener('mouseout', () => {
+                                        copyButton.style.backgroundColor = '#4CAF50'; // Original green when not hovering
+                                    });
+
                                     copyButton.addEventListener('click', () => {
                                         // disable default behavior
                                         event.preventDefault();
@@ -3261,13 +3285,11 @@ window.addEventListener('load', function () {
                                     errorElement.addEventListener('mouseout', () => {
                                         copyButton.style.display = 'none';
                                     });
-                                
-                                    copyButton.addEventListener('mouseover', () => {
-                                        copyButton.style.color = 'green';
-                                    });
-                                
-                                    copyButton.addEventListener('mouseout', () => {
-                                        copyButton.style.color = 'black';
+                                    
+                                    // Also copy if you right click on the error
+                                    errorElement.addEventListener('contextmenu', (event) => {
+                                        event.preventDefault();
+                                        copyButton.click();
                                     });
                                 
                                     // Replace the error text in the log with the highlighted version
@@ -3287,10 +3309,13 @@ window.addEventListener('load', function () {
                                 const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
 
                                 // Scroll to show new tabs
-                                otherTab.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });
+                                otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });
 
                                 // Scroll to show console log
-                                logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                setTimeout(() => {
+                                    logElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                                }, 800);
                             }
                             
                             // firmwareInfoElement
@@ -7488,11 +7513,6 @@ window.addEventListener('load', function () {
                         });
                     } else {
                         //'Error';
-                    }
-
-                    // Add the reboot count to the page
-                    if(savedFeatures["softRebootCount"]) {
-                        addDataBox('Reboot Count (Activity Log)', reboots.length);
                     }
 
                     if(savedFeatures["lastSoftReboot"]) {
