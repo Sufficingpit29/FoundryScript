@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.2.9
+// @version      7.3.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -6002,7 +6002,7 @@ window.addEventListener('load', function () {
                             const note = document.createElement('div');
                             note.style.position = 'absolute';
                             note.style.bottom = '10px';
-                            note.style.left = '50px';
+                            note.style.left = '80px';
                             note.style.color = 'white';
                             note.style.fontSize = '0.8em';
                             note.textContent = 'Note: Not a lot of error detection logic has been set up for Foundry firmware yet.';
@@ -6052,6 +6052,13 @@ window.addEventListener('load', function () {
                                 return new Promise((resolve) => {
                                     const minerIP = miner.ipAddress;
                                     addToProgressLog(miner);
+
+                                    if(miner.statusName === 'Offline'){
+                                        setPreviousLogDone(miner.id, "✖", "Miner is Offline...");
+                                        offlineCount++;
+                                        resolve();
+                                        return;
+                                    }
 
                                     let ipHref = `http://${minerIP}/cgi-bin/log.cgi`;
                                     const firmware = miner.firmwareVersion;
