@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.3.0
+// @version      7.3.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -6287,6 +6287,20 @@ window.addEventListener('load', function () {
                                         };
 
                                         const popupTableBody = popupResultElement.querySelector('tbody');
+
+                                        // Order the issueMiners by slotID (C18-1-1-1 [1]) Each number appearing first takes priority over the next number
+                                        issueMiners.sort((a, b) => {
+                                            const aSlotID = a.locationName.split('-').map(Number);
+                                            const bSlotID = b.locationName.split('-').map(Number);
+                                            for (let i = 0; i < Math.max(aSlotID.length, bSlotID.length); i++) {
+                                                const aNum = aSlotID[i] || 0;
+                                                const bNum = bSlotID[i] || 0;
+                                                if (aNum !== bNum) {
+                                                    return aNum - bNum;
+                                                }
+                                            }
+                                            return 0;
+                                        });
 
                                         issueMiners.forEach(miner => {
                                             const minerID = miner.id;
