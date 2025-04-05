@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.4.0
+// @version      7.4.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2882,13 +2882,224 @@ window.addEventListener('load', function () {
             }
 
             if(savedFeatures["currentLogTab"]) {
-                function SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, excludeUnknown, fullLog, isHistoryLog) {
+                function SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, excludeUnknown, fullLog, isHistoryLog, isFoundryFirmware) {
+                    
+                    // Add divider to m-nav
+                    const mnav = document.querySelector('.m-nav');
+                    const divider = document.createElement('div');
+                    divider.className = 'm-divider has-space-m';
+                    divider.classList.add('error-divider');
+                    mnav.appendChild(divider);
+
+                    let orignalLogText = "";
+                    function createErrorTab(title, errors, defaultOpen = false) {
+                        // If there are no errors
+                        if(errors.length === 0) {
+                            return;
+                        }
+
+                        const errorTab = document.createElement('div');
+                        errorTab.className = 'm-nav-group';
+                        errorTab.classList.add('error-tab');
+
+                        // Create the header with the dynamic title
+                        const header = `
+                            <div class="m-nav-group-header">
+                                <div class="m-nav-group-label">
+                                    <m-icon name="error" size="l" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
+                                    ${title}
+                                </div>
+                                <m-icon name="chevron-down" data-dashlane-shadowhost="true" data-dashlane-observed="true" class="flip"></m-icon>
+                            </div>
+                        `;
+                    
+                        // Create the group items with icons dynamically
+                        const items = errors.map((error, index) => `
+                            <div class="m-nav-group-item" style="display: flex; align-items: center;">
+                                <img src="${error.icon}" width="16" height="16" style="margin-right: 8px;" />
+                                <a href="#" class="m-nav-item" data-error-index="${index}">${error.textReturn}</a>
+                            </div>
+                        `).join('');
+                        
+                        // Combine all parts into the final HTML
+                        errorTab.innerHTML = `
+                            ${header}
+                            <div class="m-nav-group-section" style="display: none;">
+                                <div class="m-nav-group-items">
+                                    ${items}
+                                </div>
+                            </div>
+                        `;
+                    
+                        // Add collapse and open logic
+                        const headerElement = errorTab.querySelector('.m-nav-group-header');
+                        const sectionElement = errorTab.querySelector('.m-nav-group-section');
+                        const chevronIcon = errorTab.querySelector('.m-nav-group-header m-icon');
+                    
+                        headerElement.addEventListener('click', () => {
+                            const isOpen = sectionElement.style.display === 'block';
+                            sectionElement.style.display = isOpen ? 'none' : 'block';
+                            chevronIcon.classList.toggle('flip', !isOpen);
+                        });
+
+                        if (defaultOpen) {
+                            sectionElement.style.display = 'block';
+                            chevronIcon.classList.add('flip');
+                        }
+                    
+                        // Add click event listener to each error item
+                        const errorItems = errorTab.querySelectorAll('.m-nav-item');
+                        errorItems.forEach(errorItem => {
+                            const errorIndex = errorItem.getAttribute('data-error-index');
+                            const error = errors[errorIndex];
+
+                            errorItem.addEventListener('click', (event) => {
+                                event.preventDefault();
+                                handleErrorClick(error, orignalLogText);
+                            });
+
+                            if(findLog && error.text.includes(findLog)) {
+                                // Open the error list
+                                setTimeout(() => {
+                                    errorTab.click();
+
+                                    // Scroll to the error item
+                                    errorItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                                    // highlight that fades out
+                                    errorItem.style.transition = 'background-color 1s';
+                                    errorItem.style.backgroundColor = '#444';
+                                    setTimeout(() => {
+                                        errorItem.style.backgroundColor = 'transparent';
+                                    }, 1000);
+                                }, 0);
+
+                                // Go to the error
+                                errorItem.click();
+                                findLog = false;
+                            }
+                        });
+                    
+                        mnav.appendChild(errorTab);
+                        return errorTab;
+                    }
+                    
+                    let logElement;
+                    function handleErrorClick(error, orignalLogText) {
+                        logElement = document.querySelector('#logElement');
+
+                        // Reset log text
+                        while (logElement.firstChild) {
+                            logElement.removeChild(logElement.firstChild);
+                        }
+                        logElement.textContent = orignalLogText;
+                    
+                        // Create a new element to highlight the error
+                        const errorElement = document.createElement('span');
+                        errorElement.style.backgroundColor = '#780707';
+                        
+                        const errorTextNode = document.createElement('span');
+                        errorTextNode.style.fontWeight = 'bolder';
+                        //errorTextNode.style.textShadow = '1px 1px 2px black';
+                        errorTextNode.style.color = 'white';
+                        errorTextNode.textContent = error.text;
+                        errorElement.appendChild(errorTextNode);
+                        errorElement.style.width = logElement.scrollWidth + 'px';
+                        errorElement.style.display = 'block';
+                    
+                        // Create a copy button
+                        const copyButton = document.createElement('button');
+                        copyButton.textContent = 'Copy';
+                        copyButton.style.position = 'absolute';
+                        copyButton.style.bottom = '2px';
+                        copyButton.style.left = '2px';
+                        copyButton.style.backgroundColor = '#4CAF50'; // Green background
+                        copyButton.style.border = 'none';
+                        copyButton.style.color = 'white'; // White text
+                        copyButton.style.cursor = 'pointer';
+                        copyButton.style.padding = '3px 6px';
+                        copyButton.style.fontSize = '10px';
+                        copyButton.style.fontWeight = 'bold';
+                        copyButton.style.borderRadius = '5px'; // Rounded corners
+                        copyButton.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)'; // Subtle shadow
+                        copyButton.style.zIndex = '1';
+                        copyButton.style.display = 'none'; // Initially hidden
+
+                        // Add hover effect
+                        copyButton.addEventListener('mouseover', () => {
+                            copyButton.style.backgroundColor = '#45a049'; // Darker green on hover
+                        });
+
+                        copyButton.addEventListener('mouseout', () => {
+                            copyButton.style.backgroundColor = '#4CAF50'; // Original green when not hovering
+                        });
+
+                        copyButton.addEventListener('click', () => {
+                            // disable default behavior
+                            event.preventDefault();
+
+                            // copy text to clipboard
+                            if (navigator.clipboard) {
+                                navigator.clipboard.writeText(error.text).then(() => {
+                                    console.log('Text copied to clipboard');
+                                }).catch(err => {
+                                    console.error('Failed to copy text: ', err);
+                                });
+                            } else {
+                                const textArea = document.createElement('textarea');
+                                textArea.value = error.text;
+                                document.body.appendChild(textArea);
+                                textArea.select();
+                                try {
+                                    document.execCommand('copy');
+                                    console.log('Text copied to clipboard');
+                                } catch (err) {
+                                    console.error('Failed to copy text: ', err);
+                                }
+                                document.body.removeChild(textArea);
+                            }
+                            copyButton.textContent = 'Copied!';
+                            setTimeout(() => {
+                                copyButton.textContent = 'Copy';
+                            }, 1000);
+                        });
+                    
+                        errorElement.style.position = 'relative';
+                        errorElement.appendChild(copyButton);
+                    
+                        errorElement.addEventListener('mouseover', () => {
+                            copyButton.style.display = 'block';
+                        });
+                    
+                        errorElement.addEventListener('mouseout', () => {
+                            copyButton.style.display = 'none';
+                        });
+
+                        // Also copy if you right click on the error
+                        errorElement.addEventListener('contextmenu', (event) => {
+                            event.preventDefault();
+                            copyButton.click();
+                        });
+                    
+                        // Replace the error text in the log with the highlighted version
+                        const logTextNode = logElement.childNodes[0];
+                        const beforeErrorText = logTextNode.textContent.substring(0, error.start);
+                        const afterErrorText = logTextNode.textContent.substring(error.end);
+
+                        logTextNode.textContent = beforeErrorText;
+                        
+                        logElement.insertBefore(errorElement, logTextNode.nextSibling);
+                        logElement.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
+                        errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    
                     // Remove the loading text and spinner
                     customTabContainer.removeChild(loadingText);
                     customTabContainer.removeChild(loadingSpinner);
                     if (isHistoryLog) {
                         // Create a sleek log element with pagination and editable page input
                         const logElement = document.createElement('div');
+                        logElement.id = 'logElement';
                         logElement.style.cssText = `
                             background-color: #18181b;
                             color: #fff;
@@ -2906,12 +3117,44 @@ window.addEventListener('load', function () {
 
                         responseText = responseText.trim();
                         responseText = cleanErrors(responseText);
-                        const logSections = responseText.split('----------Start Foundry Miner');
 
-                        // Readd ----------Start Foundry Miner to the beginning of each section
-                        for (let i = 1; i < logSections.length; i++) {
-                            logSections[i] = '----------Start Foundry Miner' + logSections[i];
+                        let startSectionText = "----------Start Foundry Miner";
+                        let logSections = responseText.split(startSectionText);
+
+                        if(!isFoundryFirmware) {
+                            // Instead we will split by detecting the change of the date suddenly, but only if the next line date is less than prev line.
+                            /*
+                            For example:
+                                2025-04-04 15:54:41 enable power watchdog: 0x0001
+                                1970-01-01 00:00:13 Invalid config option --bitmain-freq-level: '' is not a number
+                            */
+                            
+                            const logLines = responseText.split('\n');
+                            logSections = [];
+                            let currentSection = '';
+                            let prevDate = null;
+                            logLines.forEach(line => {
+                                const dateMatch = line.match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+                                if (dateMatch) {
+                                    const currentDate = new Date(dateMatch[1]);
+                                    if (prevDate && currentDate < prevDate) {
+                                        logSections.push(currentSection.trim());
+                                        currentSection = line + '\n'; // Start a new section with the current line
+                                    } else {
+                                        currentSection += line + '\n'; // Append to the current section
+                                    }
+                                    prevDate = currentDate;
+                                } else {
+                                    currentSection += line + '\n'; // Append to the current section
+                                }
+                            });
+
+                            if (currentSection) {
+                                logSections.push(currentSection.trim()); // Push the last section
+                            }
+                            //
                         }
+
 
                         const totalPages = logSections.length;
                         let currentPage = totalPages - 1; // Start from the last page
@@ -2944,13 +3187,33 @@ window.addEventListener('load', function () {
                             margin-right: 10px;
                         `;
 
-                        prevButton.addEventListener('click', () => {
+                        let prevInterval;
+                        prevButton.addEventListener('mousedown', () => {
                             event.preventDefault();
 
                             if (currentPage > 0) {
                                 currentPage--;
                                 renderPage(currentPage);
                             }
+
+                            prevInterval = setInterval(() => {
+                                if (currentPage > 0) {
+                                    currentPage--;
+                                    renderPage(currentPage);
+                                }
+                            }, 200);
+                        });
+
+                        prevButton.addEventListener('click', () => {
+                            event.preventDefault();
+                        });
+
+                        prevButton.addEventListener('mouseup', () => {
+                            clearInterval(prevInterval);
+                        });
+
+                        prevButton.addEventListener('mouseleave', () => {
+                            clearInterval(prevInterval);
                         });
 
                         const nextButton = document.createElement('button');
@@ -2964,13 +3227,33 @@ window.addEventListener('load', function () {
                             margin-left: 10px;
                         `;
 
-                        nextButton.addEventListener('click', () => {
+                        let nextInterval;
+                        nextButton.addEventListener('mousedown', () => {
                             event.preventDefault();
 
                             if (currentPage < totalPages - 1) {
                                 currentPage++;
                                 renderPage(currentPage);
                             }
+
+                            nextInterval = setInterval(() => {
+                                if (currentPage < totalPages - 1) {
+                                    currentPage++;
+                                    renderPage(currentPage);
+                                }
+                            }, 200);
+                        });
+
+                        nextButton.addEventListener('click', () => {
+                            event.preventDefault();
+                        });
+
+                        nextButton.addEventListener('mouseup', () => {
+                            clearInterval(nextInterval);
+                        });
+
+                        nextButton.addEventListener('mouseleave', () => {
+                            clearInterval(nextInterval);
                         });
 
                         const pageInput = document.createElement('input');
@@ -3035,18 +3318,50 @@ window.addEventListener('load', function () {
                         document.head.appendChild(style);
 
                         function renderPage(page) {
-                            const section = logSections[page].trim();
+                            let section = logSections[page].trim();
+
+                            // If any errors tabs exist, remove them
+                            const errorTabs = document.querySelectorAll('.error-tab');
+                            errorTabs.forEach(tab => {
+                                tab.remove();
+                            });
+
+                            // Clean up
+                            section = section.trim();
+                            section = cleanErrors(section);
+
+                            // Set the log text to the current page
                             logElement.textContent = `${section}`;
                             pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
                             pageInput.value = currentPage + 1;
                             prevButton.disabled = currentPage === 0;
                             nextButton.disabled = currentPage === totalPages - 1;
+
+                            orignalLogText = section;
+
+                            // Set to bottom of log
+                            logElement.scrollTop = logElement.scrollHeight;
+
+                            // Run error scan logic
+                            const errorsFound = runErrorScanLogic(section, excludeUnknown);
+                            if (errorsFound.length > 0) {
+                                // Create the error tabs
+                                const infoTab = createErrorTab("Info", errorsFound.filter(error => error.type === "Info"), true);
+                                const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"), true);
+                                const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
+
+                                // Scroll to show new tabs
+                                mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });
+                                otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });
+                            }
+
                         }
 
                         renderPage(currentPage);
                     } else {
                         // Create a sleek log element
                         const logElement = document.createElement('div');
+                        logElement.id = 'logElement';
                         logElement.style.cssText = `
                             background-color: #18181b;
                             color: #fff;
@@ -3068,7 +3383,7 @@ window.addEventListener('load', function () {
                             responseText = cutOffPreviousLog(responseText);
                         }
 
-                        let orignalLogText = responseText;
+                        orignalLogText = responseText;
                         logElement.textContent = orignalLogText;
                         customTabContainer.appendChild(logElement);
 
@@ -3096,220 +3411,16 @@ window.addEventListener('load', function () {
 
                         // Scroll to bottom of log
                         logElement.scrollTop = logElement.scrollHeight;
-
-                        const logText = logElement.innerText;
                     }
 
                     if(!isHistoryLog) {
+                        let logElement = document.querySelector('#logElement');
+                        let logText = logElement.innerText;
+
                         // Create the error tabs
                         var errorsFound = runErrorScanLogic(logText, excludeUnknown);
                         if(errorsFound.length === 0) {
                             return;
-                        }
-
-                        // Add divider to m-nav
-                        const mnav = document.querySelector('.m-nav');
-                        const divider = document.createElement('div');
-                        divider.className = 'm-divider has-space-m';
-                        divider.classList.add('error-divider');
-                        mnav.appendChild(divider);
-
-                        function createErrorTab(title, errors, defaultOpen = false) {
-
-                            // If there are no errors
-                            if(errors.length === 0) {
-                                return;
-                            }
-
-                            const errorTab = document.createElement('div');
-                            errorTab.className = 'm-nav-group';
-                            errorTab.classList.add('error-tab');
-
-                            // Create the header with the dynamic title
-                            const header = `
-                                <div class="m-nav-group-header">
-                                    <div class="m-nav-group-label">
-                                        <m-icon name="error" size="l" data-dashlane-shadowhost="true" data-dashlane-observed="true"></m-icon>
-                                        ${title}
-                                    </div>
-                                    <m-icon name="chevron-down" data-dashlane-shadowhost="true" data-dashlane-observed="true" class="flip"></m-icon>
-                                </div>
-                            `;
-                        
-                            // Create the group items with icons dynamically
-                            const items = errors.map((error, index) => `
-                                <div class="m-nav-group-item" style="display: flex; align-items: center;">
-                                    <img src="${error.icon}" width="16" height="16" style="margin-right: 8px;" />
-                                    <a href="#" class="m-nav-item" data-error-index="${index}">${error.textReturn}</a>
-                                </div>
-                            `).join('');
-                            
-                            // Combine all parts into the final HTML
-                            errorTab.innerHTML = `
-                                ${header}
-                                <div class="m-nav-group-section" style="display: none;">
-                                    <div class="m-nav-group-items">
-                                        ${items}
-                                    </div>
-                                </div>
-                            `;
-                        
-                            // Add collapse and open logic
-                            const headerElement = errorTab.querySelector('.m-nav-group-header');
-                            const sectionElement = errorTab.querySelector('.m-nav-group-section');
-                            const chevronIcon = errorTab.querySelector('.m-nav-group-header m-icon');
-                        
-                            headerElement.addEventListener('click', () => {
-                                const isOpen = sectionElement.style.display === 'block';
-                                sectionElement.style.display = isOpen ? 'none' : 'block';
-                                chevronIcon.classList.toggle('flip', !isOpen);
-                            });
-
-                            if (defaultOpen) {
-                                sectionElement.style.display = 'block';
-                                chevronIcon.classList.add('flip');
-                            }
-                        
-                            // Add click event listener to each error item
-                            const errorItems = errorTab.querySelectorAll('.m-nav-item');
-                            errorItems.forEach(errorItem => {
-                                const errorIndex = errorItem.getAttribute('data-error-index');
-                                const error = errors[errorIndex];
-
-                                errorItem.addEventListener('click', (event) => {
-                                    event.preventDefault();
-                                    handleErrorClick(error, orignalLogText);
-                                });
-
-                                if(findLog && error.text.includes(findLog)) {
-                                    // Open the error list
-                                    setTimeout(() => {
-                                        errorTab.click();
-
-                                        // Scroll to the error item
-                                        errorItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-                                        // highlight that fades out
-                                        errorItem.style.transition = 'background-color 1s';
-                                        errorItem.style.backgroundColor = '#444';
-                                        setTimeout(() => {
-                                            errorItem.style.backgroundColor = 'transparent';
-                                        }, 1000);
-                                    }, 0);
-
-                                    // Go to the error
-                                    errorItem.click();
-                                    findLog = false;
-                                }
-                            });
-                        
-                            mnav.appendChild(errorTab);
-                            return errorTab;
-                        }
-                        
-                        function handleErrorClick(error, orignalLogText) {
-                            // Reset log text
-                            while (logElement.firstChild) {
-                                logElement.removeChild(logElement.firstChild);
-                            }
-                            logElement.textContent = orignalLogText;
-                        
-                            // Create a new element to highlight the error
-                            const errorElement = document.createElement('span');
-                            errorElement.style.backgroundColor = '#FF2323';
-                            
-                            const errorTextNode = document.createElement('span');
-                            errorTextNode.style.fontWeight = 'bolder';
-                            errorTextNode.style.textShadow = '1px 1px 2px black';
-                            errorTextNode.style.color = 'white';
-                            errorTextNode.textContent = error.text;
-                            errorElement.appendChild(errorTextNode);
-                            errorElement.style.width = logElement.scrollWidth + 'px';
-                            errorElement.style.display = 'block';
-                        
-                            // Create a copy button
-                            const copyButton = document.createElement('button');
-                            copyButton.textContent = 'Copy';
-                            copyButton.style.position = 'absolute';
-                            copyButton.style.bottom = '2px';
-                            copyButton.style.left = '2px';
-                            copyButton.style.backgroundColor = '#4CAF50'; // Green background
-                            copyButton.style.border = 'none';
-                            copyButton.style.color = 'white'; // White text
-                            copyButton.style.cursor = 'pointer';
-                            copyButton.style.padding = '6px 6px';
-                            copyButton.style.fontSize = '10px';
-                            copyButton.style.fontWeight = 'bold';
-                            copyButton.style.borderRadius = '5px'; // Rounded corners
-                            copyButton.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)'; // Subtle shadow
-                            copyButton.style.zIndex = '1';
-
-                            // Add hover effect
-                            copyButton.addEventListener('mouseover', () => {
-                                copyButton.style.backgroundColor = '#45a049'; // Darker green on hover
-                            });
-
-                            copyButton.addEventListener('mouseout', () => {
-                                copyButton.style.backgroundColor = '#4CAF50'; // Original green when not hovering
-                            });
-
-                            copyButton.addEventListener('click', () => {
-                                // disable default behavior
-                                event.preventDefault();
-
-                                // copy text to clipboard
-                                if (navigator.clipboard) {
-                                    navigator.clipboard.writeText(error.text).then(() => {
-                                        console.log('Text copied to clipboard');
-                                    }).catch(err => {
-                                        console.error('Failed to copy text: ', err);
-                                    });
-                                } else {
-                                    const textArea = document.createElement('textarea');
-                                    textArea.value = error.text;
-                                    document.body.appendChild(textArea);
-                                    textArea.select();
-                                    try {
-                                        document.execCommand('copy');
-                                        console.log('Text copied to clipboard');
-                                    } catch (err) {
-                                        console.error('Failed to copy text: ', err);
-                                    }
-                                    document.body.removeChild(textArea);
-                                }
-                                copyButton.textContent = 'Copied!';
-                                setTimeout(() => {
-                                    copyButton.textContent = 'Copy';
-                                }, 1000);
-                            });
-                        
-                            errorElement.style.position = 'relative';
-                            errorElement.appendChild(copyButton);
-                        
-                            errorElement.addEventListener('mouseover', () => {
-                                copyButton.style.display = 'block';
-                            });
-                        
-                            errorElement.addEventListener('mouseout', () => {
-                                copyButton.style.display = 'none';
-                            });
-
-                            // Also copy if you right click on the error
-                            errorElement.addEventListener('contextmenu', (event) => {
-                                event.preventDefault();
-                                copyButton.click();
-                            });
-                        
-                            // Replace the error text in the log with the highlighted version
-                            const logTextNode = logElement.childNodes[0];
-                            const beforeErrorText = logTextNode.textContent.substring(0, error.start);
-                            const afterErrorText = logTextNode.textContent.substring(error.end);
-
-                            logTextNode.textContent = beforeErrorText;
-                            
-                            logElement.insertBefore(errorElement, logTextNode.nextSibling);
-                            logElement.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
-                            errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }
                         
                         logElement.scrollIntoView({ behavior: 'auto', block: 'end' });
@@ -3321,16 +3432,7 @@ window.addEventListener('load', function () {
                         // Scroll to show new tabs
                         mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });
                         otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });
-                    } else {
-                        // Add note text saying error check breaks history log atm, so it is disabled
-                        const noteText = document.createElement('div');
-                        noteText.textContent = 'Error log detection is disabled for the Foundry Miner firmware history log for the time being.';
-                        noteText.style.fontWeight = 'bold';
-                        noteText.style.marginTop = '10px';
-                        noteText.style.marginBottom = '30px';
-                        noteText.style.textAlign = 'left';
-                        customTabContainer.insertBefore(noteText, customTabContainer.firstChild);
-                    }
+                    } 
                 }
 
                 createCustomTab('quickIPGrabTab', 'Current Log', (customTabContainer, loadingText, loadingSpinner) => {
@@ -3440,7 +3542,7 @@ window.addEventListener('load', function () {
                                 const ip = new URL(ipHref).hostname;
                                 const responseText = fetchAndCombineLogs(ip);
                                 responseText.then(responseText => { 
-                                    SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, true, true, true);
+                                    SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, true, true, true, true);
                                 }).catch(error => {
                                     try {
                                         // remove the loading text and spinner and put a message saying it failed
@@ -3458,7 +3560,7 @@ window.addEventListener('load', function () {
                             } else {
                                 fetchGUIData(ipHref)
                                     .then(responseText => {
-                                        SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText);
+                                        SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, false, false, true);
                                     })
                                     .catch(error => {
                                         try {
