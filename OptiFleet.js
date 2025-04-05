@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.3.1
+// @version      7.3.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -532,7 +532,7 @@ const errorsToSearch = {
     },
     'ASIC Number Error': {
         icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
-        start: ["Chain[0]: find "],
+        start: [/Chain\[0\]: find .* asic, times/],
         end: ["stop_mining: asic number is not right"],
         type: "Main",
         conditions: (text) => {
@@ -554,8 +554,15 @@ const errorsToSearch = {
     },
     'EEPROM Error': {
         icon: "https://img.icons8.com/?size=100&id=9040&format=png&color=FFFFFF",
-        start: ["eeprom error crc 3rd region", "EEPROM error"],
+        start: ["eeprom error crc 3rd region", "EEPROM error", /load chain \d+ eeprom data/],
+        end: "got nothing",
         type: "Main",
+        conditions: (text) => {
+            if(text.includes("load chain")) {
+                return text.includes("got nothing");
+            }
+            return true;
+        },
         onlySeparate: true
     },
     'Hashboard Init Fail': {
@@ -570,14 +577,9 @@ const errorsToSearch = {
         type: "Main",
         onlySeparate: true
     },
-    'But got voltage': { //bitmain_get_sample_voltage
-        icon: "https://img.icons8.com/?size=100&id=Hd082AfY0mbD&format=png&color=FFFFFF",
-        start: "bitmain_get_sample_voltage",
-        type: "Main",
-    },
     'Voltage Abnormity': {
         icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
-        start: ["chain avg vol drop from", "ERROR_POWER_LOST", "failed to scale voltage up"],
+        start: ["chain avg vol drop from", "ERROR_POWER_LOST", "failed to scale voltage up", "bitmain_get_sample_voltage"],
         end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
         type: "Main",
     },
@@ -657,6 +659,12 @@ const errorsToSearch = {
         start: ["WARN_NET_LOST", "ERROR_NET_LOST"],
         end: ["ERROR_UNKOWN_STATUS: power off by NET_LOST", "stop_mining_and_restart: network connection", "stop_mining: power off by NET_LOST", "network connection resume", "network connection lost for"],
         type: "Main",
+    },
+    'Read/Write Error': {
+        icon: "https://img.icons8.com/?size=100&id=keFsyAFvNFX5&format=png&color=FFFFFF",
+        start: "fail to write",
+        end: "fail to read",
+        type: "Main"
     },
     'TSensor Error': {
         icon: "https://img.icons8.com/?size=100&id=123900&format=png&color=FFFFFF",
@@ -986,7 +994,9 @@ const errorsToCondense = [
     'hash2_32 error',
     'reg_value_buf buffer is full!',
     'fail to read tsensor by iic, chain',
-    'fail to read pic temp for chain'
+    'fail to read pic temp for chain',
+    'fail to write',
+    'fail to read'
 ];
 
 // Loop through the log text and find occurrences of the defined errors, count them up and condense to the very last one
@@ -5935,6 +5945,7 @@ window.addEventListener('load', function () {
                     let activeFetches = 0;
                     function processMinerQueue(minerQueue, maxConcurrentFetches, processMiner, progressFill, percentageText) {
                         let originalLength = minerQueue.length;
+                        let finishedFetches = 0;
                         function next() {
                             if (minerQueue.length === 0 && activeFetches === 0) {
                                 // All miners processed
@@ -5952,15 +5963,16 @@ window.addEventListener('load', function () {
 
                                         // Decrement the active fetches count and call next
                                         activeFetches--;
+                                        finishedFetches++;
                                         next();
 
-                                        let doneNum = minerQueue.length + activeFetches;
+                                        let doneNum = finishedFetches;
 
                                         // Update the percentage text
-                                        percentageText.textContent = `${Math.round(((originalLength - doneNum) / originalLength) * 100)}% (${originalLength - doneNum}/${originalLength})`;
+                                        percentageText.textContent = `${Math.round(((doneNum) / originalLength) * 100)}% (${doneNum}/${originalLength})`;
                             
                                         // Update the progress bar
-                                        progressFill.style.width = `${((originalLength - doneNum) / originalLength) * 100}%`;
+                                        progressFill.style.width = `${((doneNum) / originalLength) * 100}%`;
                             
                                     });
                             }
@@ -6290,13 +6302,17 @@ window.addEventListener('load', function () {
 
                                         // Order the issueMiners by slotID (C18-1-1-1 [1]) Each number appearing first takes priority over the next number
                                         issueMiners.sort((a, b) => {
-                                            const aSlotID = a.locationName.split('-').map(Number);
-                                            const bSlotID = b.locationName.split('-').map(Number);
-                                            for (let i = 0; i < Math.max(aSlotID.length, bSlotID.length); i++) {
-                                                const aNum = aSlotID[i] || 0;
-                                                const bNum = bSlotID[i] || 0;
-                                                if (aNum !== bNum) {
-                                                    return aNum - bNum;
+                                            const parseSlotID = (slotID) => {
+                                                const parts = slotID.match(/C(\d+)-(\d+)-(\d+)-(\d+)/);
+                                                return parts ? parts.slice(1).map(Number) : [0, 0, 0, 0];
+                                            };
+
+                                            const aSlotID = parseSlotID(a.locationName);
+                                            const bSlotID = parseSlotID(b.locationName);
+
+                                            for (let i = 0; i < aSlotID.length; i++) {
+                                                if (aSlotID[i] !== bSlotID[i]) {
+                                                    return aSlotID[i] - bSlotID[i];
                                                 }
                                             }
                                             return 0;
