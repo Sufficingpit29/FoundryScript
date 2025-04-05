@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.3.3
+// @version      7.3.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -432,29 +432,47 @@ async function fetchGUIData(url, responseType, type, timeout) {
         });
     });
 }
-
 function fetchAndCombineLogs(ip) {
-    if(ip.includes("http")) {
+    if (ip.includes("http")) {
         ip = new URL(ip).hostname;
     }
 
-    const ipHref = `http://${ip}/files/logs/logs-202504022359.tar.gz`;
-    const ipHref2 = `http://${ip}/files/logs/foundryminerExec.log`;
+    const logDirUrl = `http://${ip}/cgi-bin/getLogDir.cgi`;
+    const currentLogUrl = `http://${ip}/files/logs/foundryminerExec.log`;
 
-    return fetchGUIData(ipHref, "arraybuffer", "tar.gz", 16000)
-        .then(response => {
-            // Gets all miner logs with "foundryminerExec" in the name
-            const minerLogs = response.filter(file => file.name.includes("foundryminerExec"));
-            const lastLogFile = minerLogs[minerLogs.length - 1];
-            
-            // Convert ArrayBuffer of lastLogFile.buffer to string
-            const decoder = new TextDecoder('utf-8');
-            const logString = decoder.decode(lastLogFile.buffer);
+    return fetchGUIData(logDirUrl)
+        .then(logDirResponse => {
+            const logs = JSON.parse(logDirResponse).logs;
+            const previousLogs = logs.previous || [];
+            const todayLogs = logs.today || [];
 
-            return fetchGUIData(ipHref2).then(currentLog => {
-                const fullLogString = logString + "\n" + currentLog;
-                return fullLogString;
-            });
+            // Combine previous and today logs, then find the newest logs- file
+            const allLogs = [...previousLogs, ...todayLogs];
+            const newestLogFile = allLogs
+                .filter(log => log.fileName.startsWith("logs-") && log.fileName.endsWith(".tar.gz"))
+                .sort((a, b) => new Date(b.fileMod) - new Date(a.fileMod))[0];
+
+            if (!newestLogFile) {
+                throw new Error("No logs- file found in the directory.");
+            }
+
+            const newestLogUrl = `http://${ip}/files/logs/${newestLogFile.fileName}`;
+
+            return fetchGUIData(newestLogUrl, "arraybuffer", "tar.gz", 16000)
+                .then(response => {
+                    // Gets all miner logs with "foundryminerExec" in the name
+                    const minerLogs = response.filter(file => file.name.includes("foundryminerExec"));
+                    const lastLogFile = minerLogs[minerLogs.length - 1];
+
+                    // Convert ArrayBuffer of lastLogFile.buffer to string
+                    const decoder = new TextDecoder('utf-8');
+                    const logString = decoder.decode(lastLogFile.buffer);
+
+                    return fetchGUIData(currentLogUrl).then(currentLog => {
+                        const fullLogString = "----------"+newestLogFile.fileName + " foundryminerExec LOG START----------\n\n" + logString + "\n" + currentLog;
+                        return fullLogString;
+                    });
+                });
         })
         .catch(error => {
             console.error(error);
