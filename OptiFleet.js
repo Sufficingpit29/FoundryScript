@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.4.5
+// @version      7.4.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -3120,6 +3120,11 @@ window.addEventListener('load', function () {
 
                         let startSectionText = "----------Start Foundry Miner";
                         let logSections = responseText.split(startSectionText);
+                        
+                        // Readd startSectionText to the beginning of each section
+                        for (let i = 1; i < logSections.length; i++) {
+                            logSections[i] = startSectionText + logSections[i];
+                        }
 
                         if(!isFoundryFirmware) {
                             // Instead we will split by detecting the change of the date suddenly, but only if the next line date is less than prev line.
