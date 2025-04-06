@@ -558,12 +558,6 @@ const errorsToSearch = {
         start: [/Count Detected : \d+ Expected : \d+/, "No ChippyResponse recvd from"],
         end: ["HB_INIT_FAIL"],
         type: "Main",
-        conditions: (text) => {
-            if(!text.includes("Count Detected") && !text.includes("No ChippyResponse recvd from")) {
-                //   
-            }
-            return true;
-        },
         textReturn: (text) => {
             console.log("Figuring out bad HB chain from text: ", text);
             const detectedAsics = text.match(/ASIC Count Detected : \d+ Expected : \d+/g);
@@ -630,8 +624,11 @@ const errorsToSearch = {
     'Bad Hashboard Chain FDMiner ': {
         icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
         start: [/HB\d+: \d+ ASICs Detected/],
-        end: ["Unable to init HB", "Incorrect No of Chips Detected. Check HB1."],
+        end: ["Unable to init HB", "Incorrect No of Chips Detected. Check HB"],
         type: "Main",
+        conditions: (text) => {
+            return text.includes('Unable to init HB') || text.includes('Incorrect No of Chips Detected. Check HB');
+        },
         textReturn: (text) => {
             // Find all Incorrect No of Chips Detected. Check HB# lines
             const incorrectChipsLines = text.match(/Incorrect No of Chips Detected. Check HB\d+/g);
