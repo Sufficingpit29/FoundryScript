@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.4.6
+// @version      7.4.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -555,7 +555,7 @@ const errorsToSearch = {
     },
     'Bad Hashboard Chain FDMiner': {
         icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
-        start: [/Count Detected : \d+ Expected : \d+/],
+        start: [/Count Detected : \d+ Expected : \d+/, "No ChippyResponse recvd from"],
         end: ["HB_INIT_FAIL"],
         type: "Main",
         textReturn: (text) => {
@@ -607,6 +607,17 @@ const errorsToSearch = {
                     return "Bad HB Chain [" + badHBs.join(", ") + "]";
                 }
             }
+
+            //No ChippyResponse recvd from HB1
+            const chippyResponseLines = text.match(/No ChippyResponse recvd from HB\d+/g);
+            if (chippyResponseLines) {
+                const badHBs = chippyResponseLines.map(line => {
+                    const hbNumber = line.split("HB")[1].trim();
+                    return hbNumber.replace("No ChippyResponse recvd from ", "").trim();
+                });
+                return "Bad HB Chain [" + badHBs.join(", ") + "]";
+            }
+
             return "Bad HB Chain [?]";
         }
     },
@@ -667,14 +678,12 @@ const errorsToSearch = {
         },
         onlySeparate: true
     },
-    /*
     'Hashboard Init Fail': {
         icon: "https://img.icons8.com/?size=100&id=35849&format=png&color=FFFFFF",
         start: "Exit due to HASHBOARD INITIALIZATION FAILED",
         type: "Main",
         onlySeparate: true
     },
-    */
     'Target Hashrate Fail': {
         icon: "https://img.icons8.com/?size=100&id=20767&format=png&color=FFFFFF",
         start: "Exit due to Unable to Generate Given Target Hashrate",
@@ -685,6 +694,11 @@ const errorsToSearch = {
         icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
         start: ["chain avg vol drop from", "ERROR_POWER_LOST", "failed to scale voltage up", "bitmain_get_sample_voltage"],
         end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
+        type: "Main",
+    },
+    'Power Status Fail': {
+        icon: "https://img.icons8.com/?size=100&id=16422&format=png&color=FFFFFF",
+        start: "bitmain_get_power_status failed",
         type: "Main",
     },
     "Error Status": {
@@ -907,9 +921,34 @@ const errorsToSearch = {
         start: "using dummy regulator",
         type: "Other"
     },
+    'Other': {
+        icon: "https://img.icons8.com/?size=100&id=0OqFiOxbTdXT&format=png&color=FFFFFF",
+        start: "The last error numbers are different.",
+        type: "Other",
+        textReturn: (text) => {
+            if(text.includes("The last error numbers are different.")) {
+                return "Different error numbers";
+            } else {
+                
+            }
+            return "Unknown error";
+        }
+    }
 }
 
-function runErrorScanLogic(logText, excludeUnknown) {
+function excludeUnknowns(text) {
+    const contains = [
+        '"error":null',
+    ]
+    for (const str of contains) {
+        if (text.includes(str)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function runErrorScanLogic(logText) {
     console.log('Running error scan logic');
     //console.log('Log text:', logText);
     // Search through the log and locate errors
@@ -1081,33 +1120,35 @@ function runErrorScanLogic(logText, excludeUnknown) {
     }
 
     // Find all the times 'error' or 'fail' or 'not found' is mentioned in the log if it isn't already found in the defined errors, mark is as an Unknown Error
-    if(!excludeUnknown) {
-        const errorRegex = /error/gi;
-        const failRegex = /fail/gi;
-        const notFoundRegex = /not found/gi; // disabled for now
-        const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
-        for (const match of errorMatches) {
-            // Check if the error is already found
-            const matchIndex = match.index;
-            if (!errorsFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
-                // Find the start and end of the line
-                const start = logText.lastIndexOf('\n', matchIndex) + 1;
-                const end = logText.indexOf('\n', matchIndex) + 1;
-                const errorText = logText.substring(start, end);
+    const errorRegex = /error/gi;
+    const failRegex = /fail/gi;
+    const notFoundRegex = /not found/gi; // disabled for now
+    const errorMatches = [...logText.toLowerCase().matchAll(errorRegex), ...logText.toLowerCase().matchAll(failRegex)];
+    for (const match of errorMatches) {
+        // Check if the error is already found
+        const matchIndex = match.index;
+        if (!errorsFound.some(error => matchIndex >= error.start && matchIndex <= error.end)) {
+            // Find the start and end of the line
+            const start = logText.lastIndexOf('\n', matchIndex) + 1;
+            const end = logText.indexOf('\n', matchIndex) + 1;
+            const errorText = logText.substring(start, end);
 
-                // Add the error to the list of errors
-                errorsFound.push({
-                    name: 'Unknown Error',
-                    icon: "https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF",
-                    text: errorText.trimEnd(),
-                    start: start,
-                    end: end,
-                    type: "Other"
-                });
+            // Don't add if it is set to be excluded
+            if(excludeUnknowns(errorText)) {
+                continue;
             }
+
+            // Add the error to the list of errors
+            errorsFound.push({
+                name: 'Unknown Error',
+                icon: "https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF",
+                text: errorText.trimEnd(),
+                start: start,
+                end: end,
+                type: "Other"
+            });
         }
     }
-
     return errorsFound;
 }
 
@@ -1121,7 +1162,7 @@ const errorsToCondense = [
     'fail to read pic temp for chain',
     'fail to write',
     'fail to read',
-    //'Exit due to HASHBOARD INITIALIZATION FAILED'
+    "bitmain_get_power_status failed"
 ];
 
 // Loop through the log text and find occurrences of the defined errors, count them up and condense to the very last one
@@ -2882,8 +2923,8 @@ window.addEventListener('load', function () {
             }
 
             if(savedFeatures["currentLogTab"]) {
-                function SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, excludeUnknown, fullLog, isHistoryLog, isFoundryFirmware) {
-                    
+                function SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, fullLog, isHistoryLog, isFoundryFirmware) {
+
                     // Add divider to m-nav
                     const mnav = document.querySelector('.m-nav');
                     const divider = document.createElement('div');
@@ -3116,14 +3157,15 @@ window.addEventListener('load', function () {
                         `;
 
                         responseText = responseText.trim();
-                        responseText = cleanErrors(responseText);
 
                         let startSectionText = "----------Start Foundry Miner";
                         let logSections = responseText.split(startSectionText);
                         
-                        // Readd startSectionText to the beginning of each section
+                        // Readd startSectionText to the beginning of each section and clean errors individually per page
                         for (let i = 1; i < logSections.length; i++) {
                             logSections[i] = startSectionText + logSections[i];
+
+                            logSections[i] = cleanErrors(logSections[i]);
                         }
 
                         if(!isFoundryFirmware) {
@@ -3333,7 +3375,7 @@ window.addEventListener('load', function () {
 
                             // Clean up
                             section = section.trim();
-                            section = cleanErrors(section);
+                            //section = cleanErrors(section);
 
                             // Set the log text to the current page
                             logElement.textContent = `${section}`;
@@ -3348,7 +3390,7 @@ window.addEventListener('load', function () {
                             logElement.scrollTop = logElement.scrollHeight;
 
                             // Run error scan logic
-                            const errorsFound = runErrorScanLogic(section, excludeUnknown);
+                            const errorsFound = runErrorScanLogic(section);
                             if (errorsFound.length > 0) {
                                 // Create the error tabs
                                 const infoTab = createErrorTab("Info", errorsFound.filter(error => error.type === "Info"), true);
@@ -3356,8 +3398,8 @@ window.addEventListener('load', function () {
                                 const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
 
                                 // Scroll to show new tabs
-                                mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });
-                                otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });
+                                if(mainTab) {mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });}
+                                if(otherTab) {otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });}
                             }
 
                         }
@@ -3382,11 +3424,13 @@ window.addEventListener('load', function () {
                             scrollbar-color: #888 #333;
                         `;
 
+                        if (!fullLog) {
+                            responseText = cutOffPreviousLog(responseText); // Cut off first before error clean up so we don't mash all the other instances of those errors into the log
+                        }
+
                         responseText = responseText.trim();
                         responseText = cleanErrors(responseText);
-                        if (!fullLog) {
-                            responseText = cutOffPreviousLog(responseText);
-                        }
+                        
 
                         orignalLogText = responseText;
                         logElement.textContent = orignalLogText;
@@ -3423,7 +3467,7 @@ window.addEventListener('load', function () {
                         let logText = logElement.innerText;
 
                         // Create the error tabs
-                        var errorsFound = runErrorScanLogic(logText, excludeUnknown);
+                        var errorsFound = runErrorScanLogic(logText);
                         if(errorsFound.length === 0) {
                             return;
                         }
@@ -3435,8 +3479,8 @@ window.addEventListener('load', function () {
                         const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
 
                         // Scroll to show new tabs
-                        mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });
-                        otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });
+                        if(mainTab) {mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });}
+                        if(otherTab) {otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });}
                     } 
                 }
 
@@ -3470,7 +3514,7 @@ window.addEventListener('load', function () {
                                 const ip = new URL(ipHref).hostname;
                                 const responseText = fetchAndCombineLogs(ip);
                                 responseText.then(responseText => { 
-                                    SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, true);
+                                    SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText);
                                 }).catch(error => {
                                     try {
                                         // remove the loading text and spinner and put a message saying it failed
@@ -3547,7 +3591,7 @@ window.addEventListener('load', function () {
                                 const ip = new URL(ipHref).hostname;
                                 const responseText = fetchAndCombineLogs(ip);
                                 responseText.then(responseText => { 
-                                    SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, true, true, true, true);
+                                    SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, true, true, true);
                                 }).catch(error => {
                                     try {
                                         // remove the loading text and spinner and put a message saying it failed
@@ -3565,7 +3609,7 @@ window.addEventListener('load', function () {
                             } else {
                                 fetchGUIData(ipHref)
                                     .then(responseText => {
-                                        SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, false, false, true);
+                                        SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, false, true);
                                     })
                                     .catch(error => {
                                         try {
@@ -6533,9 +6577,9 @@ window.addEventListener('load', function () {
                                     const fetchLogs = isFoundry ? fetchAndCombineLogs : fetchGUIData;
                                     fetchLogs(ipHref)
                                         .then(responseText => {
+                                            responseText = cutOffPreviousLog(responseText); // Cut off first before clean
                                             responseText = cleanErrors(responseText);
-                                            responseText = cutOffPreviousLog(responseText);
-                                            let errorsFound = runErrorScanLogic(responseText, isFoundry);
+                                            let errorsFound = runErrorScanLogic(responseText);
                                             if (!GM_SuperValue.get('includeOtherErrors', false)) {
                                                 errorsFound = errorsFound.filter(error => error.type === 'Main');
                                             }
