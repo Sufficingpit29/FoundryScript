@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.4.8
+// @version      7.4.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -553,11 +553,17 @@ const errorsToSearch = {
                 : "Bad HB Chain [?]";
         }
     },
-    'Bad Hashboard Chain FDMiner': {
+    'Bad Hashboard Chain FDMiner ': {
         icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
         start: [/Count Detected : \d+ Expected : \d+/, "No ChippyResponse recvd from"],
         end: ["HB_INIT_FAIL"],
         type: "Main",
+        conditions: (text) => {
+            if(!text.includes("Count Detected") && !text.includes("No ChippyResponse recvd from")) {
+                //   
+            }
+            return true;
+        },
         textReturn: (text) => {
             console.log("Figuring out bad HB chain from text: ", text);
             const detectedAsics = text.match(/ASIC Count Detected : \d+ Expected : \d+/g);
@@ -614,6 +620,25 @@ const errorsToSearch = {
                 const badHBs = chippyResponseLines.map(line => {
                     const hbNumber = line.split("HB")[1].trim();
                     return hbNumber.replace("No ChippyResponse recvd from ", "").trim();
+                });
+                return "Bad HB Chain [" + badHBs.join(", ") + "]";
+            }
+
+            return "Bad HB Chain [?]";
+        }
+    },
+    'Bad Hashboard Chain FDMiner ': {
+        icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
+        start: [/HB\d+: \d+ ASICs Detected/],
+        end: ["Unable to init HB", "Incorrect No of Chips Detected. Check HB1."],
+        type: "Main",
+        textReturn: (text) => {
+            // Find all Incorrect No of Chips Detected. Check HB# lines
+            const incorrectChipsLines = text.match(/Incorrect No of Chips Detected. Check HB\d+/g);
+            if (incorrectChipsLines) {
+                const badHBs = incorrectChipsLines.map(line => {
+                    const hbNumber = line.split("HB")[1].trim();
+                    return hbNumber.replace("Incorrect No of Chips Detected. Check ", "").trim();
                 });
                 return "Bad HB Chain [" + badHBs.join(", ") + "]";
             }
@@ -693,8 +718,11 @@ const errorsToSearch = {
     'Voltage Abnormity': {
         icon: "https://img.icons8.com/?size=100&id=61096&format=png&color=FFFFFF",
         start: ["chain avg vol drop from", "ERROR_POWER_LOST", "failed to scale voltage up", "bitmain_get_sample_voltage"],
-        end: ["power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
+        end: ["power voltage can not meet the target", "power voltage err", "ERROR_POWER_LOST: power voltage rise or drop", "stop_mining_and_restart: power voltage read failed", "power voltage abnormity", "stop_mining: soc init failed", "stop_mining: get power type version failed!", "stop_mining: power status err, pls check!", "stop_mining: power voltage rise or drop, pls check!", "stop_mining: pic check voltage drop"],
         type: "Main",
+        shouldGroup: (text) => {
+            return true;
+        },
     },
     'Power Status Fail': {
         icon: "https://img.icons8.com/?size=100&id=16422&format=png&color=FFFFFF",
@@ -783,6 +811,22 @@ const errorsToSearch = {
         start: "fail to write",
         end: "fail to read",
         type: "Main"
+    },
+    'Main Error Occurance': {
+        icon: "https://img.icons8.com/?size=100&id=38975&format=png&color=FFFFFF",
+        start: "MAIN Error occured",
+        type: "Main",
+        textReturn: (text) => {
+            // 04/06/25 03:10:13.860 L0 MAIN Error occured: 	{"errNo":"600","msg":["Failed to Detect Chippy","Check Following HB - HB1"]}
+
+            // Get the error data and convert to a object
+            const errorData = text.split("MAIN Error occured: ")[1].replace(/\r?\n|\r/g, '');
+            const errorObject = JSON.parse(errorData.replace(/\\/g, ''));
+            const errorMessage = errorObject.msg.join(", ");
+            const errorNumber = errorObject.errNo;
+
+            return "MEO: [" + errorNumber + "] " + errorMessage;
+        }
     },
     'TSensor Error': {
         icon: "https://img.icons8.com/?size=100&id=123900&format=png&color=FFFFFF",
@@ -1064,7 +1108,7 @@ function runErrorScanLogic(logText) {
 
                     // Check if the error text meets the conditions
                     if (typeof errorData.conditions === 'function' ? errorData.conditions(errorText) : true && !errorTextAlreadyFound) {
-                        shouldAddNew = true;
+                        let shouldAddNew = true;
                         const lastErrorIndex = errorsFound.length - 1;
                         const lastError = errorsFound[lastErrorIndex];
                         if(lastError && lastError.name === error && errorData.shouldGroup && errorData.shouldGroup(errorText)) {
@@ -3161,11 +3205,9 @@ window.addEventListener('load', function () {
                         let startSectionText = "----------Start Foundry Miner";
                         let logSections = responseText.split(startSectionText);
                         
-                        // Readd startSectionText to the beginning of each section and clean errors individually per page
+                        // Readd startSectionText to the beginning of each section
                         for (let i = 1; i < logSections.length; i++) {
                             logSections[i] = startSectionText + logSections[i];
-
-                            logSections[i] = cleanErrors(logSections[i]);
                         }
 
                         if(!isFoundryFirmware) {
@@ -3375,7 +3417,7 @@ window.addEventListener('load', function () {
 
                             // Clean up
                             section = section.trim();
-                            //section = cleanErrors(section);
+                            section = cleanErrors(section);
 
                             // Set the log text to the current page
                             logElement.textContent = `${section}`;
