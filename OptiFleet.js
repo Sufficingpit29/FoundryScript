@@ -4,7 +4,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.4.9
+// @version      7.5.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -673,11 +673,30 @@ const errorsToSearch = {
             2025-03-29 03:36:12 ERROR_FAN_LOST: fan lost
             2025-03-29 03:36:12 stop_mining: fan lost
             */
-            const fanFailLines2 = text.match(/fan lost, only find \d+ \(\< \d+\)/g);
+
+            /*
+            2025-04-05 21:34:13 Error, fan lost, only find 3 (< 4)
+            2025-04-05 21:34:13 fan_id = 0, fan_speed =  3450(corresponding to FAN3 on control board PCB)
+            2025-04-05 21:34:13 fan_id = 1, fan_speed =  3720(corresponding to FAN1 on control board PCB)
+            2025-04-05 21:34:13 fan_id = 2, fan_speed =     0(corresponding to FAN2 on control board PCB)
+            2025-04-05 21:34:13 fan_id = 3, fan_speed =  6000(corresponding to FAN4 on control board PCB)
+            2025-04-05 21:34:13 Sweep error string = F:1.
+            2025-04-05 21:34:13 ERROR_FAN_LOST: fan lost
+            2025-04-05 21:34:13 stop_mining: fan lost
+            */
+            const fanFailLines2 = text.match(/fan_id = \d+, fan_speed =\s*\d+/g)
             if (fanFailLines2) {
-                const fanFailNumbers = fanFailLines2.map(line => line.replace("fan lost, only find ", "").replace(" (<", "").trim()).join(", ");
+                // For all fan speed 0 lines, get the fan number
+                console.log("Fan Fail Lines: ", fanFailLines2);
+                const fanFailNumbers = fanFailLines2.map(line => {
+                    const fanNumber = line.split("fan_id = ")[1].split(",")[0].trim();
+                    const fanSpeed = line.split("fan_speed = ")[1].trim().split("(")[0].trim();
+                    console.log("Fan Number: ", fanNumber, " Fan Speed: ", fanSpeed);
+                    return fanSpeed === "0" ? fanNumber : null;
+                }).filter(Boolean).join(", ");
                 return "Fan Fail [" + fanFailNumbers + "]";
             }
+            return "Fan Fail";
         }
     },
     'SOC INIT Fail': {
