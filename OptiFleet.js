@@ -1,5 +1,6 @@
 // To do:
 // Maybe add a "real lower hashers" tab?
+// Maybe have it auto select the pool based on customer, then also auto select the IP Adress boxes?
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
