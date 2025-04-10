@@ -69,6 +69,7 @@ const features = [
     { name: 'SN Bar Code Scan', id: 'snBarCodeScan', category: 'All' },
     { name: 'Paste SN', id: 'pasteSN', category: 'All' },
     { name: 'Alert System', id: 'alertSystem', category: 'All' },
+    { name: 'Auto-Select Pool', id: 'autoSelectPool', category: 'All' },
 
     // Overview Page
     { name: 'Averaged Container Temps', id: 'avgContainerTemps', category: 'Overview' },
@@ -94,7 +95,6 @@ const features = [
     { name: 'Times Down', id: 'downCount', category: 'Individual Miner' },
     { name: 'Last Soft Reboot', id: 'lastSoftReboot', category: 'Individual Miner' },
     { name: 'Current Log Tab', id: 'PoolConfigModal', category: 'Individual Miner' },
-    { name: 'Auto-Select Pool', id: 'autoSelectPool', category: 'Individual Miner' },
 
     // GUI page
     { name: 'Estimated Live Time', id: 'estimatedLiveTime', category: 'GUI' },
@@ -3898,9 +3898,10 @@ window.addEventListener('load', function () {
                             }
                 
                             function autoSelectIPAddressSetup() {
+                                if(!savedFeatures["autoSelectPool"]) { return; }
                                 const PoolConfigModal = document.querySelector('#PoolConfigModal');
                                 if (!PoolConfigModal) {
-                                    setTimeout(autoSelectPoolSetup, 500);
+                                    setTimeout(autoSelectIPAddressSetup, 500);
                                     return;
                                 }
 
@@ -8240,6 +8241,7 @@ window.addEventListener('load', function () {
             }
 
             function autoSelectPoolSetup() {
+                if(!savedFeatures["autoSelectPool"]) { return; }
                 const PoolConfigModal = document.querySelector('#PoolConfigModal');
                 if (!PoolConfigModal) {
                     setTimeout(autoSelectPoolSetup, 500);
