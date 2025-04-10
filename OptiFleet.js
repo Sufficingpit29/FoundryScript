@@ -1,12 +1,12 @@
 // To do:
 // Maybe add a "real lower hashers" tab?
-// Maybe have it auto select the pool based on customer, then also auto select the IP Adress boxes?
+// Mass auto pool? (Finds all non-pooled miners and pools them to their customer name?)
 // Maybe more pagination since it can still crash
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.4
+// @version      7.5.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -94,7 +94,8 @@ const features = [
     { name: 'Breaker Number', id: 'breakerNumberMiner', category: 'Individual Miner' },
     { name: 'Times Down', id: 'downCount', category: 'Individual Miner' },
     { name: 'Last Soft Reboot', id: 'lastSoftReboot', category: 'Individual Miner' },
-    { name: 'Current Log Tab', id: 'currentLogTab', category: 'Individual Miner' },
+    { name: 'Current Log Tab', id: 'PoolConfigModal', category: 'Individual Miner' },
+    { name: 'Auto-Select Pool', id: 'autoSelectPool', category: 'Individual Miner' },
 
     // GUI page
     { name: 'Estimated Live Time', id: 'estimatedLiveTime', category: 'GUI' },
@@ -8134,6 +8135,76 @@ window.addEventListener('load', function () {
             }
             checkIfInPlannerBoard();
             
+            function autoSelectPool() {
+                const PoolConfigModalContent = document.querySelector('#PoolConfigModalContent');
+                const PoolSelectionDropDown = PoolConfigModalContent.querySelector('.dropdown.clickable');
+                setTimeout(() => { // Should hopefully be enough time for the dropdown to get the right type
+                    let curPoolType = PoolSelectionDropDown.querySelector('span[role="option"].k-input').textContent;
+                    console.log("Current Pool Type:", curPoolType);
+                    if (curPoolType === "Select Configs") {
+                        PoolSelectionDropDown.click();
+                        const customerName = unsafeWindow.im.miner.subcustomerName;
+                        
+                        const waitUntilDropdown = setInterval(() => {
+                            const optionPanel = document.querySelector('.k-list-optionlabel').parentElement;
+                            if (optionPanel) {
+                                const options = optionPanel.querySelector('.k-list.k-reset').children;
+                                for (let i = 0; i < options.length; i++) {
+                                    const option = options[i].textContent.toLowerCase();
+                                    if (option.includes(customerName.toLowerCase())) {
+                                        options[i].click();
+
+                                        setTimeout(() => {
+                                            const ddlPool1Template = document.querySelector('#ddlPool1Template');
+                                            const ddlPool2Template = document.querySelector('#ddlPool2Template');
+                                            const ddlPool3Template = document.querySelector('#ddlPool3Template');
+                                            const templates = [ddlPool1Template, ddlPool2Template, ddlPool3Template];
+
+                                            templates.forEach((template, index) => {
+                                                if (template) {
+                                                    const options = template.querySelectorAll('option');
+                                                    options.forEach(option => {
+                                                        if (option.value === 'IP Address') {
+                                                            option.selected = true;
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                        }, 500);
+
+                                        break;
+                                    }
+                                }
+                                clearInterval(waitUntilDropdown);
+                            } else {
+                                console.log("Waiting for dropdown to open...");
+                            }
+                        }, 100);
+                        console.log("Current Pool Type:", curPoolType);
+                    } else {
+                        console.log("Pool type not found.");
+                    }
+                }, 800);
+            }
+
+            function autoSelectPoolSetup() {
+                const PoolConfigModal = document.querySelector('#PoolConfigModal');
+                if (!PoolConfigModal) {
+                    setTimeout(autoSelectPoolSetup, 500);
+                    return;
+                }
+
+                // Set up observer if PoolConfigModal ever changes display to not be none
+                const observer = new MutationObserver(() => {
+                    const PoolConfigModal = document.querySelector('#PoolConfigModal');
+                    if (PoolConfigModal && PoolConfigModal.style.display !== 'none') {
+                        console.log("PoolConfigModal opened");
+                        autoSelectPool(PoolConfigModal);
+                    }
+                });
+                observer.observe(PoolConfigModal, { attributes: true, attributeFilter: ['style'] });
+            }
+            autoSelectPoolSetup();
         }
 
         // Add temps for all containers if in overview page and are in minden
@@ -9213,70 +9284,60 @@ window.addEventListener('load', function () {
                                 // Locate the new element with the inputted text
                                 const findNewCard_INTERVAL = setInterval(() => {
                                     const newElement = document.querySelector(`[aria-label="${taskName}"]`);
-                                    if (newElement) {
-                                        clearInterval(findNewCard_INTERVAL);
+                                    const notesEditor = document.querySelector('.notes-editor');
+                                    const commentField = document.querySelector('textarea[aria-label="New comment"]');
+                                    if (newElement && !notesEditor) {
                                         // Click the element
                                         newElement.click();
-
-                                        // Now add the text to the notes
-                                        const findNotesEditor_INTERVAL = setInterval(() => {
-                                            const notesEditor = document.querySelector('.notes-editor');
-                                            if (notesEditor) {
-                                                clearInterval(findNotesEditor_INTERVAL);
-
-                                                // Click the notes editor to focus it and enter editing mode
-                                                notesEditor.click();
-                                                notesEditor.focus();
-
-                                                // Change the notes editor's background color to red for testing
-                                                //notesEditor.style.backgroundColor = 'red';
-
-                                                // Insert the text into the notes editor
-                                                document.execCommand('insertText', false, taskNotes);
-
-                                                const findAddCommentButton_INTERVAL = setInterval(() => {
-                                                    // Now lets add the comment to the task for the log
-                                                    const commentField = document.querySelector('textarea[aria-label="New comment"]');
-                                                    if (commentField) {
-                                                        clearInterval(findAddCommentButton_INTERVAL);
-
-                                                        commentField.scrollIntoView({ behavior: 'auto', block: 'center' });
-                                                        commentField.click();
-                                                        commentField.focus();
-                                                        commentField.click();
-                                                        setTimeout(() => {
-                                                            commentField.click();
-                                                            console.log("Inputting:", GM_SuperValue.get("taskComment", ""));
-                                                            document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
-
-                                                            // Now find the send button and click it
-                                                            const sendButton = document.querySelector('.sendCommentButton');
-                                                            if (sendButton) {
-                                                                sendButton.click();
-
-                                                                // We'll now reset the taskName and taskNotes values
-                                                                GM_SuperValue.set("taskName", "");
-                                                                GM_SuperValue.set("taskNotes", "");
-                                                                GM_SuperValue.set("taskComment", "");
-                                                                GM_SuperValue.set("detailsData", {});
-
-                                                            } else {
-                                                                console.error('Notes editor not found.');
-                                                            }
-                                                        }, 400);
-                                                    }
-
-                                                    
-                                                }, 400);
-
-                                            } else {
-                                                console.error('Notes editor not found.');
-                                            }
-                                        }, 600);
                                     } else {
                                         console.error('New element not found.');
                                     }
-                                }, 600); // Add a 500ms delay before locating the new element
+
+                                    // Now add the text to the notes
+                                    
+                                    if (notesEditor && !notesEditor.inserted) {
+                                        // Click the notes editor to focus it and enter editing mode
+                                        notesEditor.click();
+                                        notesEditor.focus();
+
+                                        // Insert the text into the notes editor
+                                        document.execCommand('insertText', false, taskNotes);
+
+                                        notesEditor.inserted = true; // Mark as inserted
+                                    } else {
+                                        console.error('Notes editor not found.');
+                                    }
+                                    
+                                    // Now lets add the comment to the task for the log
+                                    if (commentField && !commentField.inserted) {
+                                        commentField.scrollIntoView({ behavior: 'auto', block: 'center' });
+                                        commentField.click();
+                                        commentField.focus();
+                                        commentField.click();
+
+                                        commentField.click();
+                                        console.log("Inputting:", GM_SuperValue.get("taskComment", ""));
+                                        document.execCommand('insertText', false, GM_SuperValue.get("taskComment", ""));
+                                        commentField.inserted = true; // Mark as inserted
+
+                                        // Now find the send button and click it
+                                        const sendButton = document.querySelector('.sendCommentButton');
+                                        if (sendButton) {
+                                            sendButton.click();
+                                            clearInterval(findNewCard_INTERVAL);
+
+                                            // We'll now reset the taskName and taskNotes values
+                                            GM_SuperValue.set("taskName", "");
+                                            GM_SuperValue.set("taskNotes", "");
+                                            GM_SuperValue.set("taskComment", "");
+                                            GM_SuperValue.set("detailsData", {});
+
+                                        } else {
+                                            console.error('Notes editor not found.');
+                                        }
+                                    }
+
+                                }, 600);
                             } else {
                                 console.error('Add task button not found.');
                             }
