@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.3
+// @version      7.5.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -101,6 +101,7 @@ const features = [
     { name: 'Firmware Links', id: 'firmwareLinks', category: 'GUI' },
     { name: 'Start at log bottom', id: 'startAtLogBottom', category: 'GUI' },
     { name: 'Miner Log Errors/Info', id: 'minerLogErrorsInfo', category: 'GUI' },
+    { name: 'SlotID Link', id: 'slotIDLink', category: 'GUI' },
 ];
 
 const categories = [...new Set(features.map(feature => feature.category))];
@@ -3864,13 +3865,13 @@ window.addEventListener('load', function () {
                         updatePlannerCardsData();
                     }, 10000);
 
-                    // Add mutation observer to the minerList
-                    const observer = new MutationObserver(() => {
-
+                    let hasSetUp = false;
+                    function minerListSetup() {
                         getCurrentMinerList();
                         
                         // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
                         for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
+                            hasSetUp = true;
                             const modelCell = minerData['Model'];
                             const slotIDCell = minerData['Slot ID'];
                             const statusCell = minerData['Status'];
@@ -4171,6 +4172,20 @@ window.addEventListener('load', function () {
                                 updatePlannerLink(plannerElement);
                             }
                         }
+                    }
+
+                    // Repeat every 100ms until the minerList is loaded
+                    const minerListSetUpCheck = setInterval(() => {
+                        if(hasSetUp) {
+                            clearInterval(minerListSetUpCheck);
+                        } else {
+                            minerListSetup();
+                        }
+                    }, 100);
+
+                    // Add mutation observer to the minerList
+                    const observer = new MutationObserver(() => {
+                        minerListSetup();
                     });
                     observer.observe(minerList, { childList: true, subtree: true });
                 }
@@ -9465,7 +9480,7 @@ window.addEventListener('load', function () {
 
         // Keep retrying until m-heading is-size-l is-text is found
         function addSlotLink() {
-            if(!minerSNLookup) { return; }
+            if(!minerSNLookup || !savedFeatures["slotIDLink"]) { return; }
 
             const panelSection = document.querySelector('.m-uishell-panel-section');
             let macAddressElement = document.querySelector('.m-stack.m-heading.is-size-xs.is-muted');
@@ -9528,7 +9543,6 @@ window.addEventListener('load', function () {
         }
 
         addSlotLink();
-
 
         const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
         let findLog = false;
