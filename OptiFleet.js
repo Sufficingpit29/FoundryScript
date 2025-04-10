@@ -1,11 +1,12 @@
 // To do:
 // Maybe add a "real lower hashers" tab?
 // Maybe have it auto select the pool based on customer, then also auto select the IP Adress boxes?
+// Maybe more pagination since it can still crash
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.0
+// @version      7.5.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -646,11 +647,11 @@ const errorsToSearch = {
     },
     'Fan Speed Error': {
         icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
-        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/],
-        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", " has failed to run at expected RPM", "Expected RPM"],
+        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed"],
+        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", "Expected RPM:", "Fan Fail count"],
         type: "Main",
         shouldGroup: (text) => {
-            return text.includes("has failed to run at expected RPM") || text.includes("Expected RPM");
+            return text.includes("has failed to run at expected RPM") || text.includes("Expected RPM") || text.includes("Fan Fail count");
         },
         textReturn: (text) => {
             /*
@@ -698,7 +699,8 @@ const errorsToSearch = {
                 return "Fan Fail [" + fanFailNumbers + "]";
             }
             return "Fan Fail";
-        }
+        },
+        onlySeparate: true
     },
     'SOC INIT Fail': {
         icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
