@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.5
+// @version      7.5.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -3867,7 +3867,60 @@ window.addEventListener('load', function () {
                     }, 10000);
 
                     let hasSetUp = false;
+                    let lastSelectedPool = false;
                     function minerListSetup() {
+                        if(!hasSetUp) {
+                            function autoSelectIPAddress(PoolSelectionDropDown) {
+                                let curPoolType = PoolSelectionDropDown.querySelector('span[role="option"].k-input').textContent;
+                                let newSelection = false;
+                                if(lastSelectedPool !== curPoolType) {
+                                    newSelection = true;
+                                }
+                                if (curPoolType !== "Select Configs" && newSelection) {
+                                    lastSelectedPool = curPoolType;
+                                    setTimeout(() => {
+                                        const ddlPool1Template = document.querySelector('#ddlPool1Template');
+                                        const ddlPool2Template = document.querySelector('#ddlPool2Template');
+                                        const ddlPool3Template = document.querySelector('#ddlPool3Template');
+                                        const templates = [ddlPool1Template, ddlPool2Template, ddlPool3Template];
+
+                                        templates.forEach((template, index) => {
+                                            if (template) {
+                                                const options = template.querySelectorAll('option');
+                                                options.forEach(option => {
+                                                    if (option.value === 'IP Address') {
+                                                        option.selected = true;
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }, 200);
+                                }
+                            }
+                
+                            function autoSelectIPAddressSetup() {
+                                const PoolConfigModal = document.querySelector('#PoolConfigModal');
+                                if (!PoolConfigModal) {
+                                    setTimeout(autoSelectPoolSetup, 500);
+                                    return;
+                                }
+
+                                const PoolConfigModalContent = document.querySelector('#PoolConfigModalContent');
+                                const PoolSelectionDropDown = PoolConfigModalContent.querySelector('.dropdown.clickable');
+                
+                                // Set up observer if PoolConfigModal ever changes display to not be none
+                                const observer = new MutationObserver(() => {
+                                    const PoolConfigModal = document.querySelector('#PoolConfigModal');
+                                    if (PoolConfigModal && PoolConfigModal.style.display !== 'none') {
+                                        console.log("PoolConfigModal opened");
+                                        autoSelectIPAddress(PoolSelectionDropDown);
+                                    }
+                                });
+                                observer.observe(PoolSelectionDropDown, { attributes: true, childList: true, subtree: true });
+                            }
+                            autoSelectIPAddressSetup();
+                        }
+
                         getCurrentMinerList();
                         
                         // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
