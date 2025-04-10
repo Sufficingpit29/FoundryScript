@@ -625,7 +625,7 @@ const errorsToSearch = {
     },
     'Bad Hashboard Chain FDMiner ': {
         icon: "https://img.icons8.com/?size=100&id=oirUg9VSEnSv&format=png&color=FFFFFF",
-        start: [/HB\d+: \d+ ASICs Detected/],
+        start: ["No ChippyResponse recvd", /HB\d+: \d+ ASICs Detected/],
         end: ["Unable to init HB", "Incorrect No of Chips Detected. Check HB"],
         type: "Main",
         conditions: (text) => {
@@ -638,6 +638,16 @@ const errorsToSearch = {
                 const badHBs = incorrectChipsLines.map(line => {
                     const hbNumber = line.split("HB")[1].trim();
                     return hbNumber.replace("Incorrect No of Chips Detected. Check ", "").trim();
+                });
+                return "Bad HB Chain [" + badHBs.join(", ") + "]";
+            }
+
+            // Finda all the Unable to init HB#
+            const unableToInitLines = text.match(/Unable to init HB\d+/g);
+            if (unableToInitLines) {
+                const badHBs = unableToInitLines.map(line => {
+                    const hbNumber = line.split("HB")[1].trim();
+                    return hbNumber.replace("Unable to init ", "").trim();
                 });
                 return "Bad HB Chain [" + badHBs.join(", ") + "]";
             }
