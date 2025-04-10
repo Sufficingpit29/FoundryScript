@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.1
+// @version      7.5.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -313,6 +313,7 @@ function isFoundryFirmware(text) {
 let plannerBuckets = false;
 let plannerTasks = false;
 let planID = false;
+
 // if url has planner in it, like https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad
 // extract the TbJIxx_byEKhuMp-C4tXLGUAD3Tb
 if(currentUrl.includes('planner')) {
@@ -1782,7 +1783,9 @@ window.addEventListener('load', function () {
                     resp.miners.forEach(miner => {
                         minerSNLookup[miner.serialNumber] = {
                             minerID: miner.id,
-                            slotID: miner.locationName.replace("Minden_", "")
+                            slotID: miner.locationName.replace("Minden_", ""),
+                            ipAddress: miner.ipAddress,
+                            macAddress: miner.macAddress,
                         };
                         allMinersLookup[miner.id] = miner;
 
@@ -9453,7 +9456,77 @@ window.addEventListener('load', function () {
     }
 
     // Return if the URL doesn't match the IP regex
-    if (ipURLMatch) {
+    if (ipURLMatch) { ///cgi-bin/get_system_info.cgi
+        let minerSNLookup = GM_SuperValue.get("minerSNLookup_Minden", {});
+        let curIP = window.location.hostname;
+
+        // Keep retrying until m-heading is-size-l is-text is found
+        function addSlotLink() {
+            if(!minerSNLookup) { return; }
+
+            const panelSection = document.querySelector('.m-uishell-panel-section');
+            let macAddressElement = document.querySelector('.m-stack.m-heading.is-size-xs.is-muted');
+            if(macAddressElement) {
+                macAddressElement = macAddressElement.textContent.split(': ')[1].trim();
+            }
+            const headingAGUI = document.querySelector('.miner-type');
+            if (panelSection && macAddressElement && macAddressElement !== "") {
+                let minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddressElement);
+                const headingFGUI = panelSection.querySelector('.m-heading.is-size-l.is-muted');
+                if (headingFGUI) {
+                    console.log("Miner Data: ", minerData);
+                    const slotLink = document.createElement('a');
+                    slotLink.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerData.minerID}`;
+                    slotLink.textContent = `${minerData.slotID}`;
+                    slotLink.style.color = '#17b26a';
+                    slotLink.style.textDecoration = 'underline';
+                    slotLink.style.fontFamily = '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+                    slotLink.style.fontWeight = '600';
+                    slotLink.style.fontSize = '12px';
+                    slotLink.style.marginLeft = '0px';
+                    slotLink.target = '_blank'; // Open in a new tab
+                    headingFGUI.parentNode.insertBefore(slotLink, headingFGUI.nextSibling);
+                }
+            } else if(headingAGUI) {
+                const ipHref = 'http://' + curIP + '/cgi-bin/get_system_info.cgi';
+                fetchGUIData(ipHref)
+                    .then(response => {
+                        let responseObject = JSON.parse(response);
+                        let macAddress = responseObject.macaddr;
+                        console.log("MAC Address: ", macAddress);
+                        let minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddress);
+                        if(!minerData || macAddress === undefined) { return; }
+                        console.log("Miner Data: ", minerData);
+                        const slotLink = document.createElement('a');
+                        slotLink.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerData.minerID}`;
+                        slotLink.textContent = `${minerData.slotID}`;
+                        slotLink.style.color = '#17b26a';
+                        slotLink.style.textDecoration = 'underline';
+                        slotLink.style.fontFamily = 'Arial, sans-serif';
+                        slotLink.style.fontSize = '12px';
+                        slotLink.style.position = 'absolute';
+                        slotLink.style.top = `${headingAGUI.getBoundingClientRect().bottom + window.scrollY}px`;
+                        slotLink.style.left = `${headingAGUI.getBoundingClientRect().left + window.scrollX}px`;
+                        slotLink.style.zIndex = '1000'; // Ensure it appears above other elements
+                        slotLink.target = '_blank'; // Open in a new tab
+
+                        document.body.appendChild(slotLink);
+
+                        // Add observer on the headingAGUI to adjust it position if it moves
+                        const observer = new MutationObserver(() => {
+                            slotLink.style.top = `${headingAGUI.getBoundingClientRect().bottom + window.scrollY}px`;
+                            slotLink.style.left = `${headingAGUI.getBoundingClientRect().left + window.scrollX}px`;
+                        });
+                        observer.observe(document, { attributes: true, childList: true, subtree: true });
+                })
+            } else {
+                setTimeout(addSlotLink, 200); // Retry after 200ms if not found
+            }
+        }
+
+        addSlotLink();
+
+
         const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
         let findLog = false;
         if(quickGoToLog && currentUrl.includes(quickGoToLog.ip)) {
