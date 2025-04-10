@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.2
+// @version      7.5.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1786,6 +1786,7 @@ window.addEventListener('load', function () {
                             slotID: miner.locationName.replace("Minden_", ""),
                             ipAddress: miner.ipAddress,
                             macAddress: miner.macAddress,
+                            discoveredSerialNumber: miner.discoveredSerialNumber,
                         };
                         allMinersLookup[miner.id] = miner;
 
@@ -2406,6 +2407,8 @@ window.addEventListener('load', function () {
                 
                 let clipboardData = event.clipboardData || window.clipboardData || unsafeWindow.clipboardData;
                 let pastedData = clipboardData.getData('text');
+                pastedData = pastedData.replace("http://root:root@", "");
+                pastedData = pastedData.split('/')[0].trim();
                 
                 console.log('Pasted data:', `[${pastedData}]`);
                 // If that wasn't pasted in an actual input, then we open the miner page
@@ -2413,7 +2416,7 @@ window.addEventListener('load', function () {
                 let activeElement = document.activeElement;
                 if(activeElement.tagName !== 'INPUT' && activeElement.tagName !== 'TEXTAREA' && !hasSpaces) {
                     // If the pasted data is a serial number, open the miner page
-                    let lookUpMiner = minerSNLookup[pastedData];
+                    let lookUpMiner = minerSNLookup[pastedData] || Object.values(minerSNLookup).find(data => data.macAddress === pastedData || data.ipAddress === pastedData || data.discoveredSerialNumber === pastedData);
                     if(lookUpMiner) {
                         window.open(`https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${lookUpMiner.minerID}`).focus();
                     } else if(pastedData.length === 17) {
