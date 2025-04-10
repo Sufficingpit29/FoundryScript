@@ -1,6 +1,5 @@
 // To do:
 // Maybe add a "real lower hashers" tab?
-// Mass auto pool? (Finds all non-pooled miners and pools them to their customer name?)
 // Maybe more pagination since it can still crash
 
 // ==UserScript==
