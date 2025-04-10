@@ -3898,7 +3898,7 @@ window.addEventListener('load', function () {
                             }
                 
                             function autoSelectIPAddressSetup() {
-                                if(!savedFeatures["autoSelectPool"]) { return; }
+                                if(!savedFeatures["autoSelectPool"] || !siteName.includes("Minden")) { return; }
                                 const PoolConfigModal = document.querySelector('#PoolConfigModal');
                                 const PoolConfigModalContent = document.querySelector('#PoolConfigModalContent');
                                 if (!PoolConfigModal || !PoolConfigModalContent) {
@@ -8240,7 +8240,7 @@ window.addEventListener('load', function () {
             }
 
             function autoSelectPoolSetup() {
-                if(!savedFeatures["autoSelectPool"]) { return; }
+                if(!savedFeatures["autoSelectPool"] || !siteName.includes("Minden")) { return; }
                 const PoolConfigModal = document.querySelector('#PoolConfigModal');
                 if (!PoolConfigModal) {
                     setTimeout(autoSelectPoolSetup, 500);
