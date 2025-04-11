@@ -3818,6 +3818,10 @@ window.addEventListener('load', function () {
 
                         row.lastContextMenuTime = 0;
                         row.addEventListener('contextmenu', (event) => {
+                            // if the target is a link dont do anything
+                            if(event.target.tagName === 'A') { return; }
+                            
+
                             let curTime = new Date().getTime();
                             if(curTime - row.lastContextMenuTime < 500) { return; }
                             row.lastContextMenuTime = curTime;
