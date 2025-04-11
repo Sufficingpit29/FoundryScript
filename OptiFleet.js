@@ -1816,6 +1816,7 @@ window.addEventListener('load', function () {
                         };
                         allMinersLookup[miner.id] = miner;
 
+                        GM_SuperValue.set(miner.macAddress, minerSNLookup[miner.serialNumber]);
 
                         /*
                         if(miner.avgBoardTemperature > 0) {
@@ -9715,12 +9716,11 @@ window.addEventListener('load', function () {
 
     // Return if the URL doesn't match the IP regex
     if (ipURLMatch) { ///cgi-bin/get_system_info.cgi
-        let minerSNLookup = GM_SuperValue.get("minerSNLookup_Minden", {});
         let curIP = window.location.hostname;
 
         // Keep retrying until m-heading is-size-l is-text is found
         function addSlotLink() {
-            if(!minerSNLookup || !savedFeatures["slotIDLink"]) { return; }
+            if(!savedFeatures["slotIDLink"]) { return; }
 
             const panelSection = document.querySelector('.m-uishell-panel-section');
             let macAddressElement = document.querySelector('.m-stack.m-heading.is-size-xs.is-muted');
@@ -9729,7 +9729,7 @@ window.addEventListener('load', function () {
             }
             const headingAGUI = document.querySelector('.miner-type');
             if (panelSection && macAddressElement && macAddressElement !== "") {
-                let minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddressElement);
+                let minerData = GM_SuperValue.get(macAddressElement);
                 const headingFGUI = panelSection.querySelector('.m-heading.is-size-l.is-muted');
                 if (headingFGUI) {
                     console.log("Miner Data: ", minerData);
@@ -9752,7 +9752,7 @@ window.addEventListener('load', function () {
                         let responseObject = JSON.parse(response);
                         let macAddress = responseObject.macaddr;
                         console.log("MAC Address: ", macAddress);
-                        let minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddress);
+                        let minerData = GM_SuperValue.get(macAddress);
                         if(!minerData || macAddress === undefined) { return; }
                         console.log("Miner Data: ", minerData);
                         const slotLink = document.createElement('a');
