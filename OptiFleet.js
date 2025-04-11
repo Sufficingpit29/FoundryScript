@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.6
+// @version      7.5.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -663,7 +663,7 @@ const errorsToSearch = {
         end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", "Expected RPM:", "Fan Fail count"],
         type: "Main",
         shouldGroup: (text) => {
-            return text.includes("has failed to run at expected RPM") || text.includes("Expected RPM") || text.includes("Fan Fail count");
+            return true;//text.includes("has failed to run at expected RPM") || text.includes("Expected RPM") || text.includes("Fan Fail count");
         },
         textReturn: (text) => {
             /*
@@ -8588,7 +8588,6 @@ window.addEventListener('load', function () {
                                         }
                                     };
 
-
                                     item.click();
                                     clearInterval(interval);
                                 }
@@ -8609,7 +8608,6 @@ window.addEventListener('load', function () {
 
     if (currentUrl.includes("planner.cloud.microsoft") && !currentUrl.includes("iframe")) {
         function PlannerCardPage() {
-
             const filterTextBox = document.querySelector('.ms-SearchBox-field');
             console.log("Current URL: ", currentUrl);
             console.log("Filter Text Box: ", filterTextBox);
@@ -8735,6 +8733,7 @@ window.addEventListener('load', function () {
                     }, 100);
                     return;
                 }
+
                 cards.forEach(card => {
                     const taskName = card.getAttribute('aria-label');
                     const container = card.querySelector('.container');
@@ -8763,6 +8762,7 @@ window.addEventListener('load', function () {
                         console.log("Card not found.");
                     }
                 });
+
                 if(foundCards.length === 0) {
                     setTimeout(() => {
                         FindIfCardExists(serialNumber, findCallback);
@@ -8984,7 +8984,6 @@ window.addEventListener('load', function () {
                 const minerData = minerSNLookup[serialNumber] || {};
                 let minerID = minerData.minerID;
                 
-
                 // Check if the button already exists
                 const openMinerButton = document.querySelector('#openMinerButton');
                 if (openMinerButton && previousMinerID === minerID) {
@@ -8998,7 +8997,6 @@ window.addEventListener('load', function () {
 
                 // Don't try to add the button if the minerID is not found
                 if (!minerID) {
-                    
                     // If the name does seem to be formatted with the serial number, then let the user know it is not found
                     // Check if there are _ in the taskName, and no spaces in the serial number
                     if (taskName.includes('_') && !serialNumber.includes(' ') && serialNumber.length > 5) {
