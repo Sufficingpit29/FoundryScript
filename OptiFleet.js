@@ -2326,7 +2326,8 @@ window.addEventListener('load', function () {
             createHashRateElements();
 
             function addSleepModeMiners(allMinersData) {
-                if(!savedFeatures["sleepModeMiners"]) {return;}
+                console.log("sleepModeMiners", savedFeatures["sleepModeMiners"]);
+                if(!savedFeatures["sleepModeMiners"]) { return; }
 
                 // Loop through all miners and find the sleep mode miners
                 let sleepModeMiners = 0;
@@ -2336,7 +2337,7 @@ window.addEventListener('load', function () {
                     }
                 }
 
-                let sleepModeMinersElement = document.getElementById('sleepModeMiners');
+                let sleepModeMinersElement = document.getElementById('sleepModeMinersElement');
 
                 if( sleepModeMinersElement ) {
                     // Update the sleep mode miners element
@@ -2358,7 +2359,7 @@ window.addEventListener('load', function () {
                     sleepModeMetric.className = 'site-utilization-metrics';
                     sleepModeMetric.innerHTML = `
                         <div class="metric-row">
-                            <a class="m-link" id="sleepModeMiners" href="https://foundryoptifleet.com/Content/Reports/KeyMetricsReport" target="_blank">${sleepModeMiners} Sleep Mode</a>
+                            <a class="m-link" id="sleepModeMinersElement" href="https://foundryoptifleet.com/Content/Reports/KeyMetricsReport" target="_blank">${sleepModeMiners} Sleep Mode</a>
                         </div>
                     `;
 
