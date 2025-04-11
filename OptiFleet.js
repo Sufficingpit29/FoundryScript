@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.91
+// @version      7.5.92
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -36,9 +36,9 @@
 // @run-at       document-start
 // ==/UserScript==
 
-if(currentUrl) { return; }
-const currentUrl = window.location.href;
-if(currentUrl.includes("OptiWatch")) {
+
+let currentURL = window.location.href;
+if(currentURL.includes("OptiWatch")) {
     return;
 }
 
@@ -50,14 +50,14 @@ const allowedSites = [
     "bitmain",
 ];
 
-console.log("Current URL:", currentUrl);
+console.log("Current URL:", currentURL);
 
 // See if the URL likly contains a IP address
 const ipRegex = /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
-const ipURLMatch = currentUrl.match(ipRegex);
+const ipURLMatch = currentURL.match(ipRegex);
 
 // Check if the current URL is allowed
-const allowedSiteMatch = allowedSites.some(site => currentUrl.includes(site));
+const allowedSiteMatch = allowedSites.some(site => currentURL.includes(site));
 
 if(!ipURLMatch && !allowedSiteMatch) {
     console.log("Script not for this site, exiting...");
@@ -119,7 +119,7 @@ features.forEach(feature => {
 });
 GM_SuperValue.set('features', savedFeatures); // Save the default features
 
-if(currentUrl.includes("https://foundryoptifleet.com")) {
+if(currentURL.includes("https://foundryoptifleet.com")) {
     // Add the config cog icon and toggle menu
     const configIcon = document.createElement('img');
     configIcon.setAttribute('src', 'https://img.icons8.com/?size=100&id=2969&format=png&color=FFFFFF');
@@ -322,8 +322,8 @@ let planID = false;
 
 // if url has planner in it, like https://planner.cloud.microsoft/webui/plan/TbJIxx_byEKhuMp-C4tXLGUAD3Tb/view/grid?tid=6681433f-a30d-43cd-8881-8e964fa723ad
 // extract the TbJIxx_byEKhuMp-C4tXLGUAD3Tb
-if(currentUrl.includes('planner')) {
-    planID = getPlannerID(currentUrl);
+if(currentURL.includes('planner')) {
+    planID = getPlannerID(currentURL);
 }
 
 const originalFetch = unsafeWindow.fetch;
@@ -1556,7 +1556,7 @@ window.addEventListener('load', function () {
         
         
         // Add a small edit button to bottom right
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues") && siteName.includes("Minden") && savedFeatures["alertSystem"]) {
+        if(currentURL.includes("https://foundryoptifleet.com/Content/Issues/Issues") && siteName.includes("Minden") && savedFeatures["alertSystem"]) {
 
             // Find hubspot-messages-iframe-container and remove it
             const interval = setInterval(() => {
@@ -2164,7 +2164,7 @@ window.addEventListener('load', function () {
         }
 
         // Non-Bitcoin Hash Rate Logic
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
+        if(currentURL.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
 
             // Function to add another hash rate info element to the page
             function addHashRateInfoElement(title, totalHashRate, totalHashRatePotential, totalMiners) {
@@ -2369,7 +2369,7 @@ window.addEventListener('load', function () {
         }
 
         // SN Scanner Logic
-        if(currentUrl.includes("https://foundryoptifleet.com/")) {
+        if(currentURL.includes("https://foundryoptifleet.com/")) {
 
             function createNotification(text) {
                 const notification = document.createElement('div');
@@ -2497,7 +2497,7 @@ window.addEventListener('load', function () {
         }
 
         // Copy Miner Details Logic
-        if (currentUrl.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) {
+        if (currentURL.includes("foundryoptifleet.com/Content/Miners/IndividualMiner")) {
             console.log("Individual Miner Page");
 
             const styleSheet = `
@@ -3066,7 +3066,7 @@ window.addEventListener('load', function () {
 
             const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
             let findLog = false;
-            if(quickGoToLog && currentUrl.includes(quickGoToLog.minerID)) {
+            if(quickGoToLog && currentURL.includes(quickGoToLog.minerID)) {
                 findLog = quickGoToLog.errorText;
                 GM_SuperValue.set('quickGoToLog', false);
             }
@@ -4370,7 +4370,7 @@ window.addEventListener('load', function () {
 
         //--------------------------------------------
         // Scan Logic/Auto Reboot Logic
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
+        if(currentURL.includes("https://foundryoptifleet.com/Content/Issues/Issues")) {
 
             // Add the export XLSX action for only selected rows, and change current to say All
             const issuesActionsDropdown = document.querySelector('#issuesActionsDropdown .m-menu');
@@ -7930,13 +7930,13 @@ window.addEventListener('load', function () {
             }, 1000);
         }
         
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/List")) {
+        if(currentURL.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/List")) {
             // -- Add Breaker Number to Slot ID --
             addBreakerNumberToSlotID();
         }
 
         // Individual Miner Page added data boxes
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Miners/IndividualMiner")) {
+        if(currentURL.includes("https://foundryoptifleet.com/Content/Miners/IndividualMiner")) {
             function addDataBox(title, data, updateFunc, updateInterval) {
                 // Add new m-box to m-grid-list
                 const mGridList = document.querySelector('.m-grid-list');
@@ -7978,7 +7978,7 @@ window.addEventListener('load', function () {
                 return mBox;
             }
 
-            const minerID = currentUrl.match(/id=(\d+)/)[1];
+            const minerID = currentURL.match(/id=(\d+)/)[1];
             function parsePathData(d) {
                 const commands = d.match(/[a-zA-Z][^a-zA-Z]*/g);
                 let currentY = 0;
@@ -8384,7 +8384,7 @@ window.addEventListener('load', function () {
         }
 
         // Add temps for all containers if in overview page and are in minden
-        if(currentUrl.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview") && siteName.includes("Minden")) {
+        if(currentURL.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview") && siteName.includes("Minden")) {
             if(!savedFeatures["avgContainerTemps"]) {
                 return;
             }
@@ -8558,7 +8558,7 @@ window.addEventListener('load', function () {
     }
 
     // Only run on the OptiFleet website
-    if(currentUrl.includes("https://foundryoptifleet.com")) {
+    if(currentURL.includes("https://foundryoptifleet.com")) {
 
         OptiFleetSpecificLogic();
 
@@ -8600,7 +8600,7 @@ window.addEventListener('load', function () {
         */
     }
 
-    if (currentUrl.includes("foundrydigitalllc.sharepoint.com/") ) {
+    if (currentURL.includes("foundrydigitalllc.sharepoint.com/") ) {
         let taskName = GM_SuperValue.get("taskName", "");
         const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
         const minerType = detailsData['type'];
@@ -8729,10 +8729,10 @@ window.addEventListener('load', function () {
         }
     }
 
-    if (currentUrl.includes("planner.cloud.microsoft") && !currentUrl.includes("iframe")) {
+    if (currentURL.includes("planner.cloud.microsoft") && !currentURL.includes("iframe")) {
         function PlannerCardPage() {
             const filterTextBox = document.querySelector('.ms-SearchBox-field');
-            console.log("Current URL: ", currentUrl);
+            console.log("Current URL: ", currentURL);
             console.log("Filter Text Box: ", filterTextBox);
             if (!filterTextBox) {
                 setTimeout(() => {
@@ -8950,7 +8950,7 @@ window.addEventListener('load', function () {
 
             // Logic for looping through all the planner cards, and saving the miner serial number and the category it is in, so we can use it in optifleet
             let setDate = false;
-            let plannerID = getPlannerID(currentUrl); //.match(/plan\/([^?]+)/)[1].split('/')[0];
+            let plannerID = getPlannerID(currentURL); //.match(/plan\/([^?]+)/)[1].split('/')[0];
             let newPlannerData = {};
             let createdOverlay = false;
             let refreshLimit = 30;
@@ -9781,7 +9781,7 @@ window.addEventListener('load', function () {
 
         const quickGoToLog = GM_SuperValue.get('quickGoToLog', false);
         let findLog = false;
-        if(quickGoToLog && currentUrl.includes(quickGoToLog.ip)) {
+        if(quickGoToLog && currentURL.includes(quickGoToLog.ip)) {
             findLog = quickGoToLog.errorText;
             GM_SuperValue.set('quickGoToLog', false);
         }
@@ -10442,7 +10442,7 @@ window.addEventListener('load', function () {
     }
 
     // Auto select saved miner type and algorithm
-    if (currentUrl.includes("https://shop.bitmain.com/support/download")){
+    if (currentURL.includes("https://shop.bitmain.com/support/download")){
         setTimeout(() => {
             var minerType = GM_SuperValue.get('minerType', '').toLowerCase();
             var algorithm = GM_SuperValue.get('algorithm', '').toLowerCase();
