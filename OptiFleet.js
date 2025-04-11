@@ -659,7 +659,7 @@ const errorsToSearch = {
     },
     'Fan Speed Error': {
         icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
-        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed"],
+        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed", "to run at expected RPM"],
         end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", "Expected RPM:", "Fan Fail count"],
         type: "Main",
         shouldGroup: (text) => {
