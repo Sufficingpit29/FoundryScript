@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.7
+// @version      7.5.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -61,6 +61,10 @@ const allowedSiteMatch = allowedSites.some(site => currentUrl.includes(site));
 if(!ipURLMatch && !allowedSiteMatch) {
     console.log("Script not for this site, exiting...");
     return false;
+}
+
+function isFunction(v) {
+    return v instanceof Function;
 }
 
 // Feature enable config menu
@@ -659,8 +663,8 @@ const errorsToSearch = {
     },
     'Fan Speed Error': {
         icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
-        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed", "to run at expected RPM"],
-        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost", "Expected RPM:", "Fan Fail count"],
+        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed", "to run at expected RPM", "minFans Required", "ERROR_FAN_LOST: fan lost", "Expected RPM:", "Fan Fail count", "Detected less than the min Required number of fans"],
+        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost"],
         type: "Main",
         shouldGroup: (text) => {
             return true;//text.includes("has failed to run at expected RPM") || text.includes("Expected RPM") || text.includes("Fan Fail count");
@@ -1142,7 +1146,7 @@ function runErrorScanLogic(logText) {
                         let shouldAddNew = true;
                         const lastErrorIndex = errorsFound.length - 1;
                         const lastError = errorsFound[lastErrorIndex];
-                        if(lastError && lastError.name === error && errorData.shouldGroup && errorData.shouldGroup(errorText)) {
+                        if(lastError && lastError.name === error && ((!isFunction(errorData.shouldGroup) && errorData.shouldGroup != false) || (isFunction(errorData.shouldGroup) && errorData.shouldGroup(errorText))) ) {
                             // If the error should be grouped, find the last occurrence of the error in the errorsFound array and update it, but only if it is directly after the last error found
                             if (lastError.end >= startIndex-1) {
                                 // Update the last error found with the new error text
@@ -3771,6 +3775,56 @@ window.addEventListener('load', function () {
                             minersListTableLookup[minerID] = minersListTableLookup[minerID] || {};
                             minersListTableLookup[minerID][key] = colRowElement;
                         }
+                    }
+
+                    
+
+                    if(minerLinkElement) {
+                        let rightClick = false;
+
+                        function positionContextMenu() {
+                            const contextMenu = document.getElementById('issueMenu') || document.querySelector('#minerSlotMenu');
+                            if (contextMenu) {
+                                contextMenu.style.position = 'fixed';
+                                contextMenu.style.top = event.clientY + 'px';
+                                contextMenu.style.left = event.clientX + 'px';
+
+                                // If it goes off the screen, move it back on
+                                if (event.clientX + contextMenu.offsetWidth > window.innerWidth) {
+                                    contextMenu.style.left = (window.innerWidth - contextMenu.offsetWidth) + 'px';
+                                }
+                                if (event.clientY + contextMenu.offsetHeight > window.innerHeight) {
+                                    contextMenu.style.top = (window.innerHeight - contextMenu.offsetHeight) + 'px';
+                                }
+                            }
+                        }
+
+                        let lastClickTime = 0;
+                        let allowClick = true;
+                        minerLinkElement.addEventListener('click', function(event) {
+                            let curTime = new Date().getTime();
+                            if(curTime - lastClickTime < 500 && !allowClick) { return; }
+                            allowClick = false;
+                            lastClickTime = curTime;
+                            if (event.isTrusted) {
+                                event.isTrusted = false;
+                                allowClick = true;
+                                event.preventDefault();
+                                event.stopPropagation();
+                                minerLinkElement.click();
+                                positionContextMenu();
+                            }
+                        });
+
+                        row.lastContextMenuTime = 0;
+                        row.addEventListener('contextmenu', (event) => {
+                            let curTime = new Date().getTime();
+                            if(curTime - row.lastContextMenuTime < 500) { return; }
+                            row.lastContextMenuTime = curTime;
+                            event.preventDefault();
+                            minerLinkElement.click();
+                            positionContextMenu();
+                        });
                     }
                 });
             }
