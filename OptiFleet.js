@@ -77,12 +77,14 @@ const features = [
     { name: 'Auto-Select Pool', id: 'autoSelectPool', category: 'All' },
 
     // Overview Page
+    { name: 'Sleep Mode Miners', id: 'sleepModeMiners', category: 'Overview' },
     { name: 'Averaged Container Temps', id: 'avgContainerTemps', category: 'Overview' },
 
     // Miner List
     { name: 'Miner Name Link', id: 'minerNameLink', category: 'Miner Table' },
     { name: 'Breaker Number', id: 'breakerNumber', category: 'Miner Table' },
     { name: 'Realtime Hashrate', id: 'realtimeHashrateData', category: 'Miner Table', startOff: true },
+    { name: 'Right Click Context Menu', id: 'rightClickContextMenu', category: 'Miner Table' },
 
     // Issues page
     { name: 'Down Scan', id: 'downScan', category: 'Issues' },
@@ -2324,6 +2326,8 @@ window.addEventListener('load', function () {
             createHashRateElements();
 
             function addSleepModeMiners(allMinersData) {
+                if(!savedFeatures["sleepModeMiners"]) {return;}
+
                 // Loop through all miners and find the sleep mode miners
                 let sleepModeMiners = 0;
                 for (const [index, minerData] of Object.entries(allMinersData)) {
@@ -3844,7 +3848,7 @@ window.addEventListener('load', function () {
 
                     
 
-                    if(minerLinkElement) {
+                    if(minerLinkElement && savedFeatures["rightClickContextMenu"]) {
                         let rightClick = false;
 
                         function positionContextMenu() {
