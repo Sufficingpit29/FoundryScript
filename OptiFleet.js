@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.5.92
+// @version      7.6.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2354,7 +2354,7 @@ window.addEventListener('load', function () {
                     sleepModeMetric.className = 'site-utilization-metrics';
                     sleepModeMetric.innerHTML = `
                         <div class="metric-row">
-                            <span class="m-link" id="sleepModeMiners">${sleepModeMiners} Sleep Mode</span>
+                            <a class="m-link" id="sleepModeMiners" href="https://foundryoptifleet.com/Content/Reports/KeyMetricsReport" target="_blank">${sleepModeMiners} Sleep Mode</a>
                         </div>
                     `;
 
