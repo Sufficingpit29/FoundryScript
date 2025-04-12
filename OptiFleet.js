@@ -692,8 +692,8 @@ const errorsToSearch = {
     },
     'Fan Speed Error': {
         icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
-        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed", "to run at expected RPM", "minFans Required", "ERROR_FAN_LOST: fan lost", "Expected RPM:", "Fan Fail count", "Detected less than the min Required number of fans"],
-        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost"],
+        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed", "to run at expected RPM", "minFans Required", "Expected RPM:", "Fan Fail count", "Detected less than the min Required number of fans"],
+        end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost"],
         type: "Main",
         shouldGroup: (text) => {
             return true;//text.includes("has failed to run at expected RPM") || text.includes("Expected RPM") || text.includes("Fan Fail count");
