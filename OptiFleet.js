@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.0
+// @version      7.6.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -562,6 +562,32 @@ const errorsToSearch = {
             return text.match(/Chain\s\d+\sonly\sfind/g)
                 ? "Bad HB Chain [" + text.match(/Chain\s\d+\sonly\sfind/g).map(match => match.replace("Chain ", "").replace(" only find", "")).join(", ") + "]"
                 : "Bad HB Chain [?]";
+        }
+    },
+    'Bad ASIC Number': {
+        icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
+        start: ["bad asic num"],
+        end: "] asic[",
+        type: "Main",
+        textReturn: (text) => {
+            /*
+            2025-04-12 01:22:12 chain[2] bad asic num: 9 9 0
+            2025-04-12 01:22:12 chain[2] asic[8] [124] 7205547-7205423 [0] 25514-25514
+            */
+
+            const badAsicLines = text.match(/chain\[\d+\]\sbad\sasic\snum:\s\d+\s\d+\s\d+/g);
+            if (badAsicLines) {
+                const badAsicNumbers = badAsicLines.map(line => {
+                    const chainNumber = line.match(/chain\[(\d+)\]/)[1];
+                    const asicNumbers = line.match(/bad\sasic\snum:\s(\d+)\s(\d+)\s(\d+)/);
+                    if (asicNumbers) {
+                        return `Chain ${chainNumber} Bad ASICs: (${asicNumbers[1]}, ${asicNumbers[2]}, ${asicNumbers[3]})`;
+                    }
+                }).join(", ");
+                return badAsicNumbers ? badAsicNumbers : "Bad ASIC Number [?]";
+            }
+
+            return "Bad ASIC Number";
         }
     },
     'Bad Hashboard Chain FDMiner ': {
@@ -2359,7 +2385,7 @@ window.addEventListener('load', function () {
                     const sleepModeMetric = document.createElement('div');
                     sleepModeMetric.className = 'site-utilization-metrics';
                     sleepModeMetric.innerHTML = `
-                        <div class="metric-row">
+                        <div class="metric-row" style="font-size: 0.8em;">
                             <a class="m-link" id="sleepModeMinersElement" href="https://foundryoptifleet.com/Content/Reports/KeyMetricsReport" target="_blank">${sleepModeMiners} Sleep Mode</a>
                         </div>
                     `;
