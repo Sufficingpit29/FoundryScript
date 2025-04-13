@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.1
+// @version      7.6.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1842,7 +1842,7 @@ window.addEventListener('load', function () {
                         };
                         allMinersLookup[miner.id] = miner;
 
-                        GM_SuperValue.set(miner.macAddress, minerSNLookup[miner.serialNumber]);
+                        //GM_SuperValue.set(miner.macAddress, minerSNLookup[miner.serialNumber]);
 
                         /*
                         if(miner.avgBoardTemperature > 0) {
@@ -9753,9 +9753,11 @@ window.addEventListener('load', function () {
             if(macAddressElement) {
                 macAddressElement = macAddressElement.textContent.split(': ')[1].trim();
             }
+
+            let minerSNLookup = GM_SuperValue.get("minerSNLookup_Minden", {});
             const headingAGUI = document.querySelector('.miner-type');
             if (panelSection && macAddressElement && macAddressElement !== "") {
-                let minerData = GM_SuperValue.get(macAddressElement);
+                let minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddressElement);
                 const headingFGUI = panelSection.querySelector('.m-heading.is-size-l.is-muted');
                 if (headingFGUI) {
                     console.log("Miner Data: ", minerData);
@@ -9778,7 +9780,7 @@ window.addEventListener('load', function () {
                         let responseObject = JSON.parse(response);
                         let macAddress = responseObject.macaddr;
                         console.log("MAC Address: ", macAddress);
-                        let minerData = GM_SuperValue.get(macAddress);
+                        let minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddress);
                         if(!minerData || macAddress === undefined) { return; }
                         console.log("Miner Data: ", minerData);
                         const slotLink = document.createElement('a');
