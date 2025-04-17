@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.3
+// @version      7.6.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1863,6 +1863,10 @@ window.addEventListener('load', function () {
                     console.log("Averaged Container Miner Temps:", averagedContainerMinerTemps);*/
 
                     GM_SuperValue.set("minerSNLookup_"+siteName, minerSNLookup);
+
+                    let currentSiteNames = GM_SuperValue.get("siteNames", {});
+                    currentSiteNames[siteName] = new Date().getTime();
+                    GM_SuperValue.set("siteNames", currentSiteNames);
 
                     // Set the IP Address to "Lease Expired" if it's null
                     resp.miners.filter(miner => miner.ipAddress == null).forEach(miner => miner.ipAddress = "Lease Expired");
@@ -9754,12 +9758,24 @@ window.addEventListener('load', function () {
                 macAddressElement = macAddressElement.textContent.split(': ')[1].trim();
             }
 
-            let minerSNLookup = GM_SuperValue.get("minerSNLookup_Minden", {});
+            let currentSiteNames = GM_SuperValue.get("siteNames", {});
+            let minerData = null;
+            const sortedSiteNames = Object.entries(currentSiteNames).sort((a, b) => b[1] - a[1]);
+            
             const headingAGUI = document.querySelector('.miner-type');
             if (panelSection && macAddressElement && macAddressElement !== "") {
-                let minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddressElement);
+
+                // Loop through the site names and get the snlookup for each site if the timestamp is not older than a day
+                for (const [key, value] of sortedSiteNames) {
+                    let minerSNLookup = GM_SuperValue.get("minerSNLookup_" + key, {});
+                    minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddressElement);
+                    if(minerData) {
+                        break;
+                    }
+                }
+
                 const headingFGUI = panelSection.querySelector('.m-heading.is-size-l.is-muted');
-                if (headingFGUI) {
+                if (headingFGUI && minerData) {
                     console.log("Miner Data: ", minerData);
                     const slotLink = document.createElement('a');
                     slotLink.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerData.minerID}`;
@@ -9780,7 +9796,16 @@ window.addEventListener('load', function () {
                         let responseObject = JSON.parse(response);
                         let macAddress = responseObject.macaddr;
                         console.log("MAC Address: ", macAddress);
-                        let minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddress);
+
+                        // Loop through the site names and get the snlookup for each site if the timestamp is not older than a day
+                        for (const [key, value] of sortedSiteNames) {
+                            let minerSNLookup = GM_SuperValue.get("minerSNLookup_" + key, {});
+                            minerData = Object.values(minerSNLookup).find(data => data.macAddress === macAddress);
+                            if(minerData) {
+                                break;
+                            }
+                        }
+
                         if(!minerData || macAddress === undefined) { return; }
                         console.log("Miner Data: ", minerData);
                         const slotLink = document.createElement('a');
