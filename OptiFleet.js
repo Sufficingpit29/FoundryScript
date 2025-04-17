@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.4
+// @version      7.6.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -711,6 +711,16 @@ const errorsToSearch = {
             }
 
             /*
+            Fan 4 has failed to run at expected RPM
+            */
+
+            const fanFailLines3 = text.match(/Fan \d+ has failed to run at expected RPM/g);
+            if (fanFailLines3) {
+                const fanFailNumbers = fanFailLines3.map(line => line.replace("Fan ", "").replace(" has failed to run at expected RPM", "").trim()).join(", ");
+                return "Fan Fail [" + fanFailNumbers + "]";
+            }
+
+            /*
             2025-03-29 03:36:12 Error, fan lost, only find 3 (< 4)
             2025-03-29 03:36:12 fan_id = 0, fan_speed = 0
             2025-03-29 03:36:12 fan_id = 1, fan_speed = 6970
@@ -745,7 +755,6 @@ const errorsToSearch = {
             }
             return "Fan Fail";
         },
-        onlySeparate: true
     },
     'SOC INIT Fail': {
         icon: "https://img.icons8.com/?size=100&id=gUSpFL9LqIG9&format=png&color=FFFFFF",
@@ -4151,9 +4160,23 @@ window.addEventListener('load', function () {
                                         const ipHref = "http://" + ip + '/cgi-bin/stats.cgi';
                                         fetchGUIData(ipHref)
                                             .then(response => {
+
+                                                if(response.trim() == "Socket connect failed: Connection refused") {
+                                                    element.textContent = 'Rebooting...?';
+                                                    element.hashboardRates = 'Possibly rebooting...';
+                                                    element.tooltip.textContent = element.hashboardRates;
+                                                    return;
+                                                }
+                                                //console.log("response", response)
                                                 // Convert the response from json if possible
                                                 if (response && !response.STATS) {
                                                     response = JSON.parse(response);
+                                                }
+
+                                                if(response.STATS && response.STATS.length == 0) {
+                                                    element.textContent = 'Initializing...?';
+                                                    element.hashboardRates = 'Possibly starting after a reboot?';
+                                                    element.tooltip.textContent = element.hashboardRates;
                                                 }
 
                                                 let totalHash = 0;
@@ -4172,16 +4195,21 @@ window.addEventListener('load', function () {
                                                 totalHashPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage;
                                                 let [newRate, hashType] = convertHashRate(totalHash, "GH");
                                                 totalHash = newRate + " " + hashType;
+
+                                                let elaspedTime = response.STATS[0].elapsed;
+                                                let formattedTime = Math.floor(elaspedTime / 3600) + "h " + Math.floor((elaspedTime % 3600) / 60) + "m " + (elaspedTime % 60) + "s";
                                                 if (totalHash) { 
                                                     element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
                                                     element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n\n";
                                                     element.hashboardRates += chains.map((chain, index) => 
                                                         `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
                                                     ).join('\n');
+                                                    element.hashboardRates += `\nUptime: ${formattedTime}`;
                                                     element.tooltip.textContent = element.hashboardRates
                                                 } else {
                                                     element.textContent = 'Realtime: N/A';
                                                     element.hashboardRates = 'Realtime data not available.';
+                                                    element.tooltip.textContent = element.hashboardRates;
                                                 }
                                             })
                                             .catch(error => {
@@ -4194,14 +4222,13 @@ window.addEventListener('load', function () {
                                         const ipHref = 'http://' + ip + '/cgi-bin/stats.cgi';
                                         fetchGUIData(ipHref)
                                             .then(response => {
+                                                console.log("response", response)
                                                 // Extract relevant data from the response
                                                 if (response && !response.STATS) {
                                                     response = JSON.parse(response);
                                                 }
-                                                console.log("response", response);
 
                                                 const stats = response.STATS[1];
-                                                console.log("stats", stats);
                                                 const totalHash = convertRates(stats["total rate"], "TH", "H"); // Convert to H/s
                                                 const totalHashIdeal = convertRates(stats["total_rateideal"], "GH", "H"); // Convert to H/s
                                                 const totalHashPercentage = (totalHash / totalHashIdeal) * 100;
@@ -4230,16 +4257,22 @@ window.addEventListener('load', function () {
                                                 const formattedHash = `${newRate} ${hashType}`;
                                                 const formattedPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage.toFixed(2);
 
+                                                let elaspedTime = stats.Elapsed
+                                                let formattedTime = Math.floor(elaspedTime / 3600) + "h " + Math.floor((elaspedTime % 3600) / 60) + "m " + (elaspedTime % 60) + "s";
+
                                                 if (totalHash) {
                                                     element.textContent = `Realtime: ${formattedPercentage}%`;
                                                     element.hashboardRates = `Total: ${formattedHash} / ${formattedPercentage}%\n\n`;
                                                     element.hashboardRates += chains.map((chain, index) =>
                                                         `HB${index + 1}: ${(chain.real).toFixed(0)} ${idealRatePerChainHashType} / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
                                                     ).join('\n');
+
+                                                    element.hashboardRates += `\nUptime: ${formattedTime}`;
                                                     element.tooltip.textContent = element.hashboardRates;
                                                 } else {
                                                     element.textContent = 'Realtime: N/A';
                                                     element.hashboardRates = 'Realtime data not available.';
+                                                    element.tooltip.textContent = element.hashboardRates;
                                                 }
                                             })
                                             .catch(error => {
