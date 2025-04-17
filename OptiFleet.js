@@ -2108,17 +2108,6 @@ window.addEventListener('load', function () {
                 }
             }, 1000);
         }
-        
-        setInterval(function() {
-            // Constantly checks if there siteId or companyId changes
-            if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
-                //updateAllMinersData(true);
-                console.log("Site ID or Company ID has changed.");
-
-                // Reload the page (Just far easier than trying to update the data and handle all the edge cases)
-                window.location.reload();
-            }
-        }, 500);
 
         // ------------------------------
 
@@ -2207,6 +2196,17 @@ window.addEventListener('load', function () {
 
         // Non-Bitcoin Hash Rate Logic
         if(currentURL.includes("https://foundryoptifleet.com/Content/Dashboard/SiteOverview")) {
+
+            setInterval(function() {
+                // Constantly checks if there siteId or companyId changes
+                if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
+                    //updateAllMinersData(true);
+                    console.log("Site ID or Company ID has changed.");
+    
+                    // Reload the page (Just far easier than trying to update the data and handle all the edge cases)
+                    window.location.reload();
+                }
+            }, 500);
 
             // Function to add another hash rate info element to the page
             function addHashRateInfoElement(title, totalHashRate, totalHashRatePotential, totalMiners) {
