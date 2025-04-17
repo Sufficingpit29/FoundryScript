@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.5
+// @version      7.6.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -581,10 +581,10 @@ const errorsToSearch = {
                     const chainNumber = line.match(/chain\[(\d+)\]/)[1];
                     const asicNumbers = line.match(/bad\sasic\snum:\s(\d+)\s(\d+)\s(\d+)/);
                     if (asicNumbers) {
-                        return `Chain ${chainNumber} Bad ASICs: (${asicNumbers[1]}, ${asicNumbers[2]}, ${asicNumbers[3]})`;
+                        return chainNumber//`[${chainNumber}]: (${asicNumbers[1]}, ${asicNumbers[2]}, ${asicNumbers[3]})`;
                     }
                 }).join(", ");
-                return badAsicNumbers ? badAsicNumbers : "Bad ASIC Number [?]";
+                return badAsicNumbers ? "Bad ASIC Num [" + badAsicNumbers + "]" : "Bad ASIC Number [?]";
             }
 
             return "Bad ASIC Number";
@@ -4173,7 +4173,7 @@ window.addEventListener('load', function () {
                                                     response = JSON.parse(response);
                                                 }
 
-                                                if(response.STATS && response.STATS.length == 0) {
+                                                if(response.STATS && (response.STATS.length == 0 || !response.STATS[0] || !response.STATS[0].chain)) {
                                                     element.textContent = 'Initializing...?';
                                                     element.hashboardRates = 'Possibly starting after a reboot?';
                                                     element.tooltip.textContent = element.hashboardRates;
