@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.6
+// @version      7.6.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -4173,7 +4173,7 @@ window.addEventListener('load', function () {
                                                     response = JSON.parse(response);
                                                 }
 
-                                                if(response.STATS && (response.STATS.length == 0 || !response.STATS[0] || !response.STATS[0].chain)) {
+                                                if(response.STATS && (response.STATS.length == 0 || !response.STATS[0] || response.STATS[0].chain === undefined || response.STATS[0].rate_ideal === 0 || response.STATS[0].chain[0].rate_ideal === 0)) {
                                                     element.textContent = 'Initializing...?';
                                                     element.hashboardRates = 'Possibly starting after a reboot?';
                                                     element.tooltip.textContent = element.hashboardRates;
@@ -4196,14 +4196,46 @@ window.addEventListener('load', function () {
                                                 let [newRate, hashType] = convertHashRate(totalHash, "GH");
                                                 totalHash = newRate + " " + hashType;
 
+                                                let fanNumbers = response.STATS[0].fan;
+                                                //"fan": [0, 7000, 6970, 6960]
+                                                // If any fan number is 0 or just far lower than others, list that index as an issue fan
+                                                let issueFans = fanNumbers.map((fan, index) => {
+                                                    if (fan === 0) {
+                                                        return `[${index}]`;
+                                                    } else if (Math.abs(fan - Math.max(...fanNumbers)) > 1000) {
+                                                        return `[${index}]?`;
+                                                    }
+                                                    return null;
+                                                }).filter(index => index !== null);
+
                                                 let elaspedTime = response.STATS[0].elapsed;
                                                 let formattedTime = Math.floor(elaspedTime / 3600) + "h " + Math.floor((elaspedTime % 3600) / 60) + "m " + (elaspedTime % 60) + "s";
                                                 if (totalHash) { 
                                                     element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
-                                                    element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n\n";
+                                                    element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n";
+                                                    if(chains.length >= 1) {
+                                                        element.hashboardRates += `\n`;
+                                                    }
+                                                    
                                                     element.hashboardRates += chains.map((chain, index) => 
                                                         `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
                                                     ).join('\n');
+
+                                                    let asicDifference = false;
+                                                    chains.forEach((chain, index) => {
+                                                        // If the asic count is 0 or not equal to other counts, mark it as an issue
+                                                        if (chain.asics === 0 || chain.asics !== chains[0].asics) {
+                                                            asicDifference = true;
+                                                        }
+                                                    });
+                                                    
+                                                    if (issueFans.length > 0) {
+                                                        element.textContent += ` | Fan`
+                                                        element.hashboardRates += `\nIssue Fans: ${issueFans.join(', ')}`;
+                                                    } else if(asicDifference) {
+                                                        element.textContent += ` | ASIC`
+                                                    }
+
                                                     element.hashboardRates += `\nUptime: ${formattedTime}`;
                                                     element.tooltip.textContent = element.hashboardRates
                                                 } else {
@@ -4215,7 +4247,7 @@ window.addEventListener('load', function () {
                                             .catch(error => {
                                                 console.log("Error fetching realtime hash rate: ", error);
                                                 element.textContent = 'Realtime: Error';
-                                                element.hashboardRates = 'Error fetching data.\nMiner is offline or unreachable.';
+                                                element.hashboardRates = 'Error fetching data.\nMiner is offline or unreachable.\n' + error;
                                                 element.tooltip.textContent = element.hashboardRates;
                                             });
                                     } else {
