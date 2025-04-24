@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.8
+// @version      7.6.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -822,6 +822,37 @@ const errorsToSearch = {
             return true;
         },
     },
+    'Bad Power Supply': {
+        icon: "https://img.icons8.com/?size=100&id=16422&format=png&color=FFFFFF",
+        start: "vol:",
+        conditions: (text) => {
+            // temp:14,vol:0.13,power:222
+            // if it has temp and power
+            if(text.includes("temp:") && text.includes("power:")) {
+                // Extract the voltage number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
+                const parts = text.split("vol:");
+                if (parts.length > 1) {
+                    const volPart = parts[1].split(",")[0];
+                    const voltage = parseFloat(volPart);
+                    return voltage < 1;
+                }
+            }
+            return false
+        },
+        type: "Main",
+        textReturn: (text) => {
+            // Extract the voltage number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
+            const parts = text.split("vol:");
+            if (parts.length > 1) {
+                const volPart = parts[1].split(",")[0];
+                const voltage = parseFloat(volPart);
+                return "Bad Power Supply (" + voltage + "V)";
+            }
+            return "Bad Power Supply";
+        },
+        showOnce: "last",
+    },
+
     'Power Status Fail': {
         icon: "https://img.icons8.com/?size=100&id=16422&format=png&color=FFFFFF",
         start: "bitmain_get_power_status failed",
@@ -4293,15 +4324,15 @@ window.addEventListener('load', function () {
                                                             errorTextAppend = ` | ASIC`
                                                         }
 
-                                                        if(mainErrors.includes("Bad HB")) {
+                                                        if(mainErrors.includes("Temperature")) {
+                                                            errorTextAppend = " | Temperature";
+                                                        } else if(mainErrors.includes("Voltage") || mainErrors.includes("Power Supply")) {
+                                                            errorTextAppend = " | PSU";
+                                                        } else if(mainErrors.includes("Bad HB")) {
                                                             errorTextAppend = " | Bad HB";
                                                         } else if(mainErrors.includes("Fan Fail")) {
                                                             errorTextAppend = " | Fan Fail";
-                                                        } else if(mainErrors.includes("Temperature")) {
-                                                                errorTextAppend = " | Temperature";
-                                                        } else if(mainErrors.includes("Voltage")) {
-                                                            errorTextAppend = " | Voltage";
-                                                        } 
+                                                        }
 
                                                         element.textContent += errorTextAppend;
 
