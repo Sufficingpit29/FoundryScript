@@ -4327,7 +4327,7 @@ window.addEventListener('load', function () {
                                                         if(mainErrors.includes("Temperature")) {
                                                             errorTextAppend = " | Temperature";
                                                         } else if(mainErrors.includes("Voltage")) {
-                                                            errorTextAppend = " | Voltage Abnormality";
+                                                            errorTextAppend = " | Voltage";
                                                         } else if(mainErrors.includes("Bad HB")) {
                                                             errorTextAppend = " | Bad HB";
                                                         } else if(mainErrors.includes("Fan Fail")) {
