@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.7
+// @version      7.6.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -745,12 +745,27 @@ const errorsToSearch = {
             if (fanFailLines2) {
                 // For all fan speed 0 lines, get the fan number
                 console.log("Fan Fail Lines: ", fanFailLines2);
-                const fanFailNumbers = fanFailLines2.map(line => {
+                let fanSpeeds = [];
+                
+                for (const line of fanFailLines2) {
+                    // Extract the fan number and speed from the line
                     const fanNumber = line.split("fan_id = ")[1].split(",")[0].trim();
                     const fanSpeed = line.split("fan_speed = ")[1].trim().split("(")[0].trim();
                     console.log("Fan Number: ", fanNumber, " Fan Speed: ", fanSpeed);
-                    return fanSpeed === "0" ? fanNumber : null;
-                }).filter(Boolean).join(", ");
+                    fanSpeeds.push(Number(fanSpeed));
+                }
+
+                // If any of the fan numbers are 0, or are far away from the others, return them as failed fans
+                let failedFans = [];
+                
+                for (let i = 0; i < fanSpeeds.length; i++) {
+                    let fanSpeed = fanSpeeds[i];
+                    if(fanSpeed === 0 || Math.abs(fanSpeed - Math.max(...fanSpeeds)) > 2000) {
+                        failedFans.push(i);
+                    }
+                }
+
+                const fanFailNumbers = failedFans.map(fan => fan.toString()).join(", ");
                 return "Fan Fail [" + fanFailNumbers + "]";
             }
             return "Fan Fail";
@@ -762,6 +777,16 @@ const errorsToSearch = {
         end: ["ERROR_SOC_INIT", "stop_mining: soc init failed!", "stop_mining: basic init failed!"],
         type: "Main",
         onlySeparate: true
+    },
+    'Max ASIC Fail Num': {
+        icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
+        start: "miner has reached find asic max fail num,reboot times:",
+        textReturn: (text) => {
+            // miner has reached find asic max fail num,reboot times:11.
+            const failNum = text.split("reboot times:")[1].trim().split(".")[0];
+            return "Max ASIC Fail Num (" + failNum + " Reboots)";
+        },
+        type: "Main",
     },
     'EEPROM Error': {
         icon: "https://img.icons8.com/?size=100&id=9040&format=png&color=FFFFFF",
@@ -4155,6 +4180,7 @@ window.addEventListener('load', function () {
                                 realtimeHashrateElement.style.marginTop = '5px';
                                 hashCell.appendChild(realtimeHashrateElement);
 
+                                let minerErrors = {};
                                 function fetchRealtimeHashRate(element, ip, isFoundryGUI) {
                                     if(!isFoundryGUI) {
                                         const ipHref = "http://" + ip + '/cgi-bin/stats.cgi';
@@ -4162,8 +4188,8 @@ window.addEventListener('load', function () {
                                             .then(response => {
 
                                                 if(response.trim() == "Socket connect failed: Connection refused") {
-                                                    element.textContent = 'Rebooting...?';
-                                                    element.hashboardRates = 'Possibly rebooting...';
+                                                    element.textContent = 'Rebooting...';
+                                                    element.hashboardRates = 'Probably rebooting.\nOr something really wacky happened...';
                                                     element.tooltip.textContent = element.hashboardRates;
                                                     return;
                                                 }
@@ -4173,88 +4199,153 @@ window.addEventListener('load', function () {
                                                     response = JSON.parse(response);
                                                 }
 
-                                                if(response.STATS && (response.STATS.length == 0 || !response.STATS[0] || response.STATS[0].chain === undefined || response.STATS[0].rate_ideal === 0 || response.STATS[0].chain[0].rate_ideal === 0)) {
-                                                    element.textContent = 'Initializing...?';
-                                                    element.hashboardRates = 'Possibly starting after a reboot?';
-                                                    element.tooltip.textContent = element.hashboardRates;
-                                                }
+                                                
 
-                                                let totalHash = 0;
-                                                let chains = [];
-                                                for (let i = 0; i < response.STATS[0].chain.length; i++) {
-                                                    totalHash += response.STATS[0].chain[i].rate_real;
-                                                    chains.push({
-                                                        real: response.STATS[0].chain[i].rate_real,
-                                                        ideal: response.STATS[0].chain[i].rate_ideal,
-                                                        asics: response.STATS[0].chain[i].asic_num,
-                                                        percentage: (response.STATS[0].chain[i].rate_real / response.STATS[0].chain[i].rate_ideal) * 100
-                                                    });
-                                                }
-                                                let totalHashIdeal = response.STATS[0].rate_ideal;
-                                                let totalHashPercentage = (totalHash / totalHashIdeal) * 100;
-                                                totalHashPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage;
-                                                let [newRate, hashType] = convertHashRate(totalHash, "GH");
-                                                totalHash = newRate + " " + hashType;
+                                                const ipHref2 = "http://" + ip + '/cgi-bin/summary.cgi';
+                                                fetchGUIData(ipHref2)
+                                                    .then(response2 => {
 
-                                                let fanNumbers = response.STATS[0].fan;
-                                                //"fan": [0, 7000, 6970, 6960]
-                                                // If any fan number is 0 or just far lower than others, list that index as an issue fan
-                                                let issueFans = fanNumbers.map((fan, index) => {
-                                                    if (fan === 0) {
-                                                        return `[${index}]`;
-                                                    } else if (Math.abs(fan - Math.max(...fanNumbers)) > 1000) {
-                                                        return `[${index}]?`;
-                                                    }
-                                                    return null;
-                                                }).filter(index => index !== null);
-
-                                                let elaspedTime = response.STATS[0].elapsed;
-                                                let formattedTime = Math.floor(elaspedTime / 3600) + "h " + Math.floor((elaspedTime % 3600) / 60) + "m " + (elaspedTime % 60) + "s";
-                                                if (totalHash) { 
-                                                    element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
-                                                    element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n";
-                                                    if(chains.length >= 1) {
-                                                        element.hashboardRates += `\n`;
-                                                    }
+                                                    let mainErrors = minerErrors[ip] || "";
                                                     
-                                                    element.hashboardRates += chains.map((chain, index) => 
-                                                        `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
-                                                    ).join('\n');
-
-                                                    let asicDifference = false;
-                                                    chains.forEach((chain, index) => {
-                                                        // If the asic count is 0 or not equal to other counts, mark it as an issue
-                                                        if (chain.asics === 0 || chain.asics !== chains[0].asics) {
-                                                            asicDifference = true;
+                                                    if (response2) {
+                                                        response2 = JSON.parse(response2);
+                                                    }
+                                                    if(response.STATS && (response.STATS.length == 0 || response.STATS[0].chain === undefined || response.STATS[0].rate_ideal === undefined || (response.STATS[0].chain[0] && response.STATS[0].chain[0].rate_ideal === 0))) {
+                                                        element.textContent = 'Initializing...?';
+                                                        element.tooltip.textContent = 'Possibly starting after a reboot?\nOr is stuck...' + mainErrors;
+                                                        
+                                                        if(response2.SUMMARY && response2.SUMMARY[0] && response2.SUMMARY[0].status) {
+                                                            // Loop through the status and find the first one that is not "s" status
+                                                            let status = response2.SUMMARY[0].status;
+                                                            for(let i = 0; i < status.length; i++) {
+                                                                if(status[i].status !== "s") {
+                                                                    element.textContent = 'Issue: ' + status[i].type;
+                                                                    element.tooltip.textContent += '\n\nStatus Issue: ' + status[i].type + '\n' + status[i].msg;
+                                                                }
+                                                            }
                                                         }
-                                                    });
-                                                    
-                                                    if (issueFans.length > 0) {
-                                                        element.textContent += ` | Fan`
-                                                        element.hashboardRates += `\nIssue Fans: ${issueFans.join(', ')}`;
-                                                    } else if(asicDifference) {
-                                                        element.textContent += ` | ASIC`
+
+                                                        // If there is errors, get the first one and set it as the issue
+                                                        let splitErrors = mainErrors.split('\n');
+                                                        if(splitErrors.length > 1 && !splitErrors[3].includes("No Known Major Errors Found")) {
+                                                            element.textContent = 'Error: ' + splitErrors[3];
+                                                        }
+                                                       
+                                                        return;
                                                     }
 
-                                                    element.hashboardRates += `\nUptime: ${formattedTime}`;
-                                                    element.tooltip.textContent = element.hashboardRates
-                                                } else {
-                                                    element.textContent = 'Realtime: N/A';
-                                                    element.hashboardRates = 'Realtime data not available.';
+                                                    let totalHash = 0;
+                                                    let chains = [];
+                                                    for (let i = 0; i < response.STATS[0].chain.length; i++) {
+                                                        totalHash += response.STATS[0].chain[i].rate_real;
+                                                        chains.push({
+                                                            real: response.STATS[0].chain[i].rate_real,
+                                                            ideal: response.STATS[0].chain[i].rate_ideal,
+                                                            asics: response.STATS[0].chain[i].asic_num,
+                                                            percentage: (response.STATS[0].chain[i].rate_real / response.STATS[0].chain[i].rate_ideal) * 100
+                                                        });
+                                                    }
+                                                    let totalHashIdeal = response.STATS[0].rate_ideal;
+                                                    let totalHashPercentage = (totalHash / totalHashIdeal) * 100;
+                                                    totalHashPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage;
+                                                    let [newRate, hashType] = convertHashRate(totalHash, "GH");
+                                                    totalHash = newRate + " " + hashType;
+
+                                                    let fanNumbers = response.STATS[0].fan;
+                                                    //"fan": [0, 7000, 6970, 6960]
+                                                    // If any fan number is 0 or just far lower than others, list that index as an issue fan
+                                                    let issueFans = fanNumbers.map((fan, index) => {
+                                                        if (fan === 0) {
+                                                            return `[${index}]`;
+                                                        } else if (Math.abs(fan - Math.max(...fanNumbers)) > 1000) {
+                                                            return `[${index}]?`;
+                                                        }
+                                                        return null;
+                                                    }).filter(index => index !== null);
+
+                                                    let elaspedTime = response.STATS[0].elapsed;
+                                                    let formattedTime = Math.floor(elaspedTime / 3600) + "h " + Math.floor((elaspedTime % 3600) / 60) + "m " + (elaspedTime % 60) + "s";
+                                                    if (totalHash) { 
+                                                        element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
+                                                        element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n";
+                                                        if(chains.length >= 1) {
+                                                            element.hashboardRates += `\n`;
+                                                        }
+                                                        
+                                                        element.hashboardRates += chains.map((chain, index) => 
+                                                            `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
+                                                        ).join('\n');
+
+                                                        let asicDifference = false;
+                                                        chains.forEach((chain, index) => {
+                                                            // If the asic count is 0 or not equal to other counts, mark it as an issue
+                                                            if (chain.asics === 0 || chain.asics !== chains[0].asics) {
+                                                                asicDifference = true;
+                                                            }
+                                                        });
+                                                        
+                                                        let errorTextAppend = ""
+
+                                                        if (issueFans.length > 0) {
+                                                            errorTextAppend = ` | Fan`
+                                                            element.hashboardRates += `\nIssue Fans: ${issueFans.join(', ')}`;
+                                                        } else if(asicDifference) {
+                                                            errorTextAppend = ` | ASIC`
+                                                        }
+
+                                                        if(mainErrors.includes("Bad HB")) {
+                                                            errorTextAppend = " | Bad HB";
+                                                        } else if(mainErrors.includes("Fan Fail")) {
+                                                            errorTextAppend = " | Fan Fail";
+                                                        } else if(mainErrors.includes("Temperature")) {
+                                                                errorTextAppend = " | Temperature";
+                                                        } else if(mainErrors.includes("Voltage")) {
+                                                            errorTextAppend = " | Voltage";
+                                                        } 
+
+                                                        element.textContent += errorTextAppend;
+
+                                                        element.hashboardRates += mainErrors + `\n\nUptime: ${formattedTime}`;
+                                                        element.tooltip.textContent = element.hashboardRates
+                                                    } else {
+                                                        element.textContent = 'Realtime: N/A';
+                                                        element.hashboardRates = 'Realtime Hashrate Error.' + mainErrors;
+                                                        element.tooltip.textContent = element.hashboardRates;
+                                                    }
+
+                                                    // Remove any extra new lines from the tooltip text
+                                                    element.hashboardRates = element.hashboardRates.replace(/\n{2,}/g, '\n\n');
                                                     element.tooltip.textContent = element.hashboardRates;
-                                                }
+                                                })
                                             })
                                             .catch(error => {
                                                 console.log("Error fetching realtime hash rate: ", error);
                                                 element.textContent = 'Realtime: Error';
-                                                element.hashboardRates = 'Error fetching data.\nMiner is offline or unreachable.\n' + error;
+                                                element.hashboardRates = 'Error fetching data.\n' + error;
                                                 element.tooltip.textContent = element.hashboardRates;
                                             });
+
+                                        const ipHrefLog = "http://" + ip + '/cgi-bin/log.cgi';
+                                        fetchGUIData(ipHrefLog)
+                                            .then(logResponse => {
+                                                
+                                                logResponse = cleanErrors(logResponse);
+                                                let errorsFound = runErrorScanLogic(logResponse);
+                                                errorsFound = errorsFound.filter(error => error.type === 'Main');
+
+                                                const errorMessages = errorsFound.map(error => error.textReturn).join("\n");
+                                                let mainErrors = errorsFound.length > 0 ? errorMessages : "No Known Major Errors Found";
+                                                mainErrors = "\n\nLog Errors:\n" + mainErrors;
+                                                minerErrors[ip] = mainErrors;
+                                            })
+                                            .catch(error => {
+                                                console.log("Error fetching log data: ", error);
+                                                minerErrors[ip] = "\n\nError fetching log data: " + error;
+                                            })
                                     } else {
                                         const ipHref = 'http://' + ip + '/cgi-bin/stats.cgi';
                                         fetchGUIData(ipHref)
                                             .then(response => {
-                                                console.log("response", response)
                                                 // Extract relevant data from the response
                                                 if (response && !response.STATS) {
                                                     response = JSON.parse(response);
