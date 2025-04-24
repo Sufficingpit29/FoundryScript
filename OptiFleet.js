@@ -846,9 +846,11 @@ const errorsToSearch = {
             if (parts.length > 1) {
                 const volPart = parts[1].split(",")[0];
                 const voltage = parseFloat(volPart);
+                if(voltage > 0) {
+                    return "Bad Voltage (" + voltage + "V)";
+                }
                 return "Low Voltage (" + voltage + "V)";
             }
-            return "Low Voltage";
         },
         showOnce: "last",
     },
