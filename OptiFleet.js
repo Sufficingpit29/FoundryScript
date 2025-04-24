@@ -5,7 +5,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.6.9
+// @version      7.7.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -822,7 +822,7 @@ const errorsToSearch = {
             return true;
         },
     },
-    'Bad Power Supply': {
+    'Low Voltage': {
         icon: "https://img.icons8.com/?size=100&id=16422&format=png&color=FFFFFF",
         start: "vol:",
         conditions: (text) => {
@@ -846,9 +846,9 @@ const errorsToSearch = {
             if (parts.length > 1) {
                 const volPart = parts[1].split(",")[0];
                 const voltage = parseFloat(volPart);
-                return "Bad Power Supply (" + voltage + "V)";
+                return "Low Voltage (" + voltage + "V)";
             }
-            return "Bad Power Supply";
+            return "Low Voltage";
         },
         showOnce: "last",
     },
@@ -4326,8 +4326,8 @@ window.addEventListener('load', function () {
 
                                                         if(mainErrors.includes("Temperature")) {
                                                             errorTextAppend = " | Temperature";
-                                                        } else if(mainErrors.includes("Voltage") || mainErrors.includes("Power Supply")) {
-                                                            errorTextAppend = " | PSU";
+                                                        } else if(mainErrors.includes("Voltage")) {
+                                                            errorTextAppend = " | Voltage Abnormality";
                                                         } else if(mainErrors.includes("Bad HB")) {
                                                             errorTextAppend = " | Bad HB";
                                                         } else if(mainErrors.includes("Fan Fail")) {
