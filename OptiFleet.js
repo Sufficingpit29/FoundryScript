@@ -1,11 +1,12 @@
 // To do:
 // Maybe add a "real lower hashers" tab?
 // Maybe more pagination since it can still crash
+// Maybe save timeout/long time realtime check miners and make logic around shoving those to ends of queues to not overly slow down?
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.7.0
+// @version      7.7.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -4365,6 +4366,16 @@ window.addEventListener('load', function () {
                                                 logResponse = cleanErrors(logResponse);
                                                 let errorsFound = runErrorScanLogic(logResponse);
                                                 errorsFound = errorsFound.filter(error => error.type === 'Main');
+
+                                                // Clear out duplicate error and keep only last
+                                                for (let i = errorsFound.length - 1; i >= 0; i--) {
+                                                    for (let j = i - 1; j >= 0; j--) {
+                                                        if (errorsFound[i].name === errorsFound[j].name) {
+                                                            errorsFound.splice(j, 1);
+                                                            i--;
+                                                        }
+                                                    }
+                                                }
 
                                                 const errorMessages = errorsFound.map(error => error.textReturn).join("\n");
                                                 let mainErrors = errorsFound.length > 0 ? errorMessages : "No Known Major Errors Found";
