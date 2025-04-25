@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.7.1
+// @version      7.7.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -825,7 +825,7 @@ const errorsToSearch = {
     },
     'Low Voltage': {
         icon: "https://img.icons8.com/?size=100&id=16422&format=png&color=FFFFFF",
-        start: "vol:",
+        start: ["vol:", "bitmain_get_sample_voltage"],
         conditions: (text) => {
             // temp:14,vol:0.13,power:222
             // if it has temp and power
@@ -838,10 +838,29 @@ const errorsToSearch = {
                     return voltage < 1;
                 }
             }
+
+            if(text.includes("bitmain_get_sample_voltage")) {
+                const parts = text.split("bitmain_get_sample_voltage:")[1].split(",")[0];
+                const voltage = parseFloat(parts);
+                if(voltage < 1) {
+                    return true
+                }
+            }
+
             return false
         },
         type: "Main",
         textReturn: (text) => {
+
+            if(text.includes("bitmain_get_sample_voltage")) {
+                const parts = text.split("bitmain_get_sample_voltage:")[1].split(",")[0];
+                const voltage = parseFloat(parts);
+                if(voltage < 0) {
+                    return "Bad Voltage (" + voltage + "V)";
+                }
+                return "Low Voltage (" + voltage + "V)";
+            }
+
             // Extract the voltage number from the text 2025-02-14 05:29:17 temp:-6,vol:14.98,power:569
             const parts = text.split("vol:");
             if (parts.length > 1) {
