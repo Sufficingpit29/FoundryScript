@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.7.2
+// @version      7.7.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -327,58 +327,32 @@ let planID = false;
 // extract the TbJIxx_byEKhuMp-C4tXLGUAD3Tb
 if(currentURL.includes('planner')) {
     planID = getPlannerID(currentURL);
-}
 
-const originalFetch = unsafeWindow.fetch;
+    // Wait until the element is in the DOM
+    const plannerDataGrabber = setInterval(() => {
+        const button = document.querySelector('#taskFiltersButton');
+        if (!button) return;
 
-function overrideFetch() {
-    // Intercept fetch requests
-    unsafeWindow.fetch = async function(...args) {
-        const url = args[0];
-        
-        //https://graph.microsoft.com/beta/planner/plans/wkeUw2vf1kqEkw6-XXaSR2UABn4T/tasks?$expand=details,assignedToTaskBoardFormat,bucketTaskBoardFormat,progressTaskBoardFormat
-        if (typeof url === 'string' && url.includes(planID) && (url.includes('tasks?') || url.includes('buckets'))) {
-            console.log('[Tampermonkey] Intercepting fetch request:', url);
-            const response = await originalFetch(...args);
-            const clone = response.clone();
+        // Loop through keys to find the internal React fiber key
+        const fiberKey = Object.keys(button).find(key => key.startsWith('__reactFiber$'));
+        if (!fiberKey) return;
 
-            clone.json().then(data => {
-                if(url.includes('tasks') && data.value) {
-                    plannerTasks = data.value;
-                    console.log('Planner tasks:', plannerTasks);
-                    //GM_SuperValue.set("plannerTasks_" + planID, plannerTasks);
-                } else if(url.includes('buckets') && data.value) {
-                    plannerBuckets = data.value;
-                    console.log('Planner buckets:', plannerBuckets);
-                    //GM_SuperValue.set("plannerBuckets_" + planID, plannerBuckets);
-                }
-            }).catch(err => {
-                console.log('Error parsing JSON:', err);
-            });
-            return response;
+        const fiber = button[fiberKey];
+        const props = fiber?.return?.memoizedProps;
+        const taskData = props?.taskData;
+        const buckets = props?.buckets;
+
+        if (taskData && taskData.length > 0 && buckets && buckets.length > 0) {
+            console.log('✅ Found taskData!', taskData);
+            console.log('✅ Found buckets!', buckets);
+            plannerTasks = taskData;
+            plannerBuckets = buckets;
+            clearInterval(plannerDataGrabber);
+        } else {
+            console.log('Waiting for taskData...');
         }
-
-        return originalFetch(...args);
-    };
+    }, 500);
 }
-overrideFetch();
-
-setTimeout(() => {
-    overrideFetch();
-}, 100);
-
-// override fetch again on page load, just in case
-window.addEventListener('load', function() {
-    overrideFetch();
-
-    setTimeout(() => {
-        overrideFetch();
-    }, 100);
-
-    setTimeout(() => {
-        overrideFetch();
-    }, 800);
-});
 
 const username = 'root';
 const password = 'root';
@@ -4343,7 +4317,7 @@ window.addEventListener('load', function () {
                                                             errorTextAppend = ` | Fan`
                                                             element.hashboardRates += `\nIssue Fans: ${issueFans.join(', ')}`;
                                                         } else if(asicDifference) {
-                                                            errorTextAppend = ` | ASIC`
+                                                            errorTextAppend = ` | 0 ASICs`
                                                         }
 
                                                         if(mainErrors.includes("Temperature")) {
@@ -8986,6 +8960,35 @@ window.addEventListener('load', function () {
 
     if (currentURL.includes("planner.cloud.microsoft") && !currentURL.includes("iframe")) {
         function PlannerCardPage() {
+            // If we don't have plannerTasks data yet, then no elements are made to check yet.
+            if(!plannerTasks || !plannerBuckets) {
+                console.log("Planner tasks not found, trying again in 100ms.");
+                setTimeout(() => {
+                    PlannerCardPage();
+                }, 100);
+                return;
+            }
+
+            function SimTypeTextBox(box, text) {
+                box.value = "";
+                const charArray = text.split('');
+                box.click();
+                for (const char of charArray) {
+                    
+                    // Create and dispatch the keydown event
+                    const keydownEvent = new KeyboardEvent('keydown', { key: char });
+                    box.dispatchEvent(keydownEvent);
+
+                    // Insert the character
+                    document.execCommand('insertText', false, char);
+
+                    // Create and dispatch the keyup event
+                    const keyupEvent = new KeyboardEvent('keyup', { key: char });
+                    box.dispatchEvent(keyupEvent);
+
+                }
+            }
+
             const filterTextBox = document.querySelector('.ms-SearchBox-field');
             console.log("Current URL: ", currentURL);
             console.log("Filter Text Box: ", filterTextBox);
@@ -9010,7 +9013,7 @@ window.addEventListener('load', function () {
             // Inital reset since it weirdly will sort of half remember the last input without displaying it?
             // Also, now setting it to space since microsoft updated it so the filter doesn't appear until clicked, so this way we can more easily access it just in case the user clicks away, it will remain open.
             filterTextBox.click();
-            filterTextBox.value = ' ';
+            SimTypeTextBox(filterTextBox, ' ')
             filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
             filterTextBox.blur();
 
@@ -9036,7 +9039,7 @@ window.addEventListener('load', function () {
                 });
 
                 if( filterTextBox.value !== serialNumber) {
-                    filterTextBox.value = serialNumber;
+                    SimTypeTextBox(filterTextBox, serialNumber)
                     filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
                     console.log("Inputting serial number into filter text box:", serialNumber);
                 }
@@ -9044,21 +9047,6 @@ window.addEventListener('load', function () {
                 // Set background color to the filter text box
                 filterTextBox.style.transition = 'background-color 0.8s';
                 filterTextBox.style.backgroundColor = '#c3b900';
-
-                // If we don't have plannerTasks data yet, then no elements are made to check yet.
-                if(!plannerTasks || !plannerBuckets) {
-                    console.log("Planner tasks not found, trying again in 100ms.");
-                    setTimeout(() => {
-                        FindIfCardExists(serialNumber, findCallback);
-                    }, 100);
-                    return;
-                }
-                
-                // Searches through the plannerTasks to find the card with the serial number that was edited last
-                let bucketNameLookup = {};
-                plannerBuckets.forEach(bucket => {
-                    bucketNameLookup[bucket.id] = bucket.name;
-                });
 
                 // Set horizontal scroll to a bit more each time
                 if(curTry >= 4) {
@@ -9091,7 +9079,7 @@ window.addEventListener('load', function () {
                     console.log("Max tries reached, card not found.");
 
                     // Reset the search bar
-                    filterTextBox.value = '';
+                    filterTextBox.value = ' ';
                     filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
                     
                     // Set search bar color
@@ -9208,8 +9196,6 @@ window.addEventListener('load', function () {
             let plannerID = getPlannerID(currentURL); //.match(/plan\/([^?]+)/)[1].split('/')[0];
             let newPlannerData = {};
             let createdOverlay = false;
-            let refreshLimit = 30;
-            let refreshCount = 0;
             function collectPlannerCardData() {
                 // Check if this window is actually one we should scan
                 let pages = GM_SuperValue.get("plannerCardsData_Pages", []);
@@ -9224,18 +9210,6 @@ window.addEventListener('load', function () {
 
                 if (!isSearching) {
                     console.log("Not searching this page.");
-                    return;
-                }
-
-                if(!plannerTasks || !plannerBuckets) {
-                    console.log("Planner tasks or buckets not found, trying again in 100ms.");
-                    if(refreshCount >= refreshLimit) {
-                        // refresh page
-                        window.location.reload();
-                        return
-                    }
-                    setTimeout(collectPlannerCardData, 100);
-                    refreshCount++;
                     return;
                 }
 
@@ -9295,13 +9269,13 @@ window.addEventListener('load', function () {
 
                 let bucketNameLookup = {};
                 plannerBuckets.forEach(bucket => {
-                    bucketNameLookup[bucket.id] = bucket.name;
+                    bucketNameLookup[bucket.id] = bucket.title;
                 });
 
                 // Loop through plannerTasks array
                 plannerTasks.forEach(task => {
-                    const completedDateTime = task.completedDateTime;
-                    if (completedDateTime) {
+                    const percentComplete = task.percentComplete;
+                    if (percentComplete === 100) {
                         return;
                     }
                     const taskName = task.title;
@@ -9313,10 +9287,10 @@ window.addEventListener('load', function () {
                     const lastModifiedDateTime = task.lastModifiedDateTime;
                     let cardExists = newPlannerData[serialNumber];
                     if (cardExists) {
-                        let lastModified = new Date(lastModifiedDateTime);
-                        let lastModifiedCard = new Date(cardExists.lastModified);
-                        // If the last modified date is older than our already stored date, then skip
-                        if (lastModified < lastModifiedCard) {
+                        let createdDate = new Date(task.createdDate);
+                        let createdCardDate = new Date(cardExists.createdDate);
+                        // If the created date is older than our already stored date, then skip
+                        if (createdDate < createdCardDate) {
                             return;
                         }
                     }
@@ -9537,7 +9511,7 @@ window.addEventListener('load', function () {
 
                 // find the aria-label="Filter text box" and input the serial number
                 if (filterTextBox) {
-                    filterTextBox.value = "";
+                    filterTextBox.value = " ";
                     filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
                 } else {
                     console.log("Filter text box not found.");
