@@ -6,7 +6,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.7.4
+// @version      7.7.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -8970,6 +8970,14 @@ window.addEventListener('load', function () {
             }
 
             function SimTypeTextBox(box, text) {
+                const currentValue = box.value;
+                // Backspace the current value
+                for (let i = 0; i < currentValue.length; i++) {
+                    // Create and dispatch the keydown event for backspace
+                    const keydownEvent = new KeyboardEvent('keydown', { key: 'Backspace' });
+                    box.dispatchEvent(keydownEvent);
+                }
+
                 box.value = "";
                 const charArray = text.split('');
                 box.click();
