@@ -2512,6 +2512,7 @@ window.addEventListener('load', function () {
                 }, duration);
 
                 setTimeout(function() {
+                    if(!notification) { return; }
                     notification.remove();
                 }, duration + 500);
             }
