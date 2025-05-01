@@ -2,11 +2,12 @@
 // Maybe add a "real lower hashers" tab?
 // Maybe more pagination since it can still crash
 // Maybe save timeout/long time realtime check miners and make logic around shoving those to ends of queues to not overly slow down?
+// window.ma.miners
 
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.7.5
+// @version      7.7.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1469,6 +1470,7 @@ window.addEventListener('load', function () {
             const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", "true") === "true";
             const alertEnabled = GM_SuperValue.get("alertEnabled", "true") === "true";
             const majorAlertEnable = GM_SuperValue.get("majorAlertEnable", "false") === "true";
+            const majorAlertTTS = GM_SuperValue.get("majorAlertTTS", "false") === "true";
 
             const popup = document.createElement('div');
             popup.style.position = 'fixed';
@@ -1569,6 +1571,27 @@ window.addEventListener('load', function () {
             majorAlertEnableContainer.appendChild(majorAlertEnableInput);
             majorAlertEnableContainer.appendChild(majorAlertEnableLabelText);
 
+            // Add TTS option if major alert is enabled
+            const majorAlertTTSEnableContainer = document.createElement('div');
+            majorAlertTTSEnableContainer.style.display = 'flex';
+            majorAlertTTSEnableContainer.style.alignItems = 'center';
+
+            const majorAlertTTSEnableInput = document.createElement('input');
+            majorAlertTTSEnableInput.type = 'checkbox';
+            majorAlertTTSEnableInput.checked = majorAlertTTS;
+            majorAlertTTSEnableInput.style.marginBottom = '10px';
+            majorAlertTTSEnableInput.style.width = '20px'; // Set the width smaller
+            majorAlertTTSEnableInput.style.height = '20px'; // Set the height smaller
+            majorAlertTTSEnableInput.style.marginRight = '10px'; // Add some space to the right
+
+            const majorAlertTTSEnableLabelText = document.createElement('span');
+            majorAlertTTSEnableLabelText.innerText = 'Enable/Disable TTS for major notifications.';
+            majorAlertTTSEnableLabelText.style.color = '#fff'; // Set text color to white for better contrast
+            majorAlertTTSEnableLabelText.style.marginBottom = '10px';
+
+            majorAlertTTSEnableContainer.appendChild(majorAlertTTSEnableInput);
+            majorAlertTTSEnableContainer.appendChild(majorAlertTTSEnableLabelText);
+
             const saveButton = document.createElement('button');
             saveButton.innerText = 'Save';
             saveButton.style.marginRight = '10px';
@@ -1600,6 +1623,7 @@ window.addEventListener('load', function () {
                 GM_SuperValue.set("onlyNonHashing", onlyNonHashingInput.checked.toString());
                 GM_SuperValue.set("alertEnabled", alertEnabledInput.checked.toString());
                 GM_SuperValue.set("majorAlertEnable", majorAlertEnableInput.checked.toString());
+                GM_SuperValue.set("majorAlertTTS", majorAlertTTSEnableInput.checked.toString());
                 
                 popup.remove();
 
@@ -1637,6 +1661,7 @@ window.addEventListener('load', function () {
             popup.appendChild(onlyNonHashingContainer);
             popup.appendChild(alertEnabledContainer);
             popup.appendChild(majorAlertEnableContainer);
+            popup.appendChild(majorAlertTTSEnableContainer);
             popup.appendChild(saveButton);
             popup.appendChild(cancelButton);
 
@@ -1695,6 +1720,7 @@ window.addEventListener('load', function () {
                 const onlyNonHashing = GM_SuperValue.get("onlyNonHashing", "true") === "true";
                 const alertEnabled = GM_SuperValue.get("alertEnabled", "true") === "true";
                 const majorAlertEnable = GM_SuperValue.get("majorAlertEnable", "false") === "true";
+                const majorAlertTTS = GM_SuperValue.get("majorAlertTTS", "false") === "true";
 
                 if (!alertEnabled) { return; }
 
@@ -1774,21 +1800,18 @@ window.addEventListener('load', function () {
                         notification.style.fontWeight = 'bold';
 
                         document.body.click();
-                        const audio = new Audio('https://cdn.freesound.org/previews/521/521973_311243-lq.mp3');
-                        audio.play();
 
+                        if(new Date().getTime() - GM_SuperValue.get("majorAlert_LastPlayed", 0) > 5000) {
+                            const audio = new Audio('https://cdn.freesound.org/previews/521/521973_311243-lq.mp3');
+                            audio.play();
+                            GM_SuperValue.set("majorAlert_LastPlayed", new Date().getTime());
+                        }
                         
-                        var msg = new SpeechSynthesisUtterance();
-                        msg.text = "There are " + allMiners + " miners with issues. " + nonHashingMinerCount + " are non hashing. " + lowHashingMinerCount + " are low hashing.";
-                        window.speechSynthesis.speak(msg);
-
-                        // if over 500, repeat the sound every 5 seconds for 60 seconds
-                        if(minerCount >= 2000) {
-                            const interval = setInterval(() => {
-                                const audio1 = new Audio('https://cdn.freesound.org/previews/521/521973_311243-lq.mp3');
-                                audio1.play();
-                            }, 800);
-                            setTimeout(() => clearInterval(interval), 60000);
+                        if(majorAlertTTS && (new Date().getTime() - GM_SuperValue.get("majorAlertTTS_LastSpoken", 0)) > 20000) {
+                            GM_SuperValue.set("majorAlertTTS_LastSpoken", new Date().getTime());
+                            var msg = new SpeechSynthesisUtterance();
+                            msg.text = "There are " + allMiners + " miners with issues. " + nonHashingMinerCount + " are non hashing. " + lowHashingMinerCount + " are low hashing.";
+                            window.speechSynthesis.speak(msg);
                         }
                     }
 
@@ -2418,7 +2441,6 @@ window.addEventListener('load', function () {
             createHashRateElements();
 
             function addSleepModeMiners(allMinersData) {
-                console.log("sleepModeMiners", savedFeatures["sleepModeMiners"]);
                 if(!savedFeatures["sleepModeMiners"]) { return; }
 
                 // Loop through all miners and find the sleep mode miners
@@ -3996,7 +4018,6 @@ window.addEventListener('load', function () {
             }
         }
 
-        // Wait until HTML element with #minerList is loaded
         function addBreakerNumberToSlotID() {
             const minerListCheck = setInterval(() => {
                 const minerList = document.querySelector('#minerList') || document.querySelector('#minerGrid');
