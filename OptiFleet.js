@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.7.7
+// @version      7.7.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -3337,6 +3337,7 @@ window.addEventListener('load', function () {
                         copyButton.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)'; // Subtle shadow
                         copyButton.style.zIndex = '1';
                         copyButton.style.display = 'none'; // Initially hidden
+                        copyButton.style.userSelect = 'none'; // Prevent text selection
 
                         // Add hover effect
                         copyButton.addEventListener('mouseover', () => {
@@ -5486,6 +5487,7 @@ window.addEventListener('load', function () {
                                                 // Create table for the miners that should be hard rebooted
                                                 const cols = ['IP', 'Miner', 'Slot ID & Breaker', 'Serial Number', "Scan Result"];
                                                 createPopUpTable(`Auto Reboot System`, cols, false, (popupResultElement) => {
+                                                    if(!popupResultElement) { return; }
 
                                                     const firstDiv = popupResultElement.querySelector('div');
                                                     // Create a container for the refresh text and button
@@ -5578,6 +5580,7 @@ window.addEventListener('load', function () {
                                                     refreshButton.appendChild(refreshIcon);
 
                                                     // Now the button is created, we can grab the actual button element
+                                                     
                                                     const refreshAutoRebootButton = popupResultElement.querySelector('#refreshAutoReboot');
 
                                                     
@@ -10423,6 +10426,7 @@ window.addEventListener('load', function () {
                                         copyButton.style.fontSize = '12px';
                                         copyButton.style.fontWeight = 'bold';
                                         copyButton.style.zIndex = '1';
+                                        copyButton.style.userSelect = 'none'; // Prevent text selection
                                         copyButton.addEventListener('click', () => {
                                             // Copy the error text to the clipboard
                                             if (navigator.clipboard) {
