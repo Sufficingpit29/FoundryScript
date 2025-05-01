@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.7.6
+// @version      7.7.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2510,6 +2510,10 @@ window.addEventListener('load', function () {
                 setTimeout(function() {
                     notification.style.opacity = '0';
                 }, duration);
+
+                setTimeout(function() {
+                    notification.remove();
+                }, duration + 500);
             }
 
             // Check is the user ever inputs something
