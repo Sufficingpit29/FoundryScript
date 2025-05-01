@@ -87,6 +87,7 @@ const features = [
     { name: 'Breaker Number', id: 'breakerNumber', category: 'Miner Table' },
     { name: 'Realtime Hashrate', id: 'realtimeHashrateData', category: 'Miner Table', startOff: true },
     { name: 'Right Click Context Menu', id: 'rightClickContextMenu', category: 'Miner Table' },
+    { name: 'Copy Selected Rows', id: 'copySelectedRows', category: 'Miner Table' },
 
     // Issues page
     { name: 'Down Scan', id: 'downScan', category: 'Issues' },
@@ -1272,7 +1273,6 @@ function runErrorScanLogic(logText) {
 
                         setEndIndexAfter = endIndex;
                     } else {
-                        console.log('Error text did not meet conditions');
                         setEndIndexAfter = logText.indexOf('\n', startIndex) + 1;
                     }
                 } else {
@@ -1281,7 +1281,6 @@ function runErrorScanLogic(logText) {
             }
 
             if (startIndex === -1 || endIndex === -1 || lastEndIndex === endIndex) {
-                console.log('No more errors found');
                 break;
             }
 
@@ -2490,14 +2489,14 @@ window.addEventListener('load', function () {
         // SN Scanner Logic
         if(currentURL.includes("https://foundryoptifleet.com/")) {
 
-            function createNotification(text) {
+            function createNotification(text, color = "#dc3545", duration = 8000) {
                 const notification = document.createElement('div');
                 notification.className = 'notification';
                 notification.style.cssText = `
                     position: fixed;
                     top: 10px;
                     right: 10px;
-                    background-color: #dc3545;
+                    background-color: ${color};
                     color: #fff;
                     padding: 10px;
                     border-radius: 5px;
@@ -2510,7 +2509,7 @@ window.addEventListener('load', function () {
 
                 setTimeout(function() {
                     notification.style.opacity = '0';
-                }, 8000);
+                }, duration);
             }
 
             // Check is the user ever inputs something
@@ -4670,6 +4669,52 @@ window.addEventListener('load', function () {
                             exportSelectedItem.style.display = 'block';
                         } else {
                             exportSelectedItem.style.display = 'none';
+                        }
+                    } catch (error) {
+                        console.log("Error in observer: ", error);
+                    }
+                });
+
+                observer.observe(document.querySelector('#minerSelectedCount'), { childList: true, subtree: true });
+            }
+
+            // Add the "Copy Selected Rows" action for only selected rows
+            if (issuesActionsDropdown && savedFeatures["copySelectedRows"]) {
+                const copySelectedItem = document.createElement('div');
+                copySelectedItem.classList.add('m-menu-item');
+                copySelectedItem.textContent = 'Copy Selected Rows';
+                copySelectedItem.style.display = 'none';
+                copySelectedItem.onclick = function() {
+                    const selectedIds = Object.keys(unsafeWindow.issues.activeGrid._selectedIds);
+                    const data = unsafeWindow.issues.hashingFilterMiners.filter(miner => selectedIds.includes(miner.id.toString()));
+
+                    const formattedData = data.map(miner => {
+                        const ip = miner.ipAddress || '';
+                        const macAddress = miner.macAddress || '';
+                        const serialNumber = miner.serialNumber || '';
+                        const modelName = miner.modelName || '';
+                        const slotId = miner.locationName || '';
+                        return `${ip}\t${macAddress}\t${serialNumber}\t${modelName}\t${slotId}`;
+                    }).join('\n');
+
+                    navigator.clipboard.writeText(formattedData).then(() => {
+                        console.log('Selected rows copied to clipboard.');
+
+                        createNotification('Selected rows copied to clipboard.', '#32a856', 1500);
+                    }).catch(err => {
+                        console.error('Failed to copy selected rows: ', err);
+                    });
+                };
+
+                issuesActionsDropdown.appendChild(copySelectedItem);
+
+                // Observer for changes in selected IDs
+                const observer = new MutationObserver(() => {
+                    try {
+                        if (Object.keys(unsafeWindow.issues.activeGrid._selectedIds).length > 0) {
+                            copySelectedItem.style.display = 'block';
+                        } else {
+                            copySelectedItem.style.display = 'none';
                         }
                     } catch (error) {
                         console.log("Error in observer: ", error);
@@ -8181,6 +8226,59 @@ window.addEventListener('load', function () {
         }
         
         if(currentURL.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/List")) {
+
+            // Add the "Copy Selected Rows" action for only selected rows
+            const minerListActionsDropdown = document.querySelector('#minerListActionsDropdown .m-menu');
+            if (minerListActionsDropdown && savedFeatures["copySelectedRows"]) {
+                const exportMinersItem = minerListActionsDropdown.querySelector('.m-menu-item[onclick="ma.export();"]');
+
+                const copySelectedItem = document.createElement('div');
+                copySelectedItem.classList.add('m-menu-item');
+                copySelectedItem.textContent = 'Copy Selected Rows';
+                copySelectedItem.style.display = 'none';
+                copySelectedItem.onclick = function() {
+                    const grid = unsafeWindow.$("#minerGrid").data("kendoGrid");
+                    const selectedIds = Object.keys(grid._selectedIds);
+                    const data = unsafeWindow.ma.miners.filter(miner => selectedIds.includes(miner.id.toString()));
+
+                    const formattedData = data.map(miner => {
+                        const ip = miner.ipAddress || '';
+                        const macAddress = miner.macAddress || '';
+                        const serialNumber = miner.serialNumber || '';
+                        const modelName = miner.modelName || '';
+                        const slotId = miner.locationName || '';
+                        return `${ip}\t${macAddress}\t${serialNumber}\t${modelName}\t${slotId}`;
+                    }).join('\n');
+
+                    navigator.clipboard.writeText(formattedData).then(() => {
+                        createNotification('Selected rows copied to clipboard.', '#32a856', 1500);
+                        console.log('Selected rows copied to clipboard.');
+                    }).catch(err => {
+                        console.error('Failed to copy selected rows: ', err);
+                    });
+                };
+
+                if (exportMinersItem) {
+                    exportMinersItem.after(copySelectedItem);
+                }
+
+                // Observer for changes in selected IDs
+                const observer = new MutationObserver(() => {
+                    try {
+                        let grid = unsafeWindow.$("#minerGrid").data("kendoGrid");
+                        if (grid && Object.keys(grid._selectedIds).length > 0) {
+                            copySelectedItem.style.display = 'block';
+                        } else {
+                            copySelectedItem.style.display = 'none';
+                        }
+                    } catch (error) {
+                        console.log("Error in observer: ", error);
+                    }
+                });
+
+                observer.observe(document.querySelector('#minerSelectedCount'), { childList: true, subtree: true });
+            }
+
             // -- Add Breaker Number to Slot ID --
             addBreakerNumberToSlotID();
         }
