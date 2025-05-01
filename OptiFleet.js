@@ -9637,6 +9637,16 @@ window.addEventListener('load', function () {
             // Observe the any changes in the planner
             cardObserver.observe(document.body, { childList: true, subtree: true });
 
+            // On user mouse scroll, add the slot ID to the cards
+            document.addEventListener('wheel', (event) => {
+                if (event.deltaY > 0) {
+                    // Scrolling down
+                    setTimeout(() => {
+                        addSlotIDsToPlannerCards();
+                    }, 100);
+                }
+            });
+
             //--------------------------------------------------
 
             // Logic for automatically adding a task to the planner
