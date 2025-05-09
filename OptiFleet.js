@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      7.7.8
+// @version      8.1.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -10086,6 +10086,1112 @@ window.addEventListener('load', function () {
     if (ipURLMatch) { ///cgi-bin/get_system_info.cgi
         let curIP = window.location.hostname;
 
+        // On Foundry GUI logs
+        if(currentURL.includes('/#/logs')) {
+            let errorListPanelContainer = null; // To hold the main error list panel
+            let sharedTooltipElement = null; // For shared tooltip
+        
+            // Function to create and/or retrieve the shared tooltip element
+            function getOrCreateSharedTooltip() {
+                if (!sharedTooltipElement) {
+                    sharedTooltipElement = document.createElement('div');
+                    sharedTooltipElement.style.display = 'none';
+                    sharedTooltipElement.style.position = 'absolute';
+                    sharedTooltipElement.style.backgroundColor = '#333'; // Darker background
+                    sharedTooltipElement.style.color = 'white';
+                    sharedTooltipElement.style.padding = '8px 12px';
+                    sharedTooltipElement.style.borderRadius = '6px';
+                    sharedTooltipElement.style.zIndex = '10000'; // Ensure it's on top
+                    sharedTooltipElement.style.maxWidth = '400px';
+                    sharedTooltipElement.style.whiteSpace = 'pre-wrap'; // Preserve newlines and wrap
+                    sharedTooltipElement.style.boxShadow = '0px 4px 12px rgba(0, 0, 0, 0.5)';
+                    sharedTooltipElement.style.fontSize = '0.85em';
+                    document.body.appendChild(sharedTooltipElement);
+                }
+                return sharedTooltipElement;
+            }
+        
+            // Function to create the main error list panel on the left
+            function createMainErrorListPanel() {
+                const targetParent = document.querySelector('.m-uishell-left-panel'); 
+                if (!targetParent) {
+                    console.error('.m-uishell-left-panel not found. Cannot create error list panel.'); 
+                    return null;
+                }
+        
+                // Remove existing error panel and divider if they exist to prevent duplication
+                // This ensures that if it's called again, it cleans up first.
+                const existingPanelQuery = document.getElementById('custom-error-list-panel');
+                if (existingPanelQuery) {
+                    existingPanelQuery.remove();
+                }
+                const existingDividerQuery = targetParent.querySelector('.error-divider.custom-script-divider');
+                if (existingDividerQuery) {
+                    existingDividerQuery.remove();
+                }
+        
+                const divider = document.createElement('div');
+                divider.className = 'm-divider has-space-m error-divider custom-script-divider'; // Added custom class
+                targetParent.appendChild(divider); // Append to new parent
+        
+                const panel = document.createElement('div');
+                panel.id = 'custom-error-list-panel';
+                panel.style.padding = '0px 10px 10px 10px'; // Adjusted padding
+                // Add a title to the error panel
+                const panelTitle = document.createElement('div');
+                panelTitle.textContent = 'Log Errors';
+                panelTitle.className = 'm-nav-group-label'; // Style like other labels
+                panelTitle.style.padding = '10px 0px';
+                panelTitle.style.fontWeight = 'bold';
+                panel.appendChild(panelTitle);
+        
+                targetParent.appendChild(panel); // Append to new parent
+                return panel;
+            }
+        
+            function handleErrorClickInPanel(error, originalLogText, targetLogElement) {
+                if (!targetLogElement) {
+                    console.error("Target log element not found for highlighting.");
+                    return;
+                }
+            
+                targetLogElement.textContent = originalLogText; // Reset to original
+            
+                if (error.start === 0 && error.end === 0) { // Non-highlightable message
+                    return;
+                }
+            
+                const errorIndex = originalLogText.indexOf(error.text);
+                if (errorIndex === -1) { // Fallback if start/end are off or text slightly differs due to processing
+                    console.warn("Exact error text for highlighting not found, attempting partial match or skipping highlight.");
+                    return;
+                }
+                
+                const actualStart = error.start !== -1 ? error.start : errorIndex;
+                const actualEnd = actualStart + error.text.length;
+        
+                const beforeErrorText = originalLogText.substring(0, actualStart);
+                const errorTextContent = originalLogText.substring(actualStart, actualEnd);
+                const afterErrorText = originalLogText.substring(actualEnd);
+            
+                targetLogElement.innerHTML = ''; // Clear current content
+            
+                targetLogElement.appendChild(document.createTextNode(beforeErrorText));
+            
+                const errorElement = document.createElement('span');
+                errorElement.style.backgroundColor = '#780707';
+                errorElement.style.color = 'white';
+                errorElement.style.fontWeight = 'bolder';
+                errorElement.textContent = errorTextContent;
+                errorElement.style.position = 'relative'; // For positioning the copy button
+                
+                // Make the highlight more block-like
+                errorElement.style.display = 'inline-block'; // Allows padding to take effect properly
+                errorElement.style.paddingTop = '2px';    // Add vertical padding
+                errorElement.style.paddingBottom = '2px'; // Add vertical padding
+                errorElement.style.paddingLeft = '4px';   // Add horizontal padding on the left
+                errorElement.style.paddingRight = '25px'; // Keep space for copy button
+        
+                targetLogElement.appendChild(errorElement);
+            
+                targetLogElement.appendChild(document.createTextNode(afterErrorText));
+                errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+                // Add Copy Button
+                const copyButton = document.createElement('button');
+                copyButton.textContent = '📋'; // Using an emoji for copy
+                copyButton.title = 'Copy error text';
+                copyButton.style.position = 'absolute';
+                copyButton.style.right = '3px'; 
+                copyButton.style.top = '3px'; // Position to top right
+                copyButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; 
+                copyButton.style.color = '#fff';
+                copyButton.style.border = '1px solid rgba(255, 255, 255, 0.3)'; 
+                copyButton.style.borderRadius = '4px'; 
+                copyButton.style.padding = '1px 3px'; 
+                copyButton.style.cursor = 'pointer';
+                copyButton.style.fontSize = '0.85em'; 
+                copyButton.style.display = 'none'; 
+                copyButton.style.transition = 'none'; // Make all transitions instant
+        
+                const originalButtonBg = copyButton.style.backgroundColor;
+                const hoverButtonBg = 'rgba(255, 255, 255, 0.3)';
+                const activeErrorElementBg = 'rgba(255, 255, 255, 0.2)';
+                const pressedButtonBg = 'rgba(255, 255, 255, 0.4)'; // For simulating press
+        
+                let copyTimeoutId = null; // To manage the feedback timeout
+        
+                const copyAction = (event) => {
+                    if (event) event.stopPropagation(); 
+        
+                    if (copyTimeoutId) { // Clear any existing timeout
+                        clearTimeout(copyTimeoutId);
+                        copyTimeoutId = null;
+                    }
+        
+                    // Simulate pressed state
+                    copyButton.style.backgroundColor = pressedButtonBg;
+        
+                    // copy text to clipboard
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(errorTextContent).then(() => {
+                            console.log('Text copied to clipboard');
+                            copyButton.textContent = '✅';
+                            copyButton.style.backgroundColor = 'rgba(76, 175, 80, 0.5)'; 
+                            copyTimeoutId = setTimeout(() => {
+                                copyButton.textContent = '📋';
+                                // Restore appropriate hover/normal background based on current mouse position
+                                if (errorElement.matches(':hover')) {
+                                    copyButton.style.backgroundColor = copyButton.matches(':hover') ? hoverButtonBg : activeErrorElementBg;
+                                } else {
+                                    copyButton.style.backgroundColor = originalButtonBg;
+                                }
+                                copyTimeoutId = null;
+                            }, 1000);
+                        }).catch(err => {
+                            console.error('Failed to copy text: ', err);
+                            copyButton.textContent = '❌';
+                            copyButton.style.backgroundColor = 'rgba(244, 67, 54, 0.5)'; 
+                            copyTimeoutId = setTimeout(() => {
+                                copyButton.textContent = '📋';
+                                // Restore appropriate hover/normal background
+                                if (copyButton.textContent === '📋') {
+                                    if (errorElement.matches(':hover')) {
+                                        copyButton.style.backgroundColor = copyButton.matches(':hover') ? hoverButtonBg : activeErrorElementBg;
+                                    } else {
+                                        copyButton.style.backgroundColor = originalButtonBg;
+                                    }
+                                }
+                                copyTimeoutId = null;
+                            }, 500);
+                        });
+                    } else {
+                        const textArea = document.createElement('textarea');
+                        textArea.value = errorTextContent; // Use errorTextContent
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        try {
+                            document.execCommand('copy');
+                            console.log('Text copied to clipboard');
+                            copyButton.textContent = '✅';
+                            copyButton.style.backgroundColor = 'rgba(76, 175, 80, 0.5)';
+                            copyTimeoutId = setTimeout(() => {
+                                copyButton.textContent = '📋';
+                                if (errorElement.matches(':hover')) {
+                                    copyButton.style.backgroundColor = copyButton.matches(':hover') ? hoverButtonBg : activeErrorElementBg;
+                                } else {
+                                    copyButton.style.backgroundColor = originalButtonBg;
+                                }
+                                copyTimeoutId = null;
+                            }, 1000);
+                        } catch (err) {
+                            console.error('Failed to copy text: ', err);
+                            copyButton.textContent = '❌';
+                            copyButton.style.backgroundColor = 'rgba(244, 67, 54, 0.5)';
+                            copyTimeoutId = setTimeout(() => {
+                                copyButton.textContent = '📋';
+                                if (errorElement.matches(':hover')) {
+                                    copyButton.style.backgroundColor = copyButton.matches(':hover') ? hoverButtonBg : activeErrorElementBg;
+                                } else {
+                                    copyButton.style.backgroundColor = originalButtonBg;
+                                }
+                                copyTimeoutId = null;
+                            }, 500);
+                        }
+                        document.body.removeChild(textArea);
+                    }
+                };
+        
+                copyButton.addEventListener('click', copyAction);
+                errorElement.appendChild(copyButton);
+                errorElement.addEventListener('mouseenter', () => {
+                    copyButton.style.display = 'inline-block';
+                    // Apply hover style only if not in feedback state
+                    if (copyButton.textContent === '📋') {
+                    copyButton.style.opacity = '0.7';
+                    copyButton.style.backgroundColor = activeErrorElementBg; 
+                    }
+                });
+                errorElement.addEventListener('mouseleave', () => {
+                    copyButton.style.display = 'none';
+                    // Reset style only if not in feedback state (though it will be hidden)
+                    if (copyButton.textContent === '📋') {
+                    copyButton.style.opacity = '1';
+                    copyButton.style.backgroundColor = originalButtonBg; 
+                    }
+                });
+        
+                copyButton.addEventListener('mouseover', () => {
+                    // Apply hover style only if not in feedback state
+                    if (copyButton.textContent === '📋') {
+                    copyButton.style.opacity = '1';
+                    copyButton.style.backgroundColor = hoverButtonBg; 
+                    }
+                 });
+                copyButton.addEventListener('mouseout', () => {
+                    // Revert to errorElement's hover style for button, only if not in feedback state
+                    if (copyButton.textContent === '📋') {
+                    if (errorElement.matches(':hover')) {
+                        copyButton.style.opacity = '0.7';
+                        copyButton.style.backgroundColor = activeErrorElementBg;
+                    }
+                    // If mouse is not over errorElement, errorElement's mouseleave will handle hiding.
+                    }
+                });
+        
+                // Add right-click to copy functionality to the errorElement
+                errorElement.addEventListener('contextmenu', (e) => {
+                    e.preventDefault(); 
+                    copyAction(e); 
+                });
+            }
+        
+            function createErrorTypeTab(title, errors, parentContainer, originalLogText, targetLogElement, defaultOpen = false) {
+                if (errors.length === 0) {
+                    return null;
+                }
+            
+                const errorTab = document.createElement('div');
+                errorTab.className = 'm-nav-group error-category-tab'; 
+                errorTab.style.paddingBottom = '5px'; // Added padding to the bottom of the tab
+                errorTab.style.paddingTop = '5px'; // Added padding to the top of the tab
+            
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'm-nav-group-header';
+                headerDiv.style.cursor = 'pointer';
+                headerDiv.style.display = 'flex'; 
+                headerDiv.style.justifyContent = 'space-between'; 
+                headerDiv.style.alignItems = 'center'; // Align items vertically
+                
+                const originalHeaderColor = '#E2E2E2'; // Assuming default color
+                headerDiv.addEventListener('mouseover', () => {
+                    labelDiv.style.color = '#5FB2FF'; // Light blue on hover
+                });
+                headerDiv.addEventListener('mouseout', () => {
+                    labelDiv.style.color = ''; // Revert to original/CSS defined
+                });
+        
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'm-nav-group-label';
+                labelDiv.innerHTML = `<img src="${'https://img.icons8.com/?size=100&id=24552&format=png&color=FFFFFF'}" alt="icon" style="width: 16px; height: 16px; margin-right: 5px;"> ${title} (${errors.length})`;
+            
+                const chevronIcon = document.createElement('img'); 
+                chevronIcon.src = 'https://img.icons8.com/?size=100&id=39788&format=png&color=FFFFFF'; // Right arrow
+                chevronIcon.alt = 'chevron';
+                chevronIcon.style.transition = 'transform 0.2s ease-in-out';
+                chevronIcon.style.width = '16px'; 
+                chevronIcon.style.height = '16px'; 
+                chevronIcon.style.verticalAlign = 'middle'; 
+            
+                headerDiv.appendChild(labelDiv);
+                headerDiv.appendChild(chevronIcon);
+            
+                const sectionElement = document.createElement('div');
+                sectionElement.className = 'm-nav-group-section';
+                sectionElement.style.display = defaultOpen ? 'block' : 'none';
+                if (defaultOpen) chevronIcon.style.transform = 'rotate(90deg)'; // Point down when open
+            
+                const itemsContainer = document.createElement('div');
+                itemsContainer.className = 'm-nav-group-items';
+            
+                errors.forEach((error) => {
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'm-nav-group-item';
+                    itemDiv.style.display = 'flex';
+                    itemDiv.style.alignItems = 'center';
+                    itemDiv.style.justifyContent = 'space-between'; // For errorLink and infoIcon
+                    itemDiv.style.paddingLeft = '10px';
+                    itemDiv.style.paddingTop = '4px';
+                    itemDiv.style.cursor = 'pointer'; // Indicate clickable
+                    itemDiv.style.transition = 'background-color 0.2s, color 0.2s';
+        
+                    const originalItemColor = itemDiv.style.color;
+                    const originalItemBgColor = itemDiv.style.backgroundColor;
+        
+                    itemDiv.addEventListener('mouseover', () => {
+                        itemDiv.style.backgroundColor = '#4a4a4a'; // Darker hover
+                        itemDiv.style.color = '#ffffff';
+                    });
+                    itemDiv.addEventListener('mouseout', () => {
+                        itemDiv.style.backgroundColor = originalItemBgColor || '';
+                        itemDiv.style.color = originalItemColor || '';
+                    });
+            
+                    const contentWrapper = document.createElement('div'); // Wrapper for icon and link
+                    contentWrapper.style.display = 'flex';
+                    contentWrapper.style.alignItems = 'center';
+                    contentWrapper.style.flexGrow = '1';
+                    contentWrapper.style.overflow = 'hidden'; // For ellipsis on errorLink
+        
+                    const iconSpan = document.createElement('img');
+                    iconSpan.style.marginRight = '8px';
+                    iconSpan.style.width = '16px';
+                    iconSpan.style.height = '16px';
+                    iconSpan.src = error.icon || (error.type === "Main" 
+                        ? "https://img.icons8.com/?size=100&id=24552&format=png&color=FF0000" // Red exclamation icon
+                        : error.type === "Info" 
+                        ? "https://img.icons8.com/?size=100&id=24552&format=png&color=00FF00" // Green info icon
+                        : "https://img.icons8.com/?size=100&id=24552&format=png&color=0000FF"); // Blue dot icon
+                    iconSpan.alt = error.type || "icon";
+            
+                    const errorLink = document.createElement('a');
+                    errorLink.href = '#';
+                    errorLink.className = 'm-nav-item';
+                    errorLink.textContent = error.textReturn || error.text.substring(0, 30) + (error.text.length > 30 ? "..." : "");
+                    errorLink.title = error.text; // Keep for basic tooltip, custom one is richer
+                    errorLink.style.fontSize = '0.85em';
+                    errorLink.style.whiteSpace = 'nowrap';
+                    errorLink.style.overflow = 'hidden';
+                    errorLink.style.textOverflow = 'ellipsis';
+                    errorLink.style.flexGrow = '1'; 
+                    errorLink.style.color = 'inherit'; // Inherit color from itemDiv for hover effect
+                    errorLink.style.textDecoration = 'none';
+        
+                    // Event listener on itemDiv itself or contentWrapper for better click area
+                    contentWrapper.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        handleErrorClickInPanel(error, originalLogText, targetLogElement);
+                    });
+        
+                    contentWrapper.appendChild(iconSpan);
+                    contentWrapper.appendChild(errorLink);
+                    itemDiv.appendChild(contentWrapper);
+        
+                    // Create an info icon to the right that will show the error text
+                    const infoIcon = document.createElement('div');
+                    infoIcon.style.width = '14px';
+                    infoIcon.style.height = '14px';
+                    infoIcon.style.borderRadius = '50%';
+                    infoIcon.style.backgroundColor = '#0078d4';
+                    infoIcon.style.color = 'white';
+                    infoIcon.style.textAlign = 'center';
+                    infoIcon.style.verticalAlign = 'middle';
+                    infoIcon.style.lineHeight = '14px';
+                    infoIcon.style.fontSize = '8px';
+                    infoIcon.style.border = '1px solid black';
+                    infoIcon.style.fontWeight = 'bold';
+                    infoIcon.style.textShadow = '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
+                    infoIcon.style.cursor = 'pointer';
+                    infoIcon.style.position = 'relative';
+                    infoIcon.style.float = 'right';
+                    infoIcon.style.display = 'inline-block';
+                    infoIcon.textContent = 'i';
+        
+                    // Create the tooltip
+                    const tooltip = document.createElement('div');
+                    tooltip.style.display = 'none';
+                    tooltip.style.position = 'absolute';
+                    tooltip.style.backgroundColor = '#444947';
+                    tooltip.style.color = 'white';
+                    tooltip.style.padding = '5px';
+                    tooltip.style.borderRadius = '5px';
+                    tooltip.style.zIndex = '9999';
+                    tooltip.style.whiteSpace = 'pre-wrap'; // Use pre-wrap to preserve newlines
+                    tooltip.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.5)';
+                    tooltip.textContent = error.text;
+                    document.body.appendChild(tooltip);
+        
+                    // Position the tooltip relative to the infoIcon
+                    infoIcon.addEventListener('mouseenter', () => {
+                        const rect = infoIcon.getBoundingClientRect();
+                        tooltip.style.left = `${rect.left + window.scrollX}px`;
+                        tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
+                        tooltip.style.display = 'block';
+                    });
+        
+                    infoIcon.addEventListener('mouseleave', () => {
+                        tooltip.style.display = 'none';
+                    });
+        
+                    // Append the info icon to the error item
+                    itemDiv.appendChild(infoIcon);
+                    itemsContainer.appendChild(itemDiv);
+                });
+            
+                sectionElement.appendChild(itemsContainer);
+                errorTab.appendChild(headerDiv);
+                errorTab.appendChild(sectionElement);
+            
+                headerDiv.addEventListener('click', () => {
+                    const isOpen = sectionElement.style.display === 'block';
+                    sectionElement.style.display = isOpen ? 'none' : 'block';
+                    chevronIcon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)'; // 0deg for right, 90deg for down
+                });
+            
+                parentContainer.appendChild(errorTab);
+                return errorTab;
+            }
+        
+            function updateErrorPanelContent(logString, targetLogElement) {
+                if (!errorListPanelContainer) {
+                    // Attempt to create if not existing
+                    errorListPanelContainer = createMainErrorListPanel(); 
+                    
+                    if (!errorListPanelContainer) {
+                        console.error("Failed to create or find error list panel container for update.");
+                        return; 
+                    }
+                }
+            
+                // Clear previous error type tabs, but preserve the title
+                const tabsToRemove = errorListPanelContainer.querySelectorAll('.error-category-tab');
+                tabsToRemove.forEach(tab => tab.remove());
+                // Remove "No errors" message if present
+                const noErrorsMsg = errorListPanelContainer.querySelector('.no-errors-message');
+                if (noErrorsMsg) noErrorsMsg.remove();
+        
+                const errorsFound = runErrorScanLogic(logString);
+            
+                if (errorsFound.length > 0) {
+                    createErrorTypeTab("Main Errors", errorsFound.filter(e => e.type === "Main"), errorListPanelContainer, logString, targetLogElement, true);
+                    createErrorTypeTab("Info/Warnings", errorsFound.filter(e => e.type === "Info"), errorListPanelContainer, logString, targetLogElement, true);
+                    createErrorTypeTab("Other Messages", errorsFound.filter(e => e.type === "Other" && !(e.start === 0 && e.end === 0)), errorListPanelContainer, logString, targetLogElement, false);
+                    
+                    // Handle the "No specific errors" type separately if it's the only one
+                    const otherMessages = errorsFound.filter(e => e.type === "Other" && e.start === 0 && e.end === 0);
+                    if (errorsFound.length === otherMessages.length && otherMessages.length > 0) {
+                        const noSpecificErrorsMessage = document.createElement('div');
+                        noSpecificErrorsMessage.textContent = otherMessages[0].textReturn;
+                        noSpecificErrorsMessage.className = 'm-nav-group-item no-errors-message'; // Style like an item
+                        noSpecificErrorsMessage.style.padding = "5px 10px";
+                        noSpecificErrorsMessage.style.fontSize = "0.9em";
+                        noSpecificErrorsMessage.style.color = "#aaa"; // Muted color
+                        errorListPanelContainer.appendChild(noSpecificErrorsMessage);
+                    }
+        
+                } else {
+                    const noErrorsMessage = document.createElement('div');
+                    noErrorsMessage.textContent = "No notable messages found in this log section.";
+                    noErrorsMessage.className = 'm-nav-group-item no-errors-message'; // Style like an item
+                    noErrorsMessage.style.padding = "5px 10px";
+                    noErrorsMessage.style.fontSize = "0.9em";
+                    noErrorsMessage.style.color = "#aaa"; // Muted color
+                    errorListPanelContainer.appendChild(noErrorsMessage);
+                }
+            }
+        
+            // Function to dynamically add a tab to the History Logs panel (now a sub-tab system)
+            function addHistoryLogsTab(tabLabel, fileName, specificTabList, specificTabsContainer, initialLogString = null) {
+                // Removed query for '.react-tabs__tab-panel.history-logs-panel'
+                // specificTabList and specificTabsContainer are passed in directly
+        
+                if (!specificTabList || !specificTabsContainer) {
+                    console.error('Target tab list or tabs container for history sub-tab not provided.');
+                    return;
+                }
+        
+                // Check if the tab already exists within this specific sub-tab system
+                if (specificTabsContainer.querySelector(`#tab\\:${CSS.escape(tabLabel)}`)) {
+                    console.log(`Sub-tab with ID ${tabLabel} already exists.`);
+                    return;
+                }
+        
+                // Create the new tab
+                const newTab = document.createElement('li');
+                newTab.className = 'font-size-m react-tabs__tab';
+                newTab.setAttribute('role', 'tab');
+                newTab.setAttribute('id', `tab:${tabLabel}`);
+                newTab.setAttribute('aria-selected', 'false');
+                newTab.setAttribute('aria-disabled', 'false');
+                newTab.setAttribute('aria-controls', `panel:${tabLabel}`);
+                newTab.setAttribute('tabindex', '-1');
+                newTab.setAttribute('data-rttab', 'true');
+                newTab.textContent = tabLabel;
+        
+                // manually set font size smallr
+                newTab.style.fontSize = '0.9em';
+        
+                // Add hover effect
+                newTab.style.cursor = 'pointer';
+                newTab.style.transition = 'color 0.3s';
+                newTab.addEventListener('mouseover', () => {
+                    newTab.style.color = '#118000';
+                });
+                newTab.addEventListener('mouseout', () => {
+                    newTab.style.color = '';
+                });
+        
+                // Add click event to switch tabs
+                newTab.addEventListener('click', () => {
+                    // Deselect all tabs within this specific sub-tab system
+                    specificTabList.querySelectorAll('.react-tabs__tab').forEach((t) => {
+                        t.classList.remove('react-tabs__tab--selected');
+                        t.setAttribute('aria-selected', 'false');
+                        t.setAttribute('tabindex', '-1');
+                    });
+        
+                    newTab.classList.add('react-tabs__tab--selected');
+                    newTab.setAttribute('aria-selected', 'true');
+                    newTab.setAttribute('tabindex', '0');
+        
+                    // Deselect all tab panels within this specific sub-tab system
+                    specificTabsContainer.querySelectorAll('.react-tabs__tab-panel').forEach((panel) => {
+                        panel.classList.remove('react-tabs__tab-panel--selected');
+                    });
+                    const currentNewTabPanel = specificTabsContainer.querySelector(`#panel\\:${CSS.escape(tabLabel)}`);
+                    
+                    if (currentNewTabPanel) {
+                        currentNewTabPanel.classList.add('react-tabs__tab-panel--selected');
+                        // Clear previously added custom log elements from THIS tab's panel
+                        const elementsToRemoveInPanel = document.querySelectorAll('.custom-log-element');
+                        elementsToRemoveInPanel.forEach(el => el.remove());
+                    } else {
+                        console.warn(`Panel for tab ${tabLabel} not found for display or clearing.`);
+                        // Cannot proceed if panel is not found
+                        if (errorListPanelContainer) { // Clear main error panel if tab panel is missing
+                            const tabsToRemove = errorListPanelContainer.querySelectorAll('.error-category-tab');
+                            tabsToRemove.forEach(tab => tab.remove());
+                            const noErrorsMsgPanel = errorListPanelContainer.querySelector('.no-errors-message');
+                            if (noErrorsMsgPanel) noErrorsMsgPanel.remove();
+                            const fetchErrorMessage = document.createElement('div');
+                            fetchErrorMessage.textContent = `Error: UI panel for tab "${tabLabel}" is missing.`;
+                            fetchErrorMessage.className = 'm-nav-group-item no-errors-message';
+                            fetchErrorMessage.style.color = "red";
+                            errorListPanelContainer.appendChild(fetchErrorMessage);
+                        }
+                        return;
+                    }
+                    
+                    const processAndDisplayLog = (logStringToProcess, targetPanelForDisplay) => {
+                        const fullLogString = logStringToProcess;
+                        
+                        const logElement = document.createElement('div');
+                        logElement.classList.add('custom-log-element'); 
+                        logElement.style.cssText = `
+                            background-color: #18181b; color: #fff; padding: 15px; border-radius: 8px;
+                            height: 350px; overflow-y: auto; overflow-x: auto;
+                            font-family: 'Courier New', Courier, monospace; white-space: pre;
+                            width: 100%; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: #888 #333;
+                        `;
+                        targetPanelForDisplay.appendChild(logElement);
+        
+                        let sections = [];
+                        const startMarker = "----------Start Foundry Miner";
+                        if (fullLogString.includes(startMarker)) {
+                            const parts = fullLogString.split(startMarker);
+                            if (parts[0].trim() === "" && parts.length > 1) { // Log starts with marker
+                                sections = parts.slice(1).map(part => startMarker + part);
+                            } else { // Log has content before first marker, or no marker at all (handled by else)
+                                sections.push(parts[0]); 
+                                for (let i = 1; i < parts.length; i++) {
+                                    sections.push(startMarker + parts[i]);
+                                }
+                            }
+                        } else { 
+                            sections.push(fullLogString);
+                        }
+                        if (sections.length === 0 && fullLogString.trim() !== "") { 
+                            sections.push(fullLogString); 
+                        } else if (sections.length === 0 && fullLogString.trim() === "") {
+                            sections.push(""); 
+                        }
+        
+                        const logSections = sections;
+                        const totalPages = logSections.length > 0 ? logSections.length : 1;
+                        let currentPage = totalPages > 0 ? totalPages - 1 : 0; // Default to last page
+        
+                        const pageInfo = document.createElement('span');
+                        pageInfo.classList.add('custom-log-element');
+                        pageInfo.style.cssText = `color: #fff; font-size: 14px;`;
+                        
+                        const paginationControls = document.createElement('div');
+                        paginationControls.classList.add('custom-log-element');
+                        paginationControls.style.cssText = `display: flex; justify-content: space-between; align-items: center; margin-top: 10px;`;
+        
+                        const prevButton = document.createElement('button');
+                        prevButton.textContent = 'Previous';
+                        prevButton.classList.add('custom-log-element');
+                        prevButton.style.cssText = `background-color: #333; color: #fff; padding: 10px; border-radius: 5px; cursor: pointer; margin-right: 10px;`;
+                        prevButton.addEventListener('click', () => { if (currentPage > 0) { currentPage--; renderPage(currentPage); } });
+        
+                        const nextButton = document.createElement('button');
+                        nextButton.textContent = 'Next';
+                        nextButton.classList.add('custom-log-element');
+                        nextButton.style.cssText = `background-color: #333; color: #fff; padding: 10px; border-radius: 5px; cursor: pointer; margin-left: 10px;`;
+                        nextButton.addEventListener('click', () => { if (currentPage < totalPages - 1) { currentPage++; renderPage(currentPage); } });
+        
+                        const pageInput = document.createElement('input');
+                        pageInput.type = 'number'; pageInput.min = 1; pageInput.max = totalPages;
+                        pageInput.classList.add('custom-log-element');
+                        pageInput.style.cssText = `width: 50px; text-align: center; margin: 0 10px; padding: 5px; border-radius: 5px; border: 1px solid #555; background-color: #222; color: #fff;`;
+                        pageInput.addEventListener('change', () => {
+                            const inputPage = parseInt(pageInput.value, 10) - 1;
+                            if (!isNaN(inputPage) && inputPage >= 0 && inputPage < totalPages) { currentPage = inputPage; renderPage(currentPage); } 
+                            else { pageInput.value = currentPage + 1; }
+                        });
+        
+                        paginationControls.appendChild(prevButton);
+                        paginationControls.appendChild(pageInfo);
+                        paginationControls.appendChild(pageInput);
+                        paginationControls.appendChild(nextButton);
+                        targetPanelForDisplay.appendChild(paginationControls);
+        
+                        const spacing = document.createElement('div');
+                        spacing.classList.add('custom-log-element'); 
+                        spacing.style.height = '10px';
+                        targetPanelForDisplay.appendChild(spacing);
+        
+                        // Scrollbar style (ensure it's added only once or managed)
+                        if (!document.getElementById('custom-log-scrollbar-style')) {
+                            const style = document.createElement('style');
+                            style.id = 'custom-log-scrollbar-style';
+                            style.textContent = `
+                                ::-webkit-scrollbar { width: 8px; height: 8px; }
+                                ::-webkit-scrollbar-track { background: #333; border-radius: 10px; }
+                                ::-webkit-scrollbar-thumb { background-color: #888; border-radius: 10px; border: 2px solid #333; }
+                                ::-webkit-scrollbar-thumb:hover { background-color: #555; }
+                            `;
+                            document.head.appendChild(style);
+                        }
+        
+                        function renderPage(page) {
+                            const currentPageLogContent = (logSections.length > 0 && logSections[page] !== undefined) ? logSections[page].trim() : fullLogString.trim();
+                            logElement.textContent = currentPageLogContent; 
+                            pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+                            pageInput.value = currentPage + 1;
+                            prevButton.disabled = currentPage === 0;
+                            nextButton.disabled = currentPage === totalPages - 1;
+                            logElement.scrollTop = logElement.scrollHeight; // Scroll to bottom
+                            updateErrorPanelContent(currentPageLogContent, logElement);
+                        }
+                        renderPage(currentPage);
+                    };
+        
+                    const handleErrorDisplay = (error, targetPanelForDisplay) => {
+                        console.error(`Error fetching/processing log for tab ${tabLabel}:`, error);
+                        if (targetPanelForDisplay) {
+                            const errorMsgElement = document.createElement('p');
+                            errorMsgElement.classList.add('custom-log-element');
+                            errorMsgElement.textContent = `Error loading log data: ${error.message || 'Unknown error'}`;
+                            errorMsgElement.style.color = 'red';
+                            targetPanelForDisplay.appendChild(errorMsgElement);
+                        }
+                        if (errorListPanelContainer) {
+                            const tabsToRemove = errorListPanelContainer.querySelectorAll('.error-category-tab');
+                            tabsToRemove.forEach(tab => tab.remove());
+                            const noErrorsMsgPanel = errorListPanelContainer.querySelector('.no-errors-message');
+                            if (noErrorsMsgPanel) noErrorsMsgPanel.remove();
+                            const fetchErrorMessage = document.createElement('div');
+                            fetchErrorMessage.textContent = `Error loading log data for tab "${tabLabel}".`;
+                            fetchErrorMessage.className = 'm-nav-group-item no-errors-message';
+                            fetchErrorMessage.style.padding = "5px 10px";
+                            fetchErrorMessage.style.fontSize = "0.9em";
+                            fetchErrorMessage.style.color = "red";
+                            errorListPanelContainer.appendChild(fetchErrorMessage);
+                        }
+                    };
+        
+                    if (initialLogString !== null) {
+                        try {
+                            processAndDisplayLog(initialLogString, currentNewTabPanel);
+                        } catch (e) {
+                            handleErrorDisplay(e, currentNewTabPanel);
+                        }
+                    } else if (fileName) {
+                        const logUrl = `http://${curIP}/files/logs/${fileName}`;
+                        fetchGUIData(logUrl, "arraybuffer", "tar.gz", 16000)
+                            .then(responseArchives => { 
+                                const minerLogs = responseArchives.filter(file => file.name.includes("foundryminerExec"));
+                                if (minerLogs.length === 0) {
+                                    throw new Error("No 'foundryminerExec' log found in archive: " + fileName);
+                                }
+                                const lastLogFile = minerLogs[minerLogs.length - 1];
+                                const decoder = new TextDecoder('utf-8');
+                                const decodedLogString = decoder.decode(lastLogFile.buffer);
+                                processAndDisplayLog(decodedLogString, currentNewTabPanel);
+                            })
+                            .catch(err => {
+                                handleErrorDisplay(err, currentNewTabPanel);
+                            });
+                    } else {
+                        handleErrorDisplay(new Error("No log data source provided."), currentNewTabPanel);
+                    }
+                });
+        
+                // Append the new tab to the specific tab list
+                specificTabList.appendChild(newTab);
+        
+                // Create the corresponding tab panel
+                const newTabPanel = document.createElement('div');
+                newTabPanel.className = 'react-tabs__tab-panel';
+                newTabPanel.setAttribute('role', 'tabpanel');
+                newTabPanel.setAttribute('id', `panel:${tabLabel}`);
+                newTabPanel.setAttribute('aria-labelledby', `tab:${tabLabel}`);
+                newTabPanel.style.marginTop = '10px';
+                // Apply styles to ensure newTabPanel constrains its width
+                newTabPanel.style.width = '100%';
+                newTabPanel.style.boxSizing = 'border-box';
+                newTabPanel.style.minWidth = '0'; // Important for flex item children like tab panels
+                //newTabPanel.textContent = tabContent;
+        
+                // Append the new tab panel to the specific tabs container
+                specificTabsContainer.appendChild(newTabPanel);
+        
+                console.log(`History sub-tab "${tabLabel}" added successfully.`);
+            }
+        
+            // Function to remove custom panels
+            function removeCustomPanels() {
+                // Find the panel associated with "Download Logs" tab (which hosts our history content)
+                const allTabs = Array.from(document.querySelectorAll('.react-tabs__tab'));
+                // Check for "Download Logs" or a tab that was previously "Download Logs" and renamed by an older script version
+                const downloadLogsTab = allTabs.find(tab => {
+                    const currentText = tab.textContent.trim();
+                    const originalText = tab.getAttribute('data-original-text');
+                    return currentText === 'Download Logs' || (originalText === 'Download Logs' && currentText === 'History Logs');
+                });
+        
+                if (downloadLogsTab) {
+                    const panelId = downloadLogsTab.getAttribute('aria-controls');
+                    if (panelId) {
+                        const hostPanel = document.getElementById(panelId);
+                        if (hostPanel) {
+                            const historyContent = hostPanel.querySelector('.history-logs-panel-content');
+                            if (historyContent) {
+                                historyContent.remove();
+                                // console.log('Removed .history-logs-panel-content');
+                            }
+                            // Remove the marker class if it was added
+                            hostPanel.classList.remove('history-logs-content-host');
+                        }
+                    }
+                }
+        
+                const errorPanel = document.getElementById('custom-error-list-panel');
+                if (errorPanel) {
+                    errorPanel.remove();
+                }
+        
+                const leftPanel = document.querySelector('.m-uishell-left-panel');
+                if (leftPanel) {
+                    const errorDivider = leftPanel.querySelector('.error-divider.custom-script-divider');
+                    if (errorDivider) {
+                        errorDivider.remove();
+                    }
+                }
+                errorListPanelContainer = null; // Reset the reference
+                console.log('Custom panels/content removal process finished.');
+            }
+        
+            // Function to build and show the content of the History Logs panel
+            function buildAndShowHistoryLogsPanel() {
+                if (!document.getElementById('custom-error-list-panel')) {
+                    errorListPanelContainer = createMainErrorListPanel();
+                } else {
+                    errorListPanelContainer = document.getElementById('custom-error-list-panel');
+                }
+                if (!errorListPanelContainer) {
+                    console.error("Failed to create or find error list panel for History Logs.");
+                    return;
+                }
+        
+                const allTabs = Array.from(document.querySelectorAll('.react-tabs__tab'));
+                let targetMainTab = allTabs.find(tab => tab.textContent.trim() === 'Download Logs');
+                
+                if (!targetMainTab) {
+                    targetMainTab = allTabs.find(tab => tab.textContent.trim() === 'History Logs' && tab.getAttribute('data-original-text') === 'Download Logs');
+                    if (targetMainTab) {
+                         console.warn("Found 'History Logs' tab, possibly renamed by an older script version. Proceeding as 'Download Logs' target.");
+                    } else {
+                        console.error("Main 'Download Logs' tab not found. Cannot build panel content.");
+                        return;
+                    }
+                }
+        
+                const mainTabList = targetMainTab.closest('.react-tabs__tab-list');
+                if (!mainTabList) {
+                    console.error("Could not find parent .react-tabs__tab-list for the target tab.");
+                    return;
+                }
+                
+                const targetMainPanelId = targetMainTab.getAttribute('aria-controls');
+                let historyLogsContentHostPanel = document.getElementById(targetMainPanelId);
+        
+                if (!historyLogsContentHostPanel) {
+                    console.error(`Panel with ID ${targetMainPanelId} not found to host history logs content.`);
+                    return;
+                }
+        
+                const existingHistoryContent = historyLogsContentHostPanel.querySelector('.history-logs-panel-content');
+                if (existingHistoryContent) {
+                    existingHistoryContent.remove();
+                }
+                
+                historyLogsContentHostPanel.classList.add('history-logs-content-host');
+        
+                const historyLogsPanelContainer = document.createElement('div');
+                historyLogsPanelContainer.className = 'history-logs-panel-content';
+                historyLogsPanelContainer.style.marginBottom = '20px';
+                historyLogsPanelContainer.style.width = '100%';
+                historyLogsPanelContainer.style.boxSizing = 'border-box';
+                historyLogsPanelContainer.style.minWidth = '0';
+        
+                const fieldset = document.createElement('fieldset');
+                fieldset.className = 'svelte-df8g3h m-box';
+                fieldset.style.width = '100%';
+                fieldset.style.boxSizing = 'border-box';
+                fieldset.style.minWidth = '0';
+        
+                const legend = document.createElement('legend');
+                legend.textContent = 'Archived Log Files';
+                fieldset.appendChild(legend);
+        
+                const subTabsContainer = document.createElement('div');
+                subTabsContainer.className = 'react-tabs history-logs-subtabs';
+                subTabsContainer.setAttribute('data-rttabs', 'true');
+                subTabsContainer.style.width = '100%';
+                subTabsContainer.style.boxSizing = 'border-box';
+                subTabsContainer.style.minWidth = '0';
+        
+                const subTabList = document.createElement('ul');
+                subTabList.className = 'react-tabs__tab-list';
+                subTabList.setAttribute('role', 'tablist');
+                subTabsContainer.appendChild(subTabList);
+                fieldset.appendChild(subTabsContainer);
+                historyLogsPanelContainer.appendChild(fieldset);
+        
+                // Initialize static properties for retry mechanism on the function object
+                if (typeof buildAndShowHistoryLogsPanel.insertionTimeoutId === 'undefined') {
+                    buildAndShowHistoryLogsPanel.insertionTimeoutId = null;
+                }
+                if (typeof buildAndShowHistoryLogsPanel.insertionRetries === 'undefined') {
+                    buildAndShowHistoryLogsPanel.insertionRetries = 0;
+                }
+        
+                // Clear any pending insertion from a previous call and reset retries for this new invocation
+                if (buildAndShowHistoryLogsPanel.insertionTimeoutId) {
+                    clearTimeout(buildAndShowHistoryLogsPanel.insertionTimeoutId);
+                    buildAndShowHistoryLogsPanel.insertionTimeoutId = null;
+                }
+                buildAndShowHistoryLogsPanel.insertionRetries = 0;
+        
+                function attemptInsertionOfArchivedLogs() {
+                    let referenceNode = null;
+                    // Look for <section class="has-space-xs"> as a direct child, containing the "Download Logs" legend
+                    const sections = historyLogsContentHostPanel.querySelectorAll(':scope > section.has-space-xs');
+                    for (let section of sections) {
+                        const legendEl = section.querySelector('fieldset.m-box > legend');
+                        if (legendEl && legendEl.textContent.trim() === 'Download Logs') {
+                            referenceNode = section;
+                            break;
+                        }
+                    }
+                    
+                    // If section not found, look for <fieldset class="m-box"> as a direct child, containing the "Download Logs" legend
+                    if (!referenceNode) {
+                        const fieldsets = historyLogsContentHostPanel.querySelectorAll(':scope > fieldset.m-box');
+                        for (let fs of fieldsets) {
+                            const legendEl = fs.querySelector('legend');
+                            if (legendEl && legendEl.textContent.trim() === 'Download Logs') {
+                                referenceNode = fs;
+                                break;
+                            }
+                        }
+                    }
+        
+                    if (referenceNode) {
+                        historyLogsContentHostPanel.insertBefore(historyLogsPanelContainer, referenceNode);
+                        console.log('Archived Log Files panel inserted before the Download Logs container.');
+                        if (buildAndShowHistoryLogsPanel.insertionTimeoutId) { // Should be null if success on first try
+                            clearTimeout(buildAndShowHistoryLogsPanel.insertionTimeoutId);
+                            buildAndShowHistoryLogsPanel.insertionTimeoutId = null;
+                        }
+                        buildAndShowHistoryLogsPanel.insertionRetries = 0; // Reset on success
+                    } else {
+                        buildAndShowHistoryLogsPanel.insertionRetries++;
+                        if (buildAndShowHistoryLogsPanel.insertionRetries <= 20) { // Max 20 retries (10 seconds)
+                            // console.warn(`Target Download Logs container not found (Attempt ${buildAndShowHistoryLogsPanel.insertionRetries}). Retrying insertion...`);
+                            buildAndShowHistoryLogsPanel.insertionTimeoutId = setTimeout(attemptInsertionOfArchivedLogs, 500);
+                        } else {
+                            console.error('Failed to find target Download Logs container for precise insertion after multiple retries. Using fallback insertion.');
+                            // Fallback: try to insert as the first child, or append if no children or already contains it.
+                            if (historyLogsContentHostPanel.firstChild && historyLogsContentHostPanel.firstChild !== historyLogsPanelContainer) {
+                                historyLogsContentHostPanel.insertBefore(historyLogsPanelContainer, historyLogsContentHostPanel.firstChild);
+                            } else if (!historyLogsContentHostPanel.contains(historyLogsPanelContainer)) {
+                                historyLogsContentHostPanel.appendChild(historyLogsPanelContainer);
+                            }
+                            buildAndShowHistoryLogsPanel.insertionRetries = 0; // Reset after fallback
+                        }
+                    }
+                }
+                
+                attemptInsertionOfArchivedLogs(); // Start the insertion attempt
+        
+                console.log('History Logs panel structure created, attempting to insert.');
+        
+                let currentLogTabAdded = false;
+                const currentLogFileName = "foundryminerExec.log"; // Used for display/labeling if needed, not for fetching if string provided
+                const currentLogUrl = `http://${curIP}/files/logs/${currentLogFileName}`;
+        
+                fetch(currentLogUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status} for ${currentLogFileName}`);
+                        }
+                        return response.text();
+                    })
+                    .then(currentLogString => {
+                        addHistoryLogsTab("[Current Log]", null, subTabList, subTabsContainer, currentLogString);
+                        currentLogTabAdded = true;
+                    })
+                    .catch(err => {
+                        console.error(`Error fetching current log (${currentLogFileName}):`, err);
+                        // Optionally, add a disabled/error tab here or just log the error
+                        const errorTabLabel = "[Current Log - Error]";
+                        addHistoryLogsTab(errorTabLabel, null, subTabList, subTabsContainer, `Error loading ${currentLogFileName}: ${err.message}`);
+                        // Mark it as not successfully added for activation logic, or handle error tab activation
+                    })
+                    .finally(() => {
+                        const logDirUrl = `http://${curIP}/cgi-bin/getLogDir.cgi`;
+                        fetchGUIData(logDirUrl)
+                            .then(logDirResponse => {
+                                const logs = JSON.parse(logDirResponse).logs;
+                                const previousLogs = logs.previous || [];
+        
+                                if (previousLogs.length === 0 && !currentLogTabAdded) { // Check if current log also failed or wasn't added
+                                    const noLogsMsg = document.createElement('p');
+                                    noLogsMsg.textContent = "No log files found.";
+                                    noLogsMsg.style.padding = '10px';
+                                    subTabsContainer.appendChild(noLogsMsg); // Append to subTabsContainer, not fieldset directly
+                                } else {
+                                    previousLogs.forEach(logFile => {
+                                        addHistoryLogsTab(`[${logFile.fileMod}]`, logFile.fileName, subTabList, subTabsContainer, null);
+                                    });
+                                }
+                            })
+                            .catch((err) => {
+                                console.error('Error fetching log directory for history tabs:', err);
+                                if (!currentLogTabAdded && subTabList.children.length === 0) { // Only show if no other tabs exist
+                                    const errorMsg = document.createElement('p');
+                                    errorMsg.textContent = "Error fetching log directory. No logs to display.";
+                                    errorMsg.style.color = 'red';
+                                    errorMsg.style.padding = '10px';
+                                    subTabsContainer.appendChild(errorMsg);
+                                }
+                            })
+                            .finally(() => {
+                                // Activate tab
+                                let firstTabToActivate = null;
+                                if (currentLogTabAdded) {
+                                    firstTabToActivate = subTabList.querySelector(`#tab\\:${CSS.escape("[Current Log]")}`);
+                                }
+                                
+                                if (!firstTabToActivate) { // If current log tab failed or wasn't added, try first archived
+                                   const firstArchiveTab = subTabList.querySelector('.react-tabs__tab'); // Get any first tab
+                                   if (firstArchiveTab && firstArchiveTab.id !== `tab:${CSS.escape("[Current Log - Error]")}`) { // Don't auto-select error tab
+                                       firstTabToActivate = firstArchiveTab;
+                                   }
+                                }
+                                
+                                if (firstTabToActivate) {
+                                    firstTabToActivate.click();
+                                } else if (subTabList.children.length > 0) {
+                                    // If there are tabs but none matched (e.g. only error tab for current log)
+                                    // click the very first one if it exists and isn't the error one.
+                                    const fallbackTab = subTabList.querySelector('.react-tabs__tab:not([id*="Error"])');
+                                    if (fallbackTab) fallbackTab.click();
+                                    else if (subTabList.firstChild) subTabList.firstChild.click(); // fallback to clicking even an error tab if it's the only one
+                                }
+                                 // If no tabs at all, messages should already be in subTabsContainer
+                            });
+                    });
+            }
+        
+            // Main setup function
+            function setupMainLogTabsAndHistoryFeature() {
+                const interval = setInterval(() => {
+                    const mainTabList = document.querySelector('.react-tabs__tab-list'); 
+                    
+                    if (!mainTabList) {
+                        // console.log('Main tab list not found yet. Retrying...');
+                        return; 
+                    }
+        
+                    const mainTabsInList = mainTabList.querySelectorAll(':scope > .react-tabs__tab');
+                    if (mainTabsInList.length === 0) {
+                        // console.log('No tabs found in the main tab list yet. Retrying...');
+                        return; 
+                    }
+                    
+                    let processedAnyInThisRun = false;
+        
+                    mainTabsInList.forEach(tab => {
+                        if (tab.hasAttribute('data-custom-log-listener')) {
+                            return; 
+                        }
+        
+                        const tabText = tab.textContent.trim();
+                        let listenerAttached = false;
+                        
+                        if (tabText === "Download Logs") {
+                            tab.addEventListener('click', () => {
+                                console.log("'Download Logs' (acting as History) main tab clicked.");
+                                buildAndShowHistoryLogsPanel();
+                            });
+                            listenerAttached = true;
+                        } else if (tabText === "Current Logs" || tabText === "Reboot Logs" || tabText === "System Logs") {
+                            tab.addEventListener('click', () => {
+                                console.log(`Main tab '${tabText}' clicked. Removing custom panels.`);
+                                removeCustomPanels();
+                            });
+                            listenerAttached = true;
+                        }
+                       
+                        if (listenerAttached) {
+                            tab.setAttribute('data-custom-log-listener', 'true');
+                            processedAnyInThisRun = true;
+                        }
+                    });
+        
+                    if (processedAnyInThisRun) {
+                         // console.log('Main log tabs processed in this round.');
+                    }
+        
+                    const allKnownTabsCurrentState = Array.from(mainTabList.querySelectorAll(':scope > .react-tabs__tab'));
+                    const targetTextsForProcessing = ["Current Logs", "Download Logs", "Reboot Logs", "System Logs"];
+                    
+                    const allTargetSystemTabs = allKnownTabsCurrentState.filter(t => {
+                        const text = t.textContent.trim();
+                        return targetTextsForProcessing.includes(text);
+                    });
+        
+                    if (allTargetSystemTabs.length > 0) {
+                        const allListenersAttached = allTargetSystemTabs.every(t => t.hasAttribute('data-custom-log-listener'));
+        
+                        if (allListenersAttached) {
+                            console.log('All targeted main log tabs have listeners attached. Stopping interval.');
+                            clearInterval(interval);
+        
+                            const selectedDownloadLogsTab = allTargetSystemTabs.find(
+                                tab => tab.textContent.trim() === "Download Logs" && tab.classList.contains('react-tabs__tab--selected')
+                            );
+        
+                            if (selectedDownloadLogsTab) {
+                                console.log("'Download Logs' tab is active on load/setup completion. Building its panel.");
+                                buildAndShowHistoryLogsPanel();
+                            } else {
+                                // If Download Logs is not active, check if any other of our target tabs is active.
+                                // If so, ensure custom panels are removed, as their click listener might not have fired yet.
+                                const activeNonDownloadTargetTab = allTargetSystemTabs.find(
+                                    tab => tab.classList.contains('react-tabs__tab--selected') && 
+                                           (tab.textContent.trim() === "Current Logs" || 
+                                            tab.textContent.trim() === "Reboot Logs" ||
+                                            tab.textContent.trim() === "System Logs")
+                                );
+                                if (activeNonDownloadTargetTab) {
+                                    console.log(`Tab '${activeNonDownloadTargetTab.textContent.trim()}' is active on load. Ensuring custom panels are removed.`);
+                                    removeCustomPanels();
+                                }
+                            }
+                        }
+                    }
+                }, 750);
+            }
+        
+            // Call the setup function
+            setupMainLogTabsAndHistoryFeature();
+        }
+
         // Keep retrying until m-heading is-size-l is-text is found
         function addSlotLink() {
             if(!savedFeatures["slotIDLink"]) { return; }
@@ -10114,7 +11220,6 @@ window.addEventListener('load', function () {
 
                 const headingFGUI = panelSection.querySelector('.m-heading.is-size-l.is-muted');
                 if (headingFGUI && minerData) {
-                    console.log("Miner Data: ", minerData);
                     const slotLink = document.createElement('a');
                     slotLink.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerData.minerID}`;
                     slotLink.textContent = `${minerData.slotID}`;
@@ -10737,7 +11842,7 @@ window.addEventListener('load', function () {
         // Function to update the estimated time
         function updateEstimatedTime() {
             const minerRunningTimeElement = document.querySelector('td span[data-locale="mRunTm"]');
-            if (!minerRunningTimeElement || !minerRunningTimeElement.nextElementSibling) {
+            if (!minerRunningTimeElement || !minerRunningTimeElement.nextElementSibling) { 
                 setTimeout(updateEstimatedTime, 0);
                 return;
             }
