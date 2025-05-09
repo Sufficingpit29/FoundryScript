@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Watch
 // @namespace    http://tampermonkey.net/
-// @version      0.7.1
+// @version      0.8.2
 // @description  Consolidates all the sites together into a single tab.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -15,11 +15,52 @@
 // @run-at       document-start
 // ==/UserScript==
 
+// quick link to the overview/issues tab might be nice
+
 //https://foundryoptifleet.com/api/ScheduledShutdowns?siteId=3&start=2025-01-11T04:50:38&end=2025-01-12T04:50:38&userId=e86d021e-b084-47f8-8e6d-182d17c48a84&companyFilter=64
 
 let currentURL = window.location.href;
 let loadingStatus;
+let displaySleepMiners = false; // Default to off
+
 window.addEventListener('load', async function () {
+
+     // Hash Rate Types
+     const hashRateTypes = {
+        'H': 1,
+        'KH': 1e3,
+        'MH': 1e6,
+        'GH': 1e9,
+        'TH': 1e12,
+        'PH': 1e15,
+        'EH': 1e18,
+        'ZH': 1e21,
+    };
+
+    // Function to convert hash rates between types
+    function convertRates(hashRate, fromType, toType) {
+        const hashRateFrom = hashRateTypes[fromType];
+        const hashRateTo = hashRateTypes[toType];
+
+        return (hashRate * hashRateFrom) / hashRateTo;
+    }
+
+    // Convert the hash rate to the best type
+    function convertHashRate(hashRate, fromType) {
+        // Run through the hash rate types until we find the best one to display
+        var hashType = 'H';
+        hashRate = convertRates(hashRate, fromType, hashType);
+        for (const [key, value] of Object.entries(hashRateTypes)) {
+            if (hashRate >= value) {
+                hashType = key;
+            }
+        }
+
+        // Convert the hash rate to the best type
+        hashRate = convertRates(hashRate, 'H', hashType).toFixed(2);
+
+        return [parseFloat(hashRate), hashType];
+    }
 
     const userID = localStorage.getItem("OptiFleetID");
     
@@ -97,29 +138,73 @@ window.addEventListener('load', async function () {
         }
     }
 
+    async function getMinerData(userID, site) {
+        let sleepCount = 0;
+        try {
+            if (!userID || !site || !site.siteId || !site.companyId) {
+                console.error('Missing userID or site details for getMinerData for site:', site ? site.siteName : 'Unknown Site');
+                return 0; // Return 0 if essential details are missing
+            }
+            loadingStatus.innerText = `Getting Miner Details for ${site.siteName}...`;
+            const url = `https://foundryoptifleet.com/api/Issues?siteId=${site.siteId}&zoneId=null&userId=${userID}&companyFilter=${site.companyId}`;
+            console.log('Fetching Miner Data URL:', url);
+            const resp = await fetchData(url);
+            if (resp && resp.miners) {
+                for (const miner of resp.miners) {
+                    if (miner.powerModeName === "Sleep") {
+                        sleepCount++;
+                    }
+                }
+            }
+            console.log(`Site: ${site.siteName}, Sleep Mode Count (from Issues): ${sleepCount}`);
+        } catch (error) {
+            console.error(`Error fetching miner data for site ${site.siteName}:`, error);
+        }
+        return sleepCount;
+    }
+
     async function getHashingInventory(userID, sites) {
         try {
             if (!userID) {
                 throw new Error('userID is not defined');
             }
-            console.log('GettingSites:', sites);
+            console.log('Processing sites for Hashing Inventory. Sleep miner display:', displaySleepMiners);
             for (const site of sites) {
+                loadingStatus.innerText = `Getting Hashing Inventory for ${site.siteName}...`;
+                const hashingUrl = `https://foundryoptifleet.com/api/HashingInventory?siteId=${site.siteId}&userId=${userID}&companyFilter=${site.companyId}`;
+                console.log('Fetching Hashing Inventory URL:', hashingUrl);
+                const hashingResp = await fetchData(hashingUrl);
+                
+                if (hashingResp) {
+                    site.hashingInventory = hashingResp;
+                } else {
+                    site.hashingInventory = { 
+                        siteHashrate: 0, siteHashrateUnit: 'THs', 
+                        siteExpectedHashrate: 0, siteExpectedHashrateUnit: 'THs',
+                        lowHashingCount: 0, totalActiveOrUnreachableCount: 0,
+                        lowHashingImpactValue: 0, lowHashingImpactUnit: 'THs',
+                        notHashingCount: 0, notHashingImpactValue: 0, notHashingImpactUnit: 'THs'
+                    };
+                }
 
-                loadingStatus.innerText = `Getting Miners/Hashing Data for ${site.siteName}...`;
-
-                const url = `https://foundryoptifleet.com/api/HashingInventory?siteId=${site.siteId}&userId=${userID}&companyFilter=${site.companyId}`;
-                console.log('Fetching URL:', url);
-                const resp = await fetchData(url);
-                console.log('Hashing Inventory Response:', resp);
-                if (resp) {
-                    site.hashingInventory = resp;
+                if (displaySleepMiners) {
+                    site.hashingInventory.sleepModeCount = await getMinerData(userID, site);
+                } else {
+                    site.hashingInventory.sleepModeCount = 0; // Or undefined, handled by || 0 in display
                 }
             }
-
-            loadingStatus.innerText = 'Retrieved Miners/Hashing Data!';
-            console.log('Sites with Hashing Inventory:', sites);
+            loadingStatus.innerText = 'Retrieved All Site Data!';
+            console.log('Sites with Hashing Inventory and Miner Data:', sites);
         } catch (error) {
-            console.error('Error fetching hashing inventory:', error);
+            console.error('Error in getHashingInventory:', error);
+            // Ensure all sites have at least a default hashingInventory object if a general error occurs
+            for (const site of sites) {
+                if (!site.hashingInventory) {
+                     site.hashingInventory = { sleepModeCount: 0 };
+                } else if (site.hashingInventory.sleepModeCount === undefined) {
+                    site.hashingInventory.sleepModeCount = 0;
+                }
+            }
         }
     }
 
@@ -170,7 +255,52 @@ window.addEventListener('load', async function () {
         createOptiWatchButton();
         
     } else if(currentURL.includes("OptiWatch")) {
-        console.log('Opti-Watch popout window');
+        displaySleepMiners = await GM_getValue('displaySleepMiners', false);
+        // show initial loading overlay
+        let initOverlay = document.createElement('div');
+        initOverlay.style.position = 'fixed';
+        initOverlay.style.top = '0';
+        initOverlay.style.left = '0';
+        initOverlay.style.width = '100%';
+        initOverlay.style.height = '100%';
+        initOverlay.style.backgroundColor = 'rgba(32, 32, 32, 1)';
+        initOverlay.style.display = 'flex';
+        initOverlay.style.flexDirection = 'column';
+        initOverlay.style.justifyContent = 'center';
+        initOverlay.style.alignItems = 'center';
+        initOverlay.style.zIndex = '1000';
+
+        let initSpinner = document.createElement('m-spinner');
+        initSpinner.size = 'xl';
+
+        let initStyle = document.createElement('style');
+        initStyle.innerHTML = `
+          @keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}
+          m-spinner {
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
+            border-radius: 50%;
+            width: 120px;
+            height: 120px;
+            animation: spin 2s linear infinite;
+          }
+        `;
+        document.head.appendChild(initStyle);
+
+        let initText = document.createElement('h1');
+        initText.style.color = '#fff';
+        initText.style.fontSize = '24px';
+        initText.innerText = 'Loading Opti-Watch...';
+
+        loadingStatus = document.createElement('p');
+        loadingStatus.style.color = '#fff';
+        loadingStatus.style.fontSize = '16px';
+        loadingStatus.innerText = 'Getting Companies...';
+
+        initOverlay.appendChild(initSpinner);
+        initOverlay.appendChild(initText);
+        initOverlay.appendChild(loadingStatus);
+        document.body.appendChild(initOverlay);
 
         // Find hubspot-messages-iframe-container and remove it
         const interval = setInterval(() => {
@@ -217,25 +347,9 @@ window.addEventListener('load', async function () {
         `;
         document.head.appendChild(style1);
 
-        // Add loading text below the spinner
-        let loadingText = document.createElement('h1');
-        loadingText.style.color = '#fff';
-        loadingText.style.fontSize = '24px';
-        loadingText.innerText = 'Loading Opti-Watch...';
-
-        // Text that displays what is currently being loaded
-        loadingStatus = document.createElement('p');
-        loadingStatus.style.color = '#fff';
-        loadingStatus.style.fontSize = '16px';
-        loadingStatus.innerText = 'Getting Companies...';
-
-        // Append the spinner, loading text, and loading status to the overlay
+        // Instead, reuse the original initOverlay spinner/text/status:
         overlay.appendChild(spinner);
-        overlay.appendChild(loadingText);
-        overlay.appendChild(loadingStatus);
-
-        // Append the overlay to the body
-        document.body.appendChild(overlay);
+        // overlay.appendChild(loadingStatus);   // keep status updating
 
         // Define SVG icons as functions
         function getOnlineIcon(color, isFlashing) {
@@ -332,7 +446,7 @@ window.addEventListener('load', async function () {
             overlay.style.left = '0';
             overlay.style.width = '100%';
             overlay.style.height = '100%';
-            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+            overlay.style.backgroundColor = 'rgb(15, 15, 15)';
             overlay.style.zIndex = '9999';
             overlay.id = 'optiWatchOverlay';
 
@@ -647,33 +761,67 @@ window.addEventListener('load', async function () {
                         </m-stack>
                     `;
 
+                    // compute both rates in base H and derive efficiency
+                    const rawRate    = site.hashingInventory.siteHashrate;
+                    const rawUnit    = site.hashingInventory.siteHashrateUnit.slice(0, -1);
+                    const expRate    = site.hashingInventory.siteExpectedHashrate;
+                    const expUnit    = site.hashingInventory.siteExpectedHashrateUnit.slice(0, -1);
+                    const baseRate   = convertRates(rawRate, rawUnit, 'H');
+                    const baseExp    = convertRates(expRate, expUnit, 'H');
+                    const efficiency = baseExp
+                      ? Math.min((baseRate / baseExp) * 100, 100).toFixed(2)
+                      : '0.00';
+
                     let hashRate = doc.createElement('m-box');
                     hashRate.className = 'bar-chart-card';
+                    // Conditionally add sleep mode display
+                    let sleepModeHtml = '';
+                    if (displaySleepMiners) {
+                        sleepModeHtml = `
+                            <div class="metric-row">
+                                <span class="m-link is-size-l">${site.hashingInventory.sleepModeCount || 0} Sleep Mode</span>
+                            </div>`;
+                    }
+
                     hashRate.innerHTML = `
-                        <m-stack space="m">
-                            <div class="bar-chart-card-title">
-                                <m-heading size="l">Hash Rate</m-heading>
+                      <m-stack space="m">
+                        <div class="bar-chart-card-title">
+                          <m-heading size="l">Hash Rate</m-heading>
+                        </div>
+                        <div class="bar-chart-section">
+                          <h4 class="bar-chart-title m-text is-secondary is-size-xs">
+                            Total Hash Rate / Hash Rate Potential
+                          </h4>
+                          <div class="bar-chart-row">
+                            <div class="bar-chart-container">
+                              <div class="bar-chart"
+                                   style="background-color: #4caf50;
+                                          width: ${efficiency}%;
+                                          color: #fff;">
+                                <h4 class="m-heading" style="white-space: nowrap;">
+                                  ${rawRate} ${site.hashingInventory.siteHashrateUnit}
+                                </h4>
+                              </div>
                             </div>
-                            <div class="bar-chart-section">
-                                <h4 class="bar-chart-title m-text is-secondary is-size-xs">Total Hash Rate / Hash Rate Potential</h4>
-                                <div class="bar-chart-row">
-                                    <div class="bar-chart-container">
-                                        <div class="bar-chart" style="background-color: #4caf50; width: ${Math.min((site.hashingInventory.siteHashrate / site.hashingInventory.siteExpectedHashrate) * 100, 100)}%; color: #fff;">
-                                            <h4 class="m-heading" style="white-space: nowrap;">${site.hashingInventory.siteHashrate} ${site.hashingInventory.siteHashrateUnit}</h4>
-                                        </div>
-                                    </div>
-                                    <div class="bar-chart-total">
-                                        <span class="m-heading is-size-xs">${site.hashingInventory.siteExpectedHashrate}</span>
-                                        <span class="m-text is-size-xs is-tertiary">${site.hashingInventory.siteExpectedHashrateUnit}</span>
-                                    </div>
-                                </div>
+                            <div class="bar-chart-total">
+                              <span class="m-heading is-size-xs">${expRate}</span>
+                              <span class="m-text is-size-xs is-tertiary">
+                                ${site.hashingInventory.siteExpectedHashrateUnit}
+                              </span>
                             </div>
+                          </div>
+                        </div>
+                        <div class="site-utilization-metrics">
                             <div>
-                                <span class="m-text is-size-l">${((site.hashingInventory.siteHashrate / site.hashingInventory.siteExpectedHashrate) * 100).toFixed(2)}%</span>
-                                <span class="m-text is-size-s is-secondary"> Efficiency</span>
+                                <span class="m-text is-size-l">${efficiency}%</span>
+                                <span class="m-text is-size-s is-secondary">Efficiency</span>
                             </div>
-                        </m-stack>
+                            ${sleepModeHtml}
+                        </div>
+                      </m-stack>
                     `;
+
+                    // console.log(site.hashingInventory.siteExpectedHashrateUnit) // Removed debug line
 
                     let hashingImpact = doc.createElement('m-box');
                     hashingImpact.className = 'impact-card';
@@ -783,11 +931,48 @@ window.addEventListener('load', async function () {
             // Append close button to panel
             panel.appendChild(closeButton);
 
-            // Create refresh button
+            // Create container for bottom-right controls (toggle)
+            let bottomRightControls = doc.createElement('div');
+            bottomRightControls.style.position = 'absolute';
+            bottomRightControls.style.bottom = '20px';
+            bottomRightControls.style.right = '20px';
+            bottomRightControls.style.display = 'flex';
+            bottomRightControls.style.alignItems = 'center';
+
+            // Create "Display Sleep Miners" toggle
+            let sleepToggleContainer = doc.createElement('div');
+            sleepToggleContainer.style.display = 'flex';
+            sleepToggleContainer.style.alignItems = 'center';
+            sleepToggleContainer.style.color = '#fff'; // Text color for label
+            sleepToggleContainer.title = 'Changes apply on next refresh.'; // Set title on container
+
+            let sleepToggleCheckbox = doc.createElement('input');
+            sleepToggleCheckbox.type = 'checkbox';
+            sleepToggleCheckbox.id = 'sleepMinerToggle';
+            sleepToggleCheckbox.checked = displaySleepMiners;
+            sleepToggleCheckbox.style.marginRight = '5px';
+            // sleepToggleCheckbox.title = 'Changes apply on next refresh.'; // Moved to container
+
+            let sleepToggleLabel = doc.createElement('label');
+            sleepToggleLabel.htmlFor = 'sleepMinerToggle';
+            sleepToggleLabel.innerText = 'Display Sleep Miners';
+            // sleepToggleLabel.title = 'Changes apply on next refresh.'; // Moved to container
+
+            sleepToggleCheckbox.addEventListener('change', async function() {
+                displaySleepMiners = this.checked;
+                await GM_setValue('displaySleepMiners', displaySleepMiners);
+            });
+
+            sleepToggleContainer.appendChild(sleepToggleCheckbox);
+            sleepToggleContainer.appendChild(sleepToggleLabel);
+            bottomRightControls.appendChild(sleepToggleContainer);
+            panel.appendChild(bottomRightControls); // Append toggle container to panel
+            
+            // Create refresh button (and its related elements like spinner, status) - back to top right
             let refreshContainer = doc.createElement('div');
             refreshContainer.style.position = 'absolute';
-            refreshContainer.style.top = '20px';
-            refreshContainer.style.right = '20px';
+            refreshContainer.style.top = '20px'; // Position at top
+            refreshContainer.style.right = '20px'; // Position at right
             refreshContainer.style.display = 'flex';
             refreshContainer.style.alignItems = 'center';
 
@@ -837,7 +1022,8 @@ window.addEventListener('load', async function () {
             refreshContainer.appendChild(refreshLoadStatusContainer);
             refreshContainer.appendChild(refreshSpinner);
             refreshContainer.appendChild(refreshButton);
-            panel.appendChild(refreshContainer);
+            panel.appendChild(refreshContainer); // Append refresh container directly to panel
+
 
             // Countdown and refresh logic
             let countdownInterval = setInterval(async function() {
@@ -850,10 +1036,12 @@ window.addEventListener('load', async function () {
 
             // Add click event to refresh button
             refreshButton.addEventListener('click', async function() {
-                // if we're already refreshing, don't do anything
                 if (refreshButton.innerText === 'Refreshing...') {
                     return;
                 }
+                sleepToggleCheckbox.disabled = true; // Disable toggle during refresh
+                sleepToggleContainer.title = 'Cannot change during scan.'; // Update tooltip on container
+
 
                 clearInterval(countdownInterval);
 
@@ -882,7 +1070,7 @@ window.addEventListener('load', async function () {
 
                 // Remove old overlay and create new one
                 doc.getElementById('optiWatchOverlay').remove();
-                createOverlay(doc, sites);
+                createOverlay(doc, sites); // This will re-create the toggle, re-enabling it implicitly and resetting its title
 
                 // Restore the state of opened expandables and scroll position
                 openedExpandables.forEach(index => {
@@ -911,6 +1099,12 @@ window.addEventListener('load', async function () {
 
                 // Hide loading spinner
                 refreshSpinner.style.display = 'none';
+                // The toggle and its container's title are reset when createOverlay is called.
+                // If explicit re-enable/title reset was needed:
+                // const newSleepToggleContainer = doc.querySelector('#sleepMinerToggle').parentElement;
+                // if (newSleepToggleContainer) {
+                //    newSleepToggleContainer.title = 'Changes apply on next refresh.';
+                // }
             });
 
             // Append panel to overlay
@@ -925,7 +1119,8 @@ window.addEventListener('load', async function () {
         const sites = await getSites(userID, companies);
         await getHashingInventory(userID, Object.values(sites).flatMap(company => company.sites));
 
-        // Inject the overlay content into the popout window
+        // remove the initial loader and render the dashboard
+        initOverlay.remove();
         createOverlay(document, sites);
     }
 });
