@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      8.1.2
+// @version      8.1.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -102,7 +102,6 @@ const features = [
     { name: 'Sharepoint & Planner', id: 'quickSharepointPlanner', category: 'Individual Miner' },
     { name: 'Planner Card Info', id: 'plannerCardScanMiner', category: 'Individual Miner' },
     { name: 'Breaker Number', id: 'breakerNumberMiner', category: 'Individual Miner' },
-    { name: 'Times Down', id: 'downCount', category: 'Individual Miner' },
     { name: 'Last Soft Reboot', id: 'lastSoftReboot', category: 'Individual Miner' },
     { name: 'Current Log Tab', id: 'PoolConfigModal', category: 'Individual Miner' },
 
@@ -8376,70 +8375,6 @@ window.addEventListener('load', function () {
                 const d = path.getAttribute('d');
                 return parsePathData(d);
             }
-
-            function createDownTimesChartDataBox(chartID, title, callback) {
-                if(!savedFeatures["downCount"]) { return; }
-
-                const chart = document.querySelector(chartID);
-                if (!chart) {
-                    setTimeout(() => {
-                        createDownTimesChartDataBox(chartID, title, callback);
-                    }, 500);
-                    return;
-                }
-                var lastChartd = '';
-                var downCountBox;
-                const observer = new MutationObserver(() => {
-                    const path = chart.querySelector('[id^="SvgjsPath"]');
-                    if (path) {
-                        const d = path.getAttribute('d');
-
-                        // Check if the d attribute has changed
-                        if (d === lastChartd) {
-                            return;
-                        }
-                        lastChartd = d;
-                        const result = getGraphData(chart);
-
-                        // Check if reportRange.textContent changes
-                        const reportRange = document.getElementById('reportrange');
-                        const timeSpan = reportRange.textContent.trim();
-
-                        // Find the existing data box
-                        if (downCountBox) {
-                            // Update the range in the box
-                            const h3 = downCountBox.querySelector('h3');
-                            if (h3) {
-                                h3.textContent = `${title} (${timeSpan})`;
-                            }
-
-                            // Update the down times count
-                            const p = downCountBox.querySelector('p');
-                            if (p) {
-                                p.textContent = result.downCounts;
-                            }
-                        } else {
-                            // Add the new data box to the page
-                            downCountBox = addDataBox(`${title} (${timeSpan})`, result.downCounts);
-                        }
-
-                        if(callback && typeof callback === 'function') {
-                            callback(result, timeSpan);
-                        }
-
-
-                    }
-                });
-
-                observer.observe(chart, {
-                    childList: true,
-                    subtree: true
-                });
-            }
-
-            createDownTimesChartDataBox('#uptimeChart', 'Times Down', (result, timeSpan) => {
-            });
-
 
             // Wait for the miner activity list to exist and be fully loaded
             const waitForMinerActivityList = setInterval(() => {
