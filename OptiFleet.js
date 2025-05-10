@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      8.1.0
+// @version      8.1.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1414,6 +1414,34 @@ window.addEventListener('load', function () {
         return JSON.parse(localStorage.getItem("selectedCompany"));
     }
 
+    function createNotification(text, color = "#dc3545", duration = 8000) {
+        const notification = document.createElement('div');
+        notification.className = 'notification';
+        notification.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background-color: ${color};
+            color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 999999;
+            transition: opacity 0.5s ease;
+            opacity: 1;
+        `;
+        notification.textContent = text;
+        document.body.appendChild(notification);
+
+        setTimeout(function() {
+            notification.style.opacity = '0';
+        }, duration);
+
+        setTimeout(function() {
+            if(!notification) { return; }
+            notification.remove();
+        }, duration + 500);
+    }
+
     function OptiFleetSpecificLogic() {
         var allMinersData = {};
         var allMinersLookup = {};
@@ -2488,34 +2516,6 @@ window.addEventListener('load', function () {
 
         // SN Scanner Logic
         if(currentURL.includes("https://foundryoptifleet.com/")) {
-
-            function createNotification(text, color = "#dc3545", duration = 8000) {
-                const notification = document.createElement('div');
-                notification.className = 'notification';
-                notification.style.cssText = `
-                    position: fixed;
-                    top: 10px;
-                    right: 10px;
-                    background-color: ${color};
-                    color: #fff;
-                    padding: 10px;
-                    border-radius: 5px;
-                    z-index: 999999;
-                    transition: opacity 0.5s ease;
-                    opacity: 1;
-                `;
-                notification.textContent = text;
-                document.body.appendChild(notification);
-
-                setTimeout(function() {
-                    notification.style.opacity = '0';
-                }, duration);
-
-                setTimeout(function() {
-                    if(!notification) { return; }
-                    notification.remove();
-                }, duration + 500);
-            }
 
             // Check is the user ever inputs something
             var serialInputted = "";
@@ -11967,14 +11967,18 @@ window.addEventListener('load', function () {
                     var algorithmDropdownFound = false;
                     var modelDropdownFound = false;
 
+                    let intervalModel
                     const intervalAlgorithm = setInterval(() => {
-                        algorithmDropdown.focus();
-                        algorithmDropdown.click();
-    
-                        algorithmDropdown.style.backgroundColor = '#ffcc99';
+                        let algorithmOptions = document.querySelectorAll('.filter-box .filter:nth-child(1) ul li');
+                        if(algorithmOptions.length === 0) {
+                            algorithmDropdown.focus();
+                            algorithmDropdown.click();
+        
+                            algorithmDropdown.style.backgroundColor = '#ffcc99';
+                        }
 
                         setTimeout(() => {
-                            const algorithmOptions = document.querySelectorAll('.filter-box .filter:nth-child(1) ul li');
+                            algorithmOptions = document.querySelectorAll('.filter-box .filter:nth-child(1) ul li');
                             algorithmOptions.forEach(option => {
                                 console.log(option.textContent);
                                 if (option.textContent.toLocaleLowerCase().trim().includes(algorithm)) {
@@ -11983,14 +11987,17 @@ window.addEventListener('load', function () {
                                     algorithmDropdown.style.backgroundColor = '#99ff99';
                                     algorithmDropdownFound = true;
                                     clearInterval(intervalAlgorithm);
-                                    const intervalModel = setInterval(() => {
-                                        modelDropdown.focus();
-                                        modelDropdown.click();
-                
-                                        modelDropdown.style.backgroundColor = '#ffcc99';
+                                    intervalModel = setInterval(() => {
+                                        let modelOptions = document.querySelectorAll('.filter ul li');
+                                        if(modelOptions.length === 0) {
+                                            modelDropdown.focus();
+                                            modelDropdown.click();
+
+                                            modelDropdown.style.backgroundColor = '#ffcc99';
+                                        }
                 
                                         setTimeout(() => {
-                                            const modelOptions = document.querySelectorAll('.filter ul li');
+                                            modelOptions = document.querySelectorAll('.filter ul li');
                                             modelOptions.forEach(option => {
                                                 if (option.textContent.toLocaleLowerCase().trim() === minerType) {
                                                     option.focus();
@@ -12008,7 +12015,7 @@ window.addEventListener('load', function () {
                                                 modelDropdown.style.backgroundColor = '#ff6666';
                                             }
                                         }, 100);
-                                    }, 200);
+                                    }, 500);
                                     return;
                                 }
                             });
@@ -12019,6 +12026,29 @@ window.addEventListener('load', function () {
                             }
                         }, 100);
                     }, 200);
+
+                    // Stop trying to find the algorithm after 5 seconds
+                    setTimeout(() => {
+                        if (!algorithmDropdownFound) {
+                            clearInterval(intervalAlgorithm);
+                            algorithmDropdown.style.transition = 'background-color 1s';
+                            setTimeout(() => {
+                                algorithmDropdown.style.backgroundColor = '';
+                            }, 1000); // Fade back to normal after 1 second
+                        }
+                        if (!modelDropdownFound) {
+                            clearInterval(intervalModel);
+                            modelDropdown.style.transition = 'background-color 1s';
+                            setTimeout(() => {
+                                modelDropdown.style.backgroundColor = '';
+                            }, 1000); // Fade back to normal after 1 second
+                        }
+
+                        if(!algorithmDropdownFound && !modelDropdownFound) {
+                            createNotification('Failed to auto-select miner type/algorithm');
+                        }
+                    }, 5000);
+
                 }
             }
         }, 800);
