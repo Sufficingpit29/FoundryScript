@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiFleet Additions (Dev)
 // @namespace    http://tampermonkey.net/
-// @version      8.1.3
+// @version      8.1.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -40,7 +40,7 @@
 
 
 let currentURL = window.location.href;
-if(currentURL.includes("OptiWatch")) {
+if(currentURL.includes("OptiWatch") || currentURL.includes("OptiReport")) {
     return;
 }
 
