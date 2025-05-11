@@ -2,7 +2,7 @@
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
 // @version      0.0.3
-// @description  Adds an Opti-Report panel to the page with advanced screenshot capabilities.
+// @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
 // @icon         https://foundryoptifleet.com/img/favicon-32x32.png
