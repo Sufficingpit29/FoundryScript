@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.0.2 // Version incremented
+// @version      0.0.3
 // @description  Adds an Opti-Report panel to the page with advanced screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -699,13 +699,6 @@ window.addEventListener('load', function () {
                 }
                 // --- End of data scraping ---
 
-
-                // No longer need the explicit spacerSO div, padding will handle it.
-                // const spacerSO = metricsReportWindow.document.createElement('div');
-                // spacerSO.style.height = '70px'; // Adjust height as needed
-                // spacerSO.style.width = '100%';
-                // elementToCaptureSO.appendChild(spacerSO);
-
                 const docElSO = metricsReportWindow.document.documentElement;
                 const bodyElSO = metricsReportWindow.document.body;
 
@@ -775,10 +768,6 @@ window.addEventListener('load', function () {
                 emailBodyToAppendTo.scrollTop = emailBodyToAppendTo.scrollHeight;
                 updateProgressMessage('"Site Overview" screenshot added.');
                 
-                // Clean up the spacer is no longer needed as it was removed.
-                // if (elementToCaptureSO.contains(spacerSO)) {
-                //     elementToCaptureSO.removeChild(spacerSO);
-                // }
                 // --- End of adapted screenshot logic ---
 
                 updateProgressMessage('Reloading page for "Hashrate Efficiency" capture...');
@@ -1288,9 +1277,9 @@ window.addEventListener('load', function () {
         // Container for buttons
         let buttonContainer = document.createElement('div');
         buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'space-around'; // Keep as space-around or adjust as needed for 3 buttons
+        buttonContainer.style.justifyContent = 'space-around';
         buttonContainer.style.alignItems = 'center';
-        buttonContainer.style.flexWrap = 'wrap'; // Allow buttons to wrap if not enough space
+        buttonContainer.style.flexWrap = 'wrap';
 
         fetchKeyMetricsReportScreenshot(emailBody);
 
