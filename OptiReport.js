@@ -6,8 +6,8 @@
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
 // @icon         https://foundryoptifleet.com/img/favicon-32x32.png
-// @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiReport.js
-// @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/main/OptiReport.js
+// @updateURL    https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/refs/heads/main/OptiReport.js
+// @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/refs/heads/main/OptiReport.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js
 // @grant        GM_addStyle
 // @run-at       document-start
