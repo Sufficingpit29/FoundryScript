@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.0.3
+// @version      0.0.5
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -232,7 +232,6 @@ window.addEventListener('load', function () {
         const diffMillis = Math.abs(date1.getTime() - date2.getTime());
         return diffMillis / (1000 * 60 * 60);
     }
-
 
     async function captureSingleReport(reportWindow, dateRangeKey, desiredRangeTextInSpan, emailBodyToAppendTo, updateProgress) {
         if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
@@ -525,7 +524,7 @@ window.addEventListener('load', function () {
                 }
                 emailBodyToAppendTo.scrollTop = emailBodyToAppendTo.scrollHeight;
 
-                if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.'); 
+                if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
                 updateProgressMessage('Reloading report page for 24-hour capture...');
                 metricsReportWindow.location.reload(true); // Force reload
@@ -1036,7 +1035,7 @@ window.addEventListener('load', function () {
 
 
     // Function to open the overlay panel
-    async function openOptiReportPanel() { // Made async for potential await later if needed
+    async function openOptiReportPanel() {
         // Prevent multiple panels
         if (document.getElementById(PANEL_ID)) {
             return;
@@ -1078,231 +1077,381 @@ window.addEventListener('load', function () {
         title.style.marginBottom = '20px';
         title.style.borderBottom = '1px solid #444';
         title.style.paddingBottom = '15px';
+        panel.appendChild(title);
 
+        // --- Report Selection UI ---
+        let selectionContainer = document.createElement('div');
+        selectionContainer.style.marginBottom = '20px';
+        selectionContainer.style.textAlign = 'center';
+
+        let reportTypeLabel = document.createElement('label');
+        reportTypeLabel.innerText = 'Select Report Type: ';
+        reportTypeLabel.style.marginRight = '10px';
+        reportTypeLabel.style.fontSize = '16px';
+
+        let reportTypeSelect = document.createElement('select');
+        reportTypeSelect.id = 'optiReportTypeSelect';
+        reportTypeSelect.style.padding = '8px';
+        reportTypeSelect.style.fontSize = '15px';
+        reportTypeSelect.style.borderRadius = '4px';
+        reportTypeSelect.style.backgroundColor = '#2a2a2a';
+        reportTypeSelect.style.color = '#e0e0e0';
+        reportTypeSelect.style.border = '1px solid #555';
+
+        const reportTypes = ["Full Report", "Fortitude Report"];
+        reportTypes.forEach(type => {
+            let option = document.createElement('option');
+            option.value = type;
+            option.text = type;
+            reportTypeSelect.appendChild(option);
+        });
+
+        let confirmSelectionButton = document.createElement('button');
+        confirmSelectionButton.innerText = 'Generate Report';
+        confirmSelectionButton.style.padding = '10px 18px';
+        confirmSelectionButton.style.fontSize = '15px';
+        confirmSelectionButton.style.backgroundColor = '#4CAF50'; // Green color
+        confirmSelectionButton.style.color = 'white';
+        confirmSelectionButton.style.border = 'none';
+        confirmSelectionButton.style.borderRadius = '5px';
+        confirmSelectionButton.style.cursor = 'pointer';
+        confirmSelectionButton.style.marginLeft = '15px';
+        confirmSelectionButton.style.transition = 'background-color 0.3s ease';
+        confirmSelectionButton.onmouseover = () => confirmSelectionButton.style.backgroundColor = '#45a049';
+        confirmSelectionButton.onmouseout = () => confirmSelectionButton.style.backgroundColor = '#4CAF50';
+
+        selectionContainer.appendChild(reportTypeLabel);
+        selectionContainer.appendChild(reportTypeSelect);
+        selectionContainer.appendChild(confirmSelectionButton);
+        panel.appendChild(selectionContainer);
+
+        // --- Report Display Area (initially empty) ---
+        let reportDisplayArea = document.createElement('div');
+        reportDisplayArea.id = 'optiReportDisplayArea';
+        panel.appendChild(reportDisplayArea);
+
+        // --- Main Controls Container (for Close button, etc.) ---
+        let mainControlsContainer = document.createElement('div');
+        mainControlsContainer.style.display = 'flex';
+        mainControlsContainer.style.justifyContent = 'flex-end'; // Aligns buttons to the right
+        mainControlsContainer.style.marginTop = '20px'; // Add some space above the close button
+
+        // Close Button
+        let closeButton = document.createElement('button');
+        closeButton.innerText = 'Close';
+        // ... (styling from original closeButton)
+        closeButton.style.padding = '12px 25px';
+        closeButton.style.fontSize = '16px';
+        closeButton.style.backgroundColor = '#f44336'; // Red color for close
+        closeButton.style.color = 'white';
+        closeButton.style.border = 'none';
+        closeButton.style.borderRadius = '5px';
+        closeButton.style.cursor = 'pointer';
+        closeButton.style.transition = 'background-color 0.3s ease';
+        closeButton.onmouseover = () => closeButton.style.backgroundColor = '#d32f2f';
+        closeButton.onmouseout = () => closeButton.style.backgroundColor = '#f44336';
+        closeButton.addEventListener('click', function() {
+            overlay.remove();
+        });
+        mainControlsContainer.appendChild(closeButton);
+        panel.appendChild(mainControlsContainer);
+
+        // Event listener for the confirm selection button
+        confirmSelectionButton.addEventListener('click', async function() {
+            const selectedReportType = reportTypeSelect.value;
+            confirmSelectionButton.disabled = true;
+            confirmSelectionButton.innerText = 'Generating...';
+            reportDisplayArea.innerHTML = ''; // Clear previous content if any
+
+            // Hide the selection UI
+            selectionContainer.style.display = 'none';
+
+            // Call new function to generate and display the report content
+            await generateReportContent(selectedReportType, reportDisplayArea);
+
+            // It's no longer necessary to re-enable the button or change its text
+            // if the selection UI is hidden permanently after one use per panel opening.
+            // confirmSelectionButton.disabled = false;
+            // confirmSelectionButton.innerText = 'Generate Report';
+        });
+
+        // Add panel to overlay
+        overlay.appendChild(panel);
+
+        // Add overlay to body
+        document.body.appendChild(overlay);
+    }
+
+
+    async function generateReportContent(reportType, container) {
         // Editable Content Area (Email Body)
         let emailBody = document.createElement('div');
         emailBody.contentEditable = 'true';
-        emailBody.style.minHeight = '200px'; // Minimum height for typing
-        emailBody.style.maxHeight = '40vh'; // Max height before scrolling within the div
+        emailBody.style.minHeight = '200px';
+        emailBody.style.maxHeight = '40vh';
         emailBody.style.overflowY = 'auto';
         emailBody.style.border = '1px solid #555';
         emailBody.style.padding = '15px';
         emailBody.style.marginBottom = '20px';
-        emailBody.style.backgroundColor = '#2a2a2a'; // Slightly lighter than panel for contrast
+        emailBody.style.backgroundColor = '#2a2a2a';
         emailBody.style.color = '#e0e0e0';
         emailBody.style.borderRadius = '4px';
         emailBody.style.lineHeight = '1.6';
         emailBody.setAttribute('aria-label', 'Email body content');
 
-        // --- Table Styling ---
+        // --- Common Styles and Placeholders ---
         const tableStyle = `border-collapse: collapse; width: 95%; margin: 15px auto; font-size: 14px;`;
         const thTdStyle = `border: 1px solid #444; text-align: left; padding: 8px;`;
         const thStyle = `${thTdStyle} background-color: #333; color: #fff;`;
-        const sectionTitleStyle = `font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;`; // Increased margin-top
-        const placeholderData = "---"; // Placeholder for data points
-        const sectionSpacerHTML = `<p style="margin-bottom: 20px;">&nbsp;</p>`; // Spacer paragraph
-
-        // --- General Site Stats Table ---
-        const generalStatsTableHTML = `
-            <table style="${tableStyle}">
-                <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr> 
-                <tr><td style="${thTdStyle}">Uptime 24hr Average</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Uptime Monthly Average</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Site Utilization</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Efficiency</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            </table>`;
-
-        // --- Fortitude Information Table ---
-        const fortitudeTitleHTML = `<p style="${sectionTitleStyle}">Fortitude Information</p>`;
-        const fortitudeTableHTML = `
-            <table style="${tableStyle}">
-                <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Miners Offline awaiting repair</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            </table>`;
-
-        // --- RAMM 1410 LLC Information Table ---
-        const rammTitleHTML = `<p style="${sectionTitleStyle}">RAMM 1410 LLC Information</p>`;
-        const rammTableHTML = `
-            <table style="${tableStyle}">
-                <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Miners Shipped Out for Repair</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Need Repaired</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            </table>`;
-
-        // --- Bitmain Information Table ---
-        const bitmainTitleHTML = `<p style="${sectionTitleStyle}">Bitmain Information</p>`;
-        const bitmainTableHTML = `
-            <table style="${tableStyle}">
-                <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Miners Shipped out for repair</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Need repaired</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            </table>`;
-
-        // --- Repair and Maintenance Notes ---
-        const repairNotesTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Repair and Maintenance Notes</p>`; // Increased margin-top
+        const sectionTitleStyle = `font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;`;
+        const placeholderData = "---";
+        const sectionSpacerHTML = `<p style="margin-bottom: 20px;">&nbsp;</p>`;
         const greenLineSeparatorHTML = `<hr style="border: none; border-top: 2px solid green; margin: 5px 2.5% 15px 2.5%; width: 95%;">`;
-        const repairNotesContentHTML = `<p><br></p>`; // Blank paragraph for user to start typing notes
 
-        // --- Parts Invoicing ---
-        const partsInvoicingTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Parts Invoicing</p>`; // Increased margin-top
-        const partsInvoicingGreenLineSeparatorHTML = `<hr style="border: none; border-top: 2px solid green; margin: 5px 2.5% 15px 2.5%; width: 95%;">`;
-        const partsInvoicingContentHTML = `<p><br></p>`; // Blank paragraph for user to start typing notes
-
-        // Header Image HTML String
-        const headerImageHTML = `<img src="https://media.discordapp.net/attachments/413885609686335500/1370942381297373256/Foundry-Site-Operations.png?ex=68215516&is=68200396&hm=db0eb1a9dd94a43d043bc811238026a4ffc610c5154a0c28a19b72496421b872&=&format=webp&quality=lossless&width=1011&height=219" alt="Foundry Site Operations Logo" style="display:block; margin:0 auto 15px auto; max-width:300px; height:auto;">`; // Updated image URL and alt text, increased max-width slightly
-
-        // Current Date HTML String
+        // --- Common Header Content ---
+        const headerImageHTML = `<img src="https://media.discordapp.net/attachments/413885609686335500/1370942381297373256/Foundry-Site-Operations.png?ex=68215516&is=68200396&hm=db0eb1a9dd94a43d043bc811238026a4ffc610c5154a0c28a19b72496421b872&=&format=webp&quality=lossless&width=1011&height=219" alt="Foundry Site Operations Logo" style="display:block; margin:0 auto 15px auto; max-width:300px; height:auto;">`;
         const today = new Date();
         const dateHTML = `<p style="margin-bottom: 8px;">Date: ${today.toLocaleDateString()}</p>`;
+        const siteName = getSelectedSiteName();
+        const siteHTML = `<p style="margin-bottom: 15px;">Site: ${siteName}</p>`;
+        const reportPlaceholderHTML = ""; // Kept from original, usually empty
 
-        // Site Name HTML String
-        const siteHTML = `<p style="margin-bottom: 15px;">Site: ${getSelectedSiteName()}</p>`;
+        let currentEmailContentHTML = headerImageHTML + dateHTML + siteHTML;
 
-        // Placeholder for report details - now blank
-        const reportPlaceholderHTML = "";
+        if (reportType === "Full Report") {
+            const generalStatsTableHTML = `
+                <table style="${tableStyle}">
+                    <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Uptime 24hr Average</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Uptime Monthly Average</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Site Utilization</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Efficiency</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                </table>`;
+            const fortitudeTitleHTML = `<p style="${sectionTitleStyle}">Fortitude Information</p>`;
+            const fortitudeTableHTML = `
+                <table style="${tableStyle}">
+                    <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Miners Offline awaiting repair</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                </table>`;
+            const rammTitleHTML = `<p style="${sectionTitleStyle}">RAMM 1410 LLC Information</p>`;
+            const rammTableHTML = `
+                <table style="${tableStyle}">
+                    <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Miners Shipped Out for Repair</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Need Repaired</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                </table>`;
+            const bitmainTitleHTML = `<p style="${sectionTitleStyle}">Bitmain Information</p>`;
+            const bitmainTableHTML = `
+                <table style="${tableStyle}">
+                    <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Miners Shipped out for repair</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Need repaired</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                </table>`;
+            const repairNotesTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Notes</p>`;
+            const repairNotesContentHTML = `<p><br></p>`;
+            const partsInvoicingTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Parts Invoicing</p>`;
+            const partsInvoicingContentHTML = `<p><br></p>`;
 
-        // Set initial content for the email body
-        emailBody.innerHTML = headerImageHTML +
-                      dateHTML +
-                      siteHTML +
-                      generalStatsTableHTML +
-                      sectionSpacerHTML + // Added spacer
-                      fortitudeTitleHTML +
-                      fortitudeTableHTML +
-                      sectionSpacerHTML + // Added spacer
-                      rammTitleHTML +
-                      rammTableHTML +
-                      sectionSpacerHTML + // Added spacer
-                      bitmainTitleHTML +
-                      bitmainTableHTML +
-                      repairNotesTitleHTML +
-                      greenLineSeparatorHTML +
-                      repairNotesContentHTML +
-                      partsInvoicingTitleHTML +
-                      partsInvoicingGreenLineSeparatorHTML +
-                      partsInvoicingContentHTML +
-                      reportPlaceholderHTML;
+            currentEmailContentHTML += generalStatsTableHTML +
+                                 sectionSpacerHTML +
+                                 fortitudeTitleHTML +
+                                 fortitudeTableHTML +
+                                 sectionSpacerHTML +
+                                 rammTitleHTML +
+                                 rammTableHTML +
+                                 sectionSpacerHTML +
+                                 bitmainTitleHTML +
+                                 bitmainTableHTML +
+                                 repairNotesTitleHTML +
+                                 greenLineSeparatorHTML +
+                                 repairNotesContentHTML +
+                                 partsInvoicingTitleHTML +
+                                 greenLineSeparatorHTML +
+                                 partsInvoicingContentHTML +
+                                 reportPlaceholderHTML;
+            emailBody.innerHTML = currentEmailContentHTML;
 
-        // Get all miner data
-        getMinerData(function(minerData) {
-            console.log('Miner data fetched:', minerData);
-            const subcustomerStats = {
-                Fortitude: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
-                RAMM: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
-                Bitmain: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
-            };
+            getMinerData(function(minerData) {
+                console.log('Miner data fetched for Full Report:', minerData);
+                const subcustomerStats = {
+                    Fortitude: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
+                    RAMM: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
+                    Bitmain: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
+                };
+                let totalOnline = 0;
+                let totalOffline = 0;
 
-            let totalOnline = 0;
-            let totalOffline = 0;
-
-            minerData.miners.forEach(miner => {
-                for (const subcustomer in subcustomerStats) {
-                    if (miner.subcustomerName && miner.subcustomerName.includes(subcustomer)) {
-                        if(miner.statusName === "Decommissioned") { continue; } // Skip decommissioned miners
-
-                        if (miner.statusName === "Online") {
-                            subcustomerStats[subcustomer].online++;
-                            totalOnline++;
-                        } else {
-                            subcustomerStats[subcustomer].offline++;
-                            totalOffline++;
+                minerData.miners.forEach(miner => {
+                    for (const subcustomer in subcustomerStats) {
+                        if (miner.subcustomerName && miner.subcustomerName.includes(subcustomer)) {
+                            if(miner.statusName === "Decommissioned") { continue; }
+                            if (miner.statusName === "Online") {
+                                subcustomerStats[subcustomer].online++;
+                                totalOnline++;
+                            } else {
+                                subcustomerStats[subcustomer].offline++;
+                                totalOffline++;
+                            }
+                            if (miner.statusName === "Offsite Repair") { // This might need adjustment based on exact meaning
+                                subcustomerStats[subcustomer].needRepair++;
+                            }
+                            if (miner.hashrate) {
+                                subcustomerStats[subcustomer].hashrate += miner.hashrate;
+                            }
+                            break;
                         }
-
-                        if (miner.statusName === "Need Repair") {
-                            subcustomerStats[subcustomer].needRepair++;
-                        }
-
-                        if (miner.hashrate) {
-                            subcustomerStats[subcustomer].hashrate += miner.hashrate;
-                        }
-                        break; // Exit loop once matched
                     }
+                });
+
+                const generalStatsTable = emailBody.querySelector('table:nth-of-type(1)');
+                const fortitudeTable = emailBody.querySelector('table:nth-of-type(2)');
+                const rammTable = emailBody.querySelector('table:nth-of-type(3)');
+                const bitmainTable = emailBody.querySelector('table:nth-of-type(4)');
+
+                if (generalStatsTable) {
+                    const rows = generalStatsTable.rows;
+                    rows[1].cells[1].innerText = `${totalOnline} / ${totalOnline + totalOffline}`; // Miners Online
                 }
+                if (fortitudeTable) {
+                    const rows = fortitudeTable.rows;
+                    rows[0].cells[1].innerText = `${subcustomerStats.Fortitude.online} / ${subcustomerStats.Fortitude.online + subcustomerStats.Fortitude.offline}`;
+                    let [hash, unit] = convertHashRate(subcustomerStats.Fortitude.hashrate);
+                    rows[1].cells[1].innerText = `${hash} ${unit}/s`;
+                    rows[2].cells[1].innerText = ``;
+                    rows[3].cells[1].innerText = ``;
+                    rows[4].cells[1].innerText = `${subcustomerStats.Fortitude.offline}`; // Total Offline for Fortitude
+                }
+                if (rammTable) {
+                    const rows = rammTable.rows;
+                    rows[0].cells[1].innerText = `${subcustomerStats.RAMM.online} / ${subcustomerStats.RAMM.online + subcustomerStats.RAMM.offline}`;
+                    let [hash, unit] = convertHashRate(subcustomerStats.RAMM.hashrate);
+                    rows[1].cells[1].innerText = `${hash} ${unit}/s`;
+                    rows[2].cells[1].innerText = ``;
+                    rows[3].cells[1].innerText = ``;
+                    rows[4].cells[1].innerText = ``;
+                    rows[5].cells[1].innerText = `${subcustomerStats.RAMM.offline}`;
+                }
+                if (bitmainTable) {
+                    const rows = bitmainTable.rows;
+                    rows[0].cells[1].innerText = `${subcustomerStats.Bitmain.online} / ${subcustomerStats.Bitmain.online + subcustomerStats.Bitmain.offline}`;
+                    let [hash, unit] = convertHashRate(subcustomerStats.Bitmain.hashrate);
+                    rows[1].cells[1].innerText = `${hash} ${unit}/s`;
+                    rows[2].cells[1].innerText = ``;
+                    rows[3].cells[1].innerText = ``;
+                    rows[4].cells[1].innerText = ``;
+                    rows[5].cells[1].innerText = `${subcustomerStats.Bitmain.offline}`;
+                }
+                console.log(subcustomerStats);
             });
 
-            // Update the tables with the data
-            const generalStatsTable = emailBody.querySelector('table:nth-of-type(1)');
-            const fortitudeTable = emailBody.querySelector('table:nth-of-type(2)');
-            const rammTable = emailBody.querySelector('table:nth-of-type(3)');
-            const bitmainTable = emailBody.querySelector('table:nth-of-type(4)');
-            const generalStatsRows = generalStatsTable.querySelectorAll('tr');
-            const fortitudeRows = fortitudeTable.querySelectorAll('tr');
-            const rammRows = rammTable.querySelectorAll('tr');
-            const bitmainRows = bitmainTable.querySelectorAll('tr');
+            await fetchKeyMetricsReportScreenshot(emailBody);
 
-            // Update General Stats
-            generalStatsRows[1].cells[1].innerText = `${totalOnline} / ${totalOnline + totalOffline}`;
+        } else if (reportType === "Fortitude Report") {
+            const fortitudeTitleHTML = `<p style="${sectionTitleStyle}">Fortitude Information</p>`;
+            const fortitudeTableHTML = `
+                <table style="${tableStyle}">
+                    <tr><td style="${thTdStyle}">Fleet Utilization</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Miners Online</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Hashrate</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Uptime 24hr Average</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Uptime Monthly Average</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Efficiency</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Miners Shipped Out for Repair</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Miners Need Repair</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Spare Miners</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                    <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                </table>`;
+            const repairNotesTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Notes</p>`;
+            const repairNotesContentHTML = `<p><br></p>`;
 
+            currentEmailContentHTML += fortitudeTitleHTML +
+                                 fortitudeTableHTML +
+                                 repairNotesTitleHTML +
+                                 greenLineSeparatorHTML +
+                                 repairNotesContentHTML;
+            emailBody.innerHTML = currentEmailContentHTML;
 
-            // Update Fortitude Stats
-            fortitudeRows[0].cells[1].innerText = `${subcustomerStats.Fortitude.online} / ${subcustomerStats.Fortitude.online + subcustomerStats.Fortitude.offline}`;
-            let [fortitudeHashrate, fortitudeHashrateUnit] = convertHashRate(subcustomerStats.Fortitude.hashrate);
-            fortitudeRows[1].cells[1].innerText = `${fortitudeHashrate} ${fortitudeHashrateUnit}/s`;
-            fortitudeRows[2].cells[1].innerText = ``;
-            fortitudeRows[3].cells[1].innerText = ``;
-            fortitudeRows[4].cells[1].innerText = `${subcustomerStats.Fortitude.offline}`;
+            getMinerData(function(minerData) {
+                console.log('Miner data fetched for Fortitude Report:', minerData);
+                const fortitudeStats = {
+                    online: 0,
+                    offline: 0,
+                    hashrate: 0,
+                    shippedOutForRepair: 0
+                    // minersNeedRepair (on-site): 0, // Requires specific status, placeholder for now
+                    // otherOfflineText: placeholderData, // For notes like "(24 Scrapped)"
+                    // spareMiners: placeholderData
+                };
 
-            // Update RAMM Stats
-            rammRows[0].cells[1].innerText = `${subcustomerStats.RAMM.online} / ${subcustomerStats.RAMM.online + subcustomerStats.RAMM.offline}`;
-            let [rammHashrate, rammHashrateUnit] = convertHashRate(subcustomerStats.RAMM.hashrate);
-            rammRows[1].cells[1].innerText = `${rammHashrate} ${rammHashrateUnit}/s`;
-            rammRows[2].cells[1].innerText = ``;
-            rammRows[3].cells[1].innerText = ``;
-            rammRows[4].cells[1].innerText = ``;
-            rammRows[5].cells[1].innerText = `${subcustomerStats.RAMM.offline}`;
+                minerData.miners.forEach(miner => {
+                    if (miner.subcustomerName && miner.subcustomerName.includes("Fortitude")) {
+                        if(miner.statusName === "Decommissioned") { return; }
+                        if (miner.statusName === "Online") {
+                            fortitudeStats.online++;
+                        } else {
+                            fortitudeStats.offline++;
+                            if (miner.statusName === "Offsite Repair") {
+                                fortitudeStats.shippedOutForRepair++;
+                            }
+                        }
+                        if (miner.hashrate) {
+                            fortitudeStats.hashrate += miner.hashrate;
+                        }
+                    }
+                });
 
-            // Update Bitmain Stats
-            bitmainRows[0].cells[1].innerText = `${subcustomerStats.Bitmain.online} / ${subcustomerStats.Bitmain.online + subcustomerStats.Bitmain.offline}`;
-            let [bitmainHashrate, bitmainHashrateUnit] = convertHashRate(subcustomerStats.Bitmain.hashrate);
-            bitmainRows[1].cells[1].innerText = `${bitmainHashrate} ${bitmainHashrateUnit}/s`;
-            bitmainRows[2].cells[1].innerText = ``;
-            bitmainRows[3].cells[1].innerText = ``;
-            bitmainRows[4].cells[1].innerText = ``;
-            bitmainRows[5].cells[1].innerText = `${subcustomerStats.Bitmain.offline}`;
+                const fortitudeTable = emailBody.querySelector('table:nth-of-type(1)'); // Assumes it's the first/only table
+                if (fortitudeTable) {
+                    const rows = fortitudeTable.rows;
+                    // rows[0].cells[1].innerText = `100%`; // Fleet Utilization - Placeholder
+                    rows[1].cells[1].innerText = `${fortitudeStats.online} / ${fortitudeStats.online + fortitudeStats.offline}`;
+                    let [hash, unit] = convertHashRate(fortitudeStats.hashrate);
+                    rows[2].cells[1].innerText = `${hash} ${unit}/s`;
+                    // rows[3].cells[1].innerText = `99.9%`; // Uptime 24hr Average - Placeholder
+                    // rows[4].cells[1].innerText = `99.9%`; // Uptime Monthly Average - Placeholder
+                    // rows[5].cells[1].innerText = `98.3%`; // Efficiency - Placeholder
+                    rows[6].cells[1].innerText = `${fortitudeStats.shippedOutForRepair}`;
+                    // rows[7].cells[1].innerText = `18`; // Miners Need Repair - Placeholder
+                    // rows[8].cells[1].innerText = `(24 Scrapped)`; // Other Offline - Placeholder
+                    // rows[9].cells[1].innerText = `3`; // Spare Miners - Placeholder
+                    rows[10].cells[1].innerText = `${fortitudeStats.offline}`;
+                }
+                console.log("Fortitude Stats:", fortitudeStats);
+            });
+        }
 
-            console.log(subcustomerStats);
-        });
-
-
-        // Container for buttons
-        let buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'space-around';
-        buttonContainer.style.alignItems = 'center';
-        buttonContainer.style.flexWrap = 'wrap';
-
-        fetchKeyMetricsReportScreenshot(emailBody);
-
+        container.appendChild(emailBody);
 
         // Copy to Clipboard Button
         let copyButton = document.createElement('button');
         copyButton.innerText = 'Copy Email Body';
         copyButton.style.padding = '12px 20px';
         copyButton.style.fontSize = '15px';
-        copyButton.style.backgroundColor = '#0078d4'; // Blue color
+        copyButton.style.backgroundColor = '#0078d4';
         copyButton.style.color = 'white';
         copyButton.style.border = 'none';
         copyButton.style.borderRadius = '5px';
         copyButton.style.cursor = 'pointer';
         copyButton.style.transition = 'background-color 0.3s ease';
-        copyButton.style.margin = '5px';
+        copyButton.style.display = 'block';
+        copyButton.style.margin = '20px auto 0 auto'; // Center button below emailBody
 
         copyButton.onmouseover = () => copyButton.style.backgroundColor = '#005a9e';
         copyButton.onmouseout = () => copyButton.style.backgroundColor = '#0078d4';
 
         copyButton.addEventListener('click', async function() {
             const htmlToCopy = emailBody.innerHTML;
-
             if (navigator.clipboard && navigator.clipboard.write) {
                 try {
                     const blob = new Blob([htmlToCopy], { type: 'text/html' });
@@ -1312,79 +1461,41 @@ window.addEventListener('load', function () {
                     setTimeout(() => { copyButton.innerText = 'Copy Email Body'; }, 2000);
                 } catch (err) {
                     console.error('Failed to copy HTML using Clipboard API: ', err);
-                    // Fallback to execCommand
-                    fallbackCopy(htmlToCopy);
+                    fallbackCopy(htmlToCopy, copyButton);
                 }
             } else {
-                // Fallback for older browsers
-                fallbackCopy(htmlToCopy);
+                fallbackCopy(htmlToCopy, copyButton);
             }
         });
+        container.appendChild(copyButton);
+    }
 
-        function fallbackCopy(htmlToCopy) {
-            const tempEl = document.createElement('div');
-            // It's important that the temporary element is part of the DOM for execCommand to work.
-            // However, it can be off-screen.
-            tempEl.style.position = 'absolute';
-            tempEl.style.left = '-9999px';
-            tempEl.innerHTML = htmlToCopy;
-            document.body.appendChild(tempEl);
+    // Modified fallbackCopy to accept the button instance for updating its text
+    function fallbackCopy(htmlToCopy, copyButtonInstance) {
+        const tempEl = document.createElement('div');
+        tempEl.style.position = 'absolute';
+        tempEl.style.left = '-9999px';
+        tempEl.innerHTML = htmlToCopy;
+        document.body.appendChild(tempEl);
 
-            const range = document.createRange();
-            range.selectNodeContents(tempEl);
-            const selection = window.getSelection();
-            selection.removeAllRanges();
-            selection.addRange(range);
+        const range = document.createRange();
+        range.selectNodeContents(tempEl);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
 
-            try {
-                document.execCommand('copy');
-                copyButton.innerText = 'Copied (fallback)!';
-                setTimeout(() => { copyButton.innerText = 'Copy Email Body'; }, 2000);
-            } catch (err) {
-                console.error('Failed to copy HTML using execCommand: ', err);
-                copyButton.innerText = 'Copy Failed';
-                setTimeout(() => { copyButton.innerText = 'Copy Email Body'; }, 2000);
-            }
-
-            selection.removeAllRanges();
-            document.body.removeChild(tempEl);
+        try {
+            document.execCommand('copy');
+            copyButtonInstance.innerText = 'Copied (fallback)!';
+            setTimeout(() => { copyButtonInstance.innerText = 'Copy Email Body'; }, 2000);
+        } catch (err) {
+            console.error('Failed to copy HTML using execCommand: ', err);
+            copyButtonInstance.innerText = 'Copy Failed';
+            setTimeout(() => { copyButtonInstance.innerText = 'Copy Email Body'; }, 2000);
         }
 
-        // Close Button
-        let closeButton = document.createElement('button');
-        closeButton.innerText = 'Close';
-        closeButton.style.display = 'block';
-        closeButton.style.margin = '5px'; // Remove auto margin as it's in a flex container
-        closeButton.style.padding = '12px 25px';
-        closeButton.style.fontSize = '16px';
-        closeButton.style.backgroundColor = '#f44336'; // Red color for close
-        closeButton.style.color = 'white';
-        closeButton.style.border = 'none';
-        closeButton.style.borderRadius = '5px';
-        closeButton.style.cursor = 'pointer';
-        closeButton.style.transition = 'background-color 0.3s ease';
-
-        closeButton.onmouseover = () => closeButton.style.backgroundColor = '#d32f2f'; // Darker red on hover
-        closeButton.onmouseout = () => closeButton.style.backgroundColor = '#f44336';
-
-        closeButton.addEventListener('click', function() {
-            overlay.remove();
-        });
-
-        // Assemble button container
-        buttonContainer.appendChild(copyButton);
-        buttonContainer.appendChild(closeButton);
-
-        // Assemble panel
-        panel.appendChild(title);
-        panel.appendChild(emailBody); // Add editable email body
-        panel.appendChild(buttonContainer); // Add button container
-
-        // Add panel to overlay
-        overlay.appendChild(panel);
-
-        // Add overlay to body
-        document.body.appendChild(overlay);
+        selection.removeAllRanges();
+        document.body.removeChild(tempEl);
     }
 
     // Initialize
