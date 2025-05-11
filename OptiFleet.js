@@ -5,7 +5,7 @@
 // window.ma.miners
 
 // ==UserScript==
-// @name         OptiFleet Additions (Dev)
+// @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
 // @version      8.1.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
