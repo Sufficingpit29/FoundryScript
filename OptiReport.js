@@ -944,7 +944,7 @@ window.addEventListener('load', function () {
 
                 if (emailBodiesArray[1]) { // Only for Fortitude Report (index 1)
                     updateProgressMessage('Preparing filtered Hashrate Efficiency for Fortitude Report...');
-                    const titleFilteredHE_HTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Hashrate Efficiency (C18 &amp; C19)</p>`; // Corrected Title
+                    const titleFilteredHE_HTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Hashrate Efficiency</p>`; // Corrected Title
                     const fortitudeEmailBody = emailBodiesArray[1];
                     const tempDivFilteredHE = document.createElement('div');
                     tempDivFilteredHE.innerHTML = titleFilteredHE_HTML + greenLineSeparatorHTML;
