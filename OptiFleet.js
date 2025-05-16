@@ -5,9 +5,9 @@
 // window.ma.miners
 
 // ==UserScript==
-// @name         Opti-Additions
+// @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.1.4
+// @version      8.1.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -736,7 +736,7 @@ const errorsToSearch = {
                 
                 for (let i = 0; i < fanSpeeds.length; i++) {
                     let fanSpeed = fanSpeeds[i];
-                    if(fanSpeed === 0 || Math.abs(fanSpeed - Math.max(...fanSpeeds)) > 2000) {
+                    if(fanSpeed === 0 || Math.abs(fanSpeed - Math.max(...fanSpeeds)) > 1500) {
                         failedFans.push(i);
                     }
                 }
