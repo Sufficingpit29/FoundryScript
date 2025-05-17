@@ -129,7 +129,7 @@ window.addEventListener('load', function () {
 
     // Function to get the selected site name from localStorage
     function getSelectedSiteName() {
-        return localStorage.getItem("selectedSiteName") || "N/A"; // Fallback if not found
+        return localStorage.getItem("selectedSiteName");
     }
 
     // Function to create and inject the new button
@@ -691,16 +691,23 @@ window.addEventListener('load', function () {
 
                 let siteUtilizationValue = siteUtilization.textContent;
                 while (!siteUtilizationValue.match(/^\d+(\.\d+)?%$/)) {
+                    console.log('[Opti-Report] Site Utilization element not found or invalid. Waiting...');
                     await new Promise(resolve => setTimeout(resolve, 100));
                     siteUtilizationValue = siteUtilization.textContent;
+                }
+
+                const hashRateBar = await waitForElement('#hashRateBarVal', metricsReportWindow.document, 10000);
+                let hashRateFullSite = hashRateBar.textContent || "N/A";
+                while (hashRateFullSite === "N/A" || hashRateFullSite === "-- H/s") {
+                    console.log('[Opti-Report] Hashrate Full Site element not found or invalid. Waiting...');
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    hashRateFullSite = hashRateBar.textContent || "N/A";
                 }
 
 
                 // --- Scrape data for General Site Stats Table ---
                 try {
-                    const hashRateFullSite = document.querySelector('#hashRateBarVal')?.textContent || 'N/A';
-
-
+                    
                     const siteEfficiency = metricsReportWindow.document.querySelector('#hashRateEfficiency');
 
                     emailBodiesArray.forEach((emailBodyToUpdate, index) => {
@@ -724,6 +731,7 @@ window.addEventListener('load', function () {
                                     }
                                 }
                             } else if (index === 1) {
+                                /* Need to set to the actual grabbed data for only fortitude, not this which is overall for whole site
                                 for (let i = 0; i < rows.length; i++) {
                                     const cells = rows[i].getElementsByTagName('td');
                                     if(cells[0].textContent === "Hashrate") {
@@ -733,7 +741,7 @@ window.addEventListener('load', function () {
                                         const siteEfficiencyValue = siteEfficiency ? siteEfficiency.textContent : 'N/A';
                                         cells[1].textContent = siteEfficiencyValue;
                                     }
-                                }
+                                }*/
                             }
                         }
                     });
@@ -1648,7 +1656,7 @@ window.addEventListener('load', function () {
                     online: 0,
                     offline: 0,
                     hashrate: 0,
-                    shippedOutForRepair: 0
+                    expectedHashRate: 0,
                 };
 
                 minerData.miners.forEach(miner => {
@@ -1660,16 +1668,19 @@ window.addEventListener('load', function () {
                         }
                         if (miner.hashrate) {
                             fortitudeStats.hashrate += miner.hashrate;
+                            fortitudeStats.expectedHashRate += miner.expectedHashRate;
                         }
                     }
                 });
 
                 const fortitudeTable = emailBody.querySelector('table:nth-of-type(1)');
                 if (fortitudeTable) {
+                    const efficiency = ((fortitudeStats.hashrate / fortitudeStats.expectedHashRate) * 100).toFixed(2);
                     const rows = fortitudeTable.rows;
                     rows[1].cells[1].innerText = `${fortitudeStats.online} / ${fortitudeStats.online + fortitudeStats.offline}`;
                     let [hash, unit] = convertHashRate(fortitudeStats.hashrate);
                     rows[2].cells[1].innerText = `${hash} ${unit}/s`;
+                    rows[5].cells[1].innerText = `${efficiency}%`;
                     rows[6].cells[1].innerText = `${fortitudeStats.shippedOutForRepair}`;
                     rows[10].cells[1].innerText = `${fortitudeStats.offline}`;
                 }
