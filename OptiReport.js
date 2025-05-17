@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.0.7
+// @version      0.0.8
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -15,6 +15,16 @@
 
 
 window.addEventListener('load', function () {
+
+    const imageSeparatorHTML = `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABAAAAAATCAYAAAAOEH+lAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAADsSURBVHhe7dwhTgMBEAXQvyhQeC6AhIT0Gu0FGi7QSo6CwKOKrOUIoBBNuAAXIKRULMtmOwkBBXLJe2b+zA1mxAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4rabql7uL43TtfZ8m+wEAAAAwIuscbueZPb9WPziourc6X+Sj3fTJ8g8AAADjNM370UNWZ/PqB98PAMl1mpxUBgAAAMbpNGluKw9+HgCW6fJSGQAAABijLo/9yj+tbuAHAAAAAPwrzU127VUun95qAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPxF8gl4AB6H9/IqJQAAAABJRU5ErkJggg==" alt="" style="display:block; margin: 5px 2.5% 15px 2.5%; width: 95%; height:auto;">`;
+    const workAroundLineBreakHTML = `<p style="margin: 0; padding: 0; line-height: 0;">&nbsp;</p>`;
+
+    // Pre-parse the workAroundLineBreakHTML to an element for efficient reuse
+    const workAroundLineBreakElement = (() => {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = workAroundLineBreakHTML;
+        return tempDiv.firstChild;
+    })();
 
     // Hash Rate Types
     const hashRateTypes = {
@@ -489,9 +499,9 @@ window.addEventListener('load', function () {
             imgElement.style.marginTop = '15px'; imgElement.style.marginBottom = '15px';
             imgElement.style.border = '1px solid #555';
 
-            emailBodyToAppendTo.appendChild(document.createElement('p'));
+            //emailBodyToAppendTo.appendChild(workAroundLineBreakElement.cloneNode(true));
             emailBodyToAppendTo.appendChild(imgElement);
-            emailBodyToAppendTo.appendChild(document.createElement('p'));
+            emailBodyToAppendTo.appendChild(workAroundLineBreakElement.cloneNode(true));
             emailBodyToAppendTo.scrollTop = emailBodyToAppendTo.scrollHeight;
         });
         updateProgress(`"${desiredRangeTextInSpan}" screenshot added.`);
@@ -524,10 +534,9 @@ window.addEventListener('load', function () {
 
                 // Add title and separator for the 7-day report to all email bodies
                 const title7DayHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">7 Day Average</p>`;
-                const greenLineSeparatorHTML = `<hr style="border: none; border-top: 2px solid green; margin: 5px 2.5% 15px 2.5%; width: 95%;">`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDiv7Day = document.createElement('div');
-                    tempDiv7Day.innerHTML = title7DayHTML + greenLineSeparatorHTML;
+                    tempDiv7Day.innerHTML = title7DayHTML + imageSeparatorHTML;
                     while(tempDiv7Day.firstChild) {
                         emailBodyToAppendTo.appendChild(tempDiv7Day.firstChild);
                     }
@@ -545,7 +554,7 @@ window.addEventListener('load', function () {
                 const title24hrHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">24 Hour Average</p>`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDiv24hr = document.createElement('div');
-                    tempDiv24hr.innerHTML = title24hrHTML + greenLineSeparatorHTML;
+                    tempDiv24hr.innerHTML = title24hrHTML + imageSeparatorHTML;
                     while(tempDiv24hr.firstChild) {
                         emailBodyToAppendTo.appendChild(tempDiv24hr.firstChild);
                     }
@@ -598,7 +607,7 @@ window.addEventListener('load', function () {
                 const title30DayHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">30 Day Average</p>`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDiv30Day = document.createElement('div');
-                    tempDiv30Day.innerHTML = title30DayHTML + greenLineSeparatorHTML;
+                    tempDiv30Day.innerHTML = title30DayHTML + imageSeparatorHTML;
                     while(tempDiv30Day.firstChild) {
                         emailBodyToAppendTo.appendChild(tempDiv30Day.firstChild);
                     }
@@ -651,7 +660,7 @@ window.addEventListener('load', function () {
                 if (emailBodiesArray[0]) { // Only for Full Report
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const tempDivSiteOverview = document.createElement('div');
-                    tempDivSiteOverview.innerHTML = titleSiteOverviewHTML + greenLineSeparatorHTML;
+                    tempDivSiteOverview.innerHTML = titleSiteOverviewHTML + imageSeparatorHTML;
                     while(tempDivSiteOverview.firstChild) {
                         emailBodyToAppendTo.appendChild(tempDivSiteOverview.firstChild);
                     }
@@ -812,11 +821,11 @@ window.addEventListener('load', function () {
 
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
-                const titleHashrateEfficiencyHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Hashrate Efficiency</p>`;
+                const titleHashrateEfficiencyHTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Hashrate Efficiency</p>`;
                 if (emailBodiesArray[0]) { // Only for Full Report
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const tempDivHE = document.createElement('div');
-                    tempDivHE.innerHTML = titleHashrateEfficiencyHTML + greenLineSeparatorHTML;
+                    tempDivHE.innerHTML = titleHashrateEfficiencyHTML + imageSeparatorHTML;
                     while(tempDivHE.firstChild) {
                         emailBodyToAppendTo.appendChild(tempDivHE.firstChild);
                     }
@@ -944,10 +953,10 @@ window.addEventListener('load', function () {
 
                 if (emailBodiesArray[1]) { // Only for Fortitude Report (index 1)
                     updateProgressMessage('Preparing filtered Hashrate Efficiency for Fortitude Report...');
-                    const titleFilteredHE_HTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Hashrate Efficiency</p>`; // Corrected Title
+                    const titleFilteredHE_HTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Hashrate Efficiency</p>`; // Corrected Title
                     const fortitudeEmailBody = emailBodiesArray[1];
                     const tempDivFilteredHE = document.createElement('div');
-                    tempDivFilteredHE.innerHTML = titleFilteredHE_HTML + greenLineSeparatorHTML;
+                    tempDivFilteredHE.innerHTML = titleFilteredHE_HTML + imageSeparatorHTML;
                     while(tempDivFilteredHE.firstChild) {
                         fortitudeEmailBody.appendChild(tempDivFilteredHE.firstChild);
                     }
@@ -1030,11 +1039,11 @@ window.addEventListener('load', function () {
                 // --- Capture Uptime Tab within Hashrate Efficiency ---
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
-                const titleUptimeStatsHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Uptime Stats</p>`;
+                const titleUptimeStatsHTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Uptime Stats</p>`;
                 if (emailBodiesArray[0]) { // Only for Full Report
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const tempDivUS = document.createElement('div');
-                    tempDivUS.innerHTML = titleUptimeStatsHTML + greenLineSeparatorHTML;
+                    tempDivUS.innerHTML = titleUptimeStatsHTML + imageSeparatorHTML;
                     while(tempDivUS.firstChild) {
                         emailBodyToAppendTo.appendChild(tempDivUS.firstChild);
                     }
@@ -1164,11 +1173,11 @@ window.addEventListener('load', function () {
 
                 if (emailBodiesArray[1]) { // Only for Fortitude Report (index 1)
                     updateProgressMessage('Preparing filtered Uptime Stats (C18 & C19) for Fortitude Report...');
-                    const titleFilteredUS_Fortitude_HTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Uptime Stats</p>`;
+                    const titleFilteredUS_Fortitude_HTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Uptime Stats</p>`;
                     const fortitudeEmailBody = emailBodiesArray[1];
 
                     const tempDivFilteredUS = document.createElement('div');
-                    tempDivFilteredUS.innerHTML = titleFilteredUS_Fortitude_HTML + greenLineSeparatorHTML;
+                    tempDivFilteredUS.innerHTML = titleFilteredUS_Fortitude_HTML + imageSeparatorHTML;
                     while(tempDivFilteredUS.firstChild) {
                         fortitudeEmailBody.appendChild(tempDivFilteredUS.firstChild);
                     }
@@ -1282,10 +1291,10 @@ window.addEventListener('load', function () {
                 }
                 // --- END: Add Filtered Uptime Stats (C18 & C19) to Fortitude Report ---
 
-                const weatherReportsTitle = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Weather Notes</p>`;
+                const weatherReportsTitle = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Weather Notes</p>`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDivWR = document.createElement('div');
-                    tempDivWR.innerHTML = weatherReportsTitle + greenLineSeparatorHTML;
+                    tempDivWR.innerHTML = weatherReportsTitle + imageSeparatorHTML + `<p><br></p>`;
                     while(tempDivWR.firstChild) {
                         emailBodyToAppendTo.appendChild(tempDivWR.firstChild);
                     }
@@ -1451,12 +1460,10 @@ window.addEventListener('load', function () {
         // --- Common Styles and Placeholders ---
         const tableStyle = `border-collapse: collapse; width: 95%; margin: 15px auto; font-size: 14px;`;
         const thTdStyle = `border: 1px solid #444; text-align: left; padding: 8px;`;
-        const thStyle = `${thTdStyle} background-color: #333; color: #fff;`;
         const sectionTitleStyle = `font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;`;
         const placeholderData = "---";
         const sectionSpacerHTML = `<p style="margin-bottom: 20px;">&nbsp;</p>`;
-        const greenLineSeparatorHTML = `<hr style="border: none; border-top: 2px solid green; margin: 5px 2.5% 15px 2.5%; width: 95%;">`;
-        const imageSeparatorHTML = `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABAAAAAATCAYAAAAOEH+lAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACbSURBVHhe7dgxFYRAEETBHTTgBCOnAhGo4T18oABPc8koICCYrUq6NfwBAAAAAAAAAAAAAAAAAAAAAAAAAHwjMnOtDwAAADQVvzyv+gAAAEBTsT171gcAAACaWmoBAACAxgQAAAAAmIAAAAAAABMQAAAAAGACAgAAAABMIO7Moz4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPDeGH82aQtMdd+HnAAAAABJRU5ErkJggg==" alt="" style="display:block; margin: 5px 2.5% 15px 2.5%; width: 95%; height:auto;">`;
+
 
         // --- Common Header Content ---
         //const headerImageHTML = `<img src="https://media.discordapp.net/attachments/413885609686335500/1370942381297373256/Foundry-Site-Operations.png?ex=6827ec96&is=68269b16&hm=4b90dcc1bf09b7124fc99b1f2efcaa282e271c7b4bcdff7ede5e04b2cd28eaf6&=&format=webp&quality=lossless&width=1444&height=313" alt="Foundry Site Operations Logo" style="display:block; margin:0 auto 15px auto; max-width:300px; height:auto;">`;
@@ -1510,7 +1517,7 @@ window.addEventListener('load', function () {
                     <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
                     <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 </table>`;
-            const repairNotesTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Notes</p>`;
+            const repairNotesTitleHTML = `<p><br></p>` + `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Notes</p>`;
             const repairNotesContentHTML = `<p><br></p>`;
             const partsInvoicingTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Parts Invoicing</p>`;
             const partsInvoicingContentHTML = `<p><br></p>`;
