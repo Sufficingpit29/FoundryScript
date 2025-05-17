@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.0.8
+// @version      0.0.9
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -262,10 +262,61 @@ window.addEventListener('load', function () {
         return diffMillis / (1000 * 60 * 60);
     }
 
-    async function captureSingleReport(reportWindow, dateRangeKey, desiredRangeTextInSpan, emailBodiesArray, updateProgress) {
+    async function captureSingleReport(reportWindow, dateRangeKey, desiredRangeTextInSpan, emailBody, updateProgress, selectFortitude) {
         if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
         updateProgress(`Verifying/setting date range to "${desiredRangeTextInSpan}"...`);
         console.log(`[Opti-Report] Starting captureSingleReport for: ${desiredRangeTextInSpan}`);
+
+        let customSelect = "-1";
+        if(selectFortitude) {
+            customSelect = "353";
+        }
+
+        // Ensure screen-busy is cleared before proceeding
+        const screenBusyElement = reportWindow.document.querySelector('.screen-busy');
+        if (screenBusyElement && screenBusyElement.classList.contains('active')) {
+            while (screenBusyElement.classList.contains('active')) {
+                if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
+                console.log('[Opti-Report] Waiting for screen-busy to clear...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Select "Fortitude" in the subcustomer dropdown if present
+        const subCustomerSelect = await waitForElement('#ddlSubCustomer', reportWindow.document, 5000);
+        if (subCustomerSelect) {
+            // Try to access shadowRoot and set Fortitude (value="353")
+            try {
+                const shadowRoot = subCustomerSelect.shadowRoot;
+                if (shadowRoot) {
+                    const ddlSubCustomer = shadowRoot.querySelector('.op-large-select');
+                    if (ddlSubCustomer) {
+                        let selectElement = ddlSubCustomer.querySelector('select');
+                        if (selectElement) {
+                            // Set the value to "Fortitude" (value="353")
+                            selectElement.value = customSelect;
+                            // Dispatch a change event
+                            const changeEvent = new Event('change', {
+                                bubbles: true,
+                                cancelable: true
+                            });
+                            selectElement.dispatchEvent(changeEvent);
+                            console.log("Set select element value to '353' (Fortitude) and dispatched change event.");
+                        } else {
+                            console.log('Select element not found inside .op-large-select');
+                        }
+                    } else {
+                        console.log('.op-large-select not found in shadowRoot');
+                    }
+                } else {
+                    console.log('shadowRoot not found on #ddlSubCustomer');
+                }
+            } catch (e) {
+                console.warn('Error setting Fortitude in subcustomer dropdown:', e);
+            }
+        } else {
+            console.warn('[Opti-Report] Subcustomer dropdown not found for Fortitude selection.');
+        }
 
         const reportRangeDiv = await waitForElement('#reportrange', reportWindow.document);
         console.log('[Opti-Report] Found #reportrange div.');
@@ -293,17 +344,27 @@ window.addEventListener('load', function () {
             updateProgress(`Attempting to set date range to "${desiredRangeTextInSpan}"...`);
             console.log(`[Opti-Report] Needs date update. Starting attempts to set to "${desiredRangeTextInSpan}".`);
 
+            // Only wait for busy indicator if it exists and is active
+            const screenBusyElement = reportWindow.document.querySelector('.screen-busy');
+            if (screenBusyElement && screenBusyElement.classList.contains('active')) {
+                while (screenBusyElement.classList.contains('active')) {
+                    if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
+                    console.log('[Opti-Report] Waiting for screen-busy to clear...');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+
             while (elapsedTime < maxTotalWaitTime && !dateRangeTextConfirmed) {
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
                 attemptCount++;
                 console.log(`[Opti-Report] Attempt ${attemptCount} to set date range text.`);
 
                 try {
-                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    await new Promise(resolve => setTimeout(resolve, 500));
                     console.log('[Opti-Report] Clicking #reportrange to open dropdown.');
                     reportRangeDiv.click();
                     const dateOption = await waitForElement(`li[data-range-key="${dateRangeKey}"]`, reportWindow.document, 2000);
-                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await new Promise(resolve => setTimeout(resolve, 100));
                     console.log(`[Opti-Report] Found date option li[data-range-key="${dateRangeKey}"]. Clicking it.`);
                     dateOption.click();
                     updateProgress(`Clicked "${desiredRangeTextInSpan}" (Attempt ${attemptCount}). Verifying text update...`);
@@ -433,7 +494,7 @@ window.addEventListener('load', function () {
         updateProgress(`Preparing "${desiredRangeTextInSpan}" report section for capture...`);
         console.log(`[Opti-Report] Preparing "${desiredRangeTextInSpan}" report section for capture.`);
 
-        const reportElementSelector = '#mainContent m-container';
+        const reportElementSelector = '#mainContent';
         const elementToCapture = await waitForElement(reportElementSelector, reportWindow.document);
         if (!elementToCapture) {
             throw new Error(`Could not find element "${reportElementSelector}" to capture for ${desiredRangeTextInSpan}.`);
@@ -491,7 +552,7 @@ window.addEventListener('load', function () {
         });
 
         const imgDataUrl = canvas.toDataURL('image/png');
-
+        let emailBodiesArray = [emailBody];
         emailBodiesArray.forEach(emailBodyToAppendTo => {
             const imgElement = document.createElement('img');
             imgElement.src = imgDataUrl;
@@ -508,7 +569,7 @@ window.addEventListener('load', function () {
     }
 
 
-    async function fetchKeyMetricsReportScreenshot(emailBodiesArray) {
+    async function fetchKeyMetricsReportScreenshot(fullReportEmailBody, fortitudeReportEmailBody) {
         cancelMetricsFetchFlag = false;
         showProgressOverlay('Initiating Key Metrics report captures...');
 
@@ -521,18 +582,33 @@ window.addEventListener('load', function () {
 
         metricsReportWindow.onload = async () => {
             try {
-                // --- Disable mouse inputs on the pop-out window ---
                 disableMouseInputsInWindow(metricsReportWindow);
-                // --- End of disabling mouse inputs ---
 
                 if (cancelMetricsFetchFlag) {
                     if (metricsReportWindow && !metricsReportWindow.closed) metricsReportWindow.close();
                     hideProgressOverlay();
                     return;
                 }
+
+                // Get '.screen-busy' and see if it is "screen-busy active"
+                updateProgressMessage('Waiting for report page to load...');
+                const screenBusyElement = metricsReportWindow.document.querySelector('.screen-busy');
+                if (screenBusyElement) {
+                    while(screenBusyElement.classList.contains('active')) {
+                        if (cancelMetricsFetchFlag) {
+                            if (metricsReportWindow && !metricsReportWindow.closed) metricsReportWindow.close();
+                            hideProgressOverlay();
+                            return;
+                        }
+                        console.log('[Opti-Report] Waiting for screen-busy to clear...');
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+
                 updateProgressMessage('Report page loaded. Preparing for "Last 7 Days" report...');
 
                 // Add title and separator for the 7-day report to all email bodies
+                let emailBodiesArray = [fullReportEmailBody, fortitudeReportEmailBody];
                 const title7DayHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">7 Day Average</p>`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDiv7Day = document.createElement('div');
@@ -546,7 +622,8 @@ window.addEventListener('load', function () {
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
                 updateProgressMessage('Capturing "Last 7 Days" report...');
-                await captureSingleReport(metricsReportWindow, "Last 7 Days", "Last 7 Days", emailBodiesArray, updateProgressMessage);
+                await captureSingleReport(metricsReportWindow, "Last 7 Days", "Last 7 Days", fullReportEmailBody, updateProgressMessage);
+                await captureSingleReport(metricsReportWindow, "Last 7 Days", "Last 7 Days", fortitudeReportEmailBody, updateProgressMessage, true);
 
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
@@ -563,17 +640,19 @@ window.addEventListener('load', function () {
 
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
-                updateProgressMessage('Reloading report page for 24-hour capture...');
-                metricsReportWindow.location.reload(true); // Force reload
-                await new Promise(resolve => setTimeout(resolve, 500));
+                updateProgressMessage('Selecting for 24-hour capture...');
+                //metricsReportWindow.location.reload(true); // Force reload
+                //await new Promise(resolve => setTimeout(resolve, 500));
 
-                await waitForElement('#reportrange', metricsReportWindow.document, 15000); // Increased timeout for page reload
-                disableMouseInputsInWindow(metricsReportWindow); // Re-apply after reload
+                await waitForElement('#reportrange', metricsReportWindow.document, 15000);
+                //disableMouseInputsInWindow(metricsReportWindow); // Re-apply after reload
 
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
                 updateProgressMessage('Capturing "Last 24 Hours" report...');
-                await captureSingleReport(metricsReportWindow, "Last 24 Hours", "Last 24 Hours", emailBodiesArray, updateProgressMessage);
+                await captureSingleReport(metricsReportWindow, "Last 24 Hours", "Last 24 Hours", fullReportEmailBody, updateProgressMessage);
+                await captureSingleReport(metricsReportWindow, "Last 24 Hours", "Last 24 Hours", fortitudeReportEmailBody, updateProgressMessage, true);
+                
 
                 // --- Scrape Uptime 24hr Average ---
                 try {
@@ -616,17 +695,18 @@ window.addEventListener('load', function () {
 
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
-                updateProgressMessage('Reloading report page for 30-day capture...');
-                metricsReportWindow.location.reload(true); // Force reload
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                updateProgressMessage('Selecting for 30-day capture...');
+                //metricsReportWindow.location.reload(true); // Force reload
+                //await new Promise(resolve => setTimeout(resolve, 1500));
 
                 await waitForElement('#reportrange', metricsReportWindow.document, 15000); // Increased timeout for page reload
-                disableMouseInputsInWindow(metricsReportWindow); // Re-apply after reload
+                //disableMouseInputsInWindow(metricsReportWindow); // Re-apply after reload
 
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
                 updateProgressMessage('Capturing "Last 30 Days" report...');
-                await captureSingleReport(metricsReportWindow, "Last 30 Days", "Last 30 Days", emailBodiesArray, updateProgressMessage);
+                await captureSingleReport(metricsReportWindow, "Last 30 Days", "Last 30 Days", fullReportEmailBody, updateProgressMessage);
+                await captureSingleReport(metricsReportWindow, "Last 30 Days", "Last 30 Days", fortitudeReportEmailBody, updateProgressMessage, true);
 
                 // --- Scrape Uptime Monthly Average ---
                 try {
@@ -1431,7 +1511,7 @@ window.addEventListener('load', function () {
             const fullReportEmailBody = await generateReportContent("Full Report", fullReportContainer);
             const fortitudeReportEmailBody = await generateReportContent("Fortitude Report", fortitudeReportContainer);
             loadingMessage.innerText = 'Fetching screenshots and additional data...'; // Update loading message
-            await fetchKeyMetricsReportScreenshot([fullReportEmailBody, fortitudeReportEmailBody]);
+            await fetchKeyMetricsReportScreenshot(fullReportEmailBody, fortitudeReportEmailBody);
             loadingMessage.remove(); // Remove loading message once reports are generated
         })();
     }
