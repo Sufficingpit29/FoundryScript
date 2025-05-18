@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.0.9
+// @version      0.1.0
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -273,7 +273,7 @@ window.addEventListener('load', function () {
         }
 
         // Ensure screen-busy is cleared before proceeding
-        const screenBusyElement = reportWindow.document.querySelector('.screen-busy');
+        let screenBusyElement = reportWindow.document.querySelector('.screen-busy');
         if (screenBusyElement && screenBusyElement.classList.contains('active')) {
             while (screenBusyElement.classList.contains('active')) {
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
@@ -292,7 +292,7 @@ window.addEventListener('load', function () {
                     const ddlSubCustomer = shadowRoot.querySelector('.op-large-select');
                     if (ddlSubCustomer) {
                         let selectElement = ddlSubCustomer.querySelector('select');
-                        if (selectElement) {
+                        if (selectElement && selectElement.value !== customSelect) {
                             // Set the value to "Fortitude" (value="353")
                             selectElement.value = customSelect;
                             // Dispatch a change event
@@ -302,6 +302,9 @@ window.addEventListener('load', function () {
                             });
                             selectElement.dispatchEvent(changeEvent);
                             console.log("Set select element value to '353' (Fortitude) and dispatched change event.");
+
+                            // Wait for the change event to propagate
+                            await new Promise(resolve => setTimeout(resolve, 500));
                         } else {
                             console.log('Select element not found inside .op-large-select');
                         }
@@ -316,6 +319,16 @@ window.addEventListener('load', function () {
             }
         } else {
             console.warn('[Opti-Report] Subcustomer dropdown not found for Fortitude selection.');
+        }
+
+        // Ensure screen-busy is cleared before proceeding
+        screenBusyElement = reportWindow.document.querySelector('.screen-busy');
+        if (screenBusyElement && screenBusyElement.classList.contains('active')) {
+            while (screenBusyElement.classList.contains('active')) {
+                if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
+                console.log('[Opti-Report] Waiting for screen-busy to clear...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
         }
 
         const reportRangeDiv = await waitForElement('#reportrange', reportWindow.document);
