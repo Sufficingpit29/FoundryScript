@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      0.1.1
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -1562,7 +1562,7 @@ window.addEventListener('load', function () {
         const tableStyle = `border-collapse: collapse; width: 95%; margin: 15px auto; font-size: 14px;`;
         const thTdStyle = `border: 1px solid #444; text-align: left; padding: 8px;`;
         const sectionTitleStyle = `font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;`;
-        const placeholderData = "---";
+        const placeholderData = "";
         const sectionSpacerHTML = `<p style="margin-bottom: 20px;">&nbsp;</p>`;
 
 
@@ -1645,9 +1645,9 @@ window.addEventListener('load', function () {
             getMinerData(function(minerData) {
                 console.log('Miner data fetched for Full Report:', minerData);
                 const subcustomerStats = {
-                    Fortitude: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
-                    RAMM: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
-                    Bitmain: { online: 0, offline: 0, needRepair: 0, hashrate: 0 },
+                    Fortitude: { online: 0, offline: 0, hashrate: 0 },
+                    RAMM: { online: 0, offline: 0, hashrate: 0 },
+                    Bitmain: { online: 0, offline: 0, hashrate: 0 },
                 };
                 let totalOnline = 0;
                 let totalOffline = 0;
@@ -1774,7 +1774,6 @@ window.addEventListener('load', function () {
                     let [hash, unit] = convertHashRate(fortitudeStats.hashrate);
                     rows[2].cells[1].innerText = `${hash} ${unit}/s`;
                     rows[5].cells[1].innerText = `${efficiency}%`;
-                    rows[6].cells[1].innerText = `${fortitudeStats.shippedOutForRepair}`;
                     rows[10].cells[1].innerText = `${fortitudeStats.offline}`;
                 }
                 console.log("Fortitude Stats:", fortitudeStats);
