@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.1.1
+// @version      0.1.2
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -15,7 +15,6 @@
 
 
 window.addEventListener('load', function () {
-
     const imageSeparatorHTML = `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAC8gAAAATCAYAAAD2gMU2AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGpSURBVHhe7dyxTcNQEAbge3bBBIyBRCZgBSpKUqdDiIo9oKFBVAlbsEV2QBnASM7jTGxFSJQRBOn7pF++e+95g9MFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcDCr8zJWX/bNcraIUh/Hro+omdJmPb3ZZoa6yXxkTjIAAAAAAAAAAAAAAPDb6vgtUetzdN1dzNebEquzy4j2Ji8udvff7H8CAAAAAAAAAAAAAIDj9B5Rb5uI9iqbn4bjB8NgvOF4AAAAAAAAAAAAAACO2WlEuW4i+tds3nZnAAAAAAAAAAAAAADw7wwb5F/22+GXs0WU+pDVdFYztscDAAAAAAAAAAAAAPCXtpkm02eGGfehntSo9Sm67j7m6814BgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABxaxCeiVSoY99t7uwAAAABJRU5ErkJggg==" alt="" style="display:block; margin: 5px 2.5% 15px 2.5%; width: 100%; height:auto;">`;
     const workAroundLineBreakHTML = `<p style="margin: 0; padding: 0; line-height: 0;">&nbsp;</p>`;
 
@@ -622,7 +621,7 @@ window.addEventListener('load', function () {
 
                 // Add title and separator for the 7-day report to all email bodies
                 let emailBodiesArray = [fullReportEmailBody, fortitudeReportEmailBody];
-                const title7DayHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">7 Day Average</p>`;
+                const title7DayHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">7 Day Average</p>`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDiv7Day = document.createElement('div');
                     tempDiv7Day.innerHTML = title7DayHTML + imageSeparatorHTML;
@@ -641,7 +640,7 @@ window.addEventListener('load', function () {
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
                 // Add title and separator for the 24-hour report
-                const title24hrHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">24 Hour Average</p>`;
+                const title24hrHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">24 Hour Average</p>`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDiv24hr = document.createElement('div');
                     tempDiv24hr.innerHTML = title24hrHTML + imageSeparatorHTML;
@@ -696,7 +695,7 @@ window.addEventListener('load', function () {
                 // --- End of Uptime 24hr Average scraping ---
 
                 // Add title and separator for the 30-day report
-                const title30DayHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">30 Day Average</p>`;
+                const title30DayHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">30 Day Average</p>`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDiv30Day = document.createElement('div');
                     tempDiv30Day.innerHTML = title30DayHTML + imageSeparatorHTML;
@@ -749,7 +748,7 @@ window.addEventListener('load', function () {
                 // --- End of Uptime Monthly Average scraping ---
 
                 // Add title and separator for the Site Overview
-                const titleSiteOverviewHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Site Overview</p>`;
+                const titleSiteOverviewHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Site Overview</p>`;
                 if (emailBodiesArray[0]) { // Only for Full Report
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const tempDivSiteOverview = document.createElement('div');
@@ -922,7 +921,7 @@ window.addEventListener('load', function () {
 
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
-                const titleHashrateEfficiencyHTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Hashrate Efficiency</p>`;
+                const titleHashrateEfficiencyHTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Hashrate Efficiency</p>`;
                 if (emailBodiesArray[0]) { // Only for Full Report
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const tempDivHE = document.createElement('div');
@@ -1054,7 +1053,7 @@ window.addEventListener('load', function () {
 
                 if (emailBodiesArray[1]) { // Only for Fortitude Report (index 1)
                     updateProgressMessage('Preparing filtered Hashrate Efficiency for Fortitude Report...');
-                    const titleFilteredHE_HTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Hashrate Efficiency</p>`; // Corrected Title
+                    const titleFilteredHE_HTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Hashrate Efficiency</p>`; // Corrected Title
                     const fortitudeEmailBody = emailBodiesArray[1];
                     const tempDivFilteredHE = document.createElement('div');
                     tempDivFilteredHE.innerHTML = titleFilteredHE_HTML + imageSeparatorHTML;
@@ -1140,7 +1139,7 @@ window.addEventListener('load', function () {
                 // --- Capture Uptime Tab within Hashrate Efficiency ---
                 if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
 
-                const titleUptimeStatsHTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Uptime Stats</p>`;
+                const titleUptimeStatsHTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Uptime Stats</p>`;
                 if (emailBodiesArray[0]) { // Only for Full Report
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const tempDivUS = document.createElement('div');
@@ -1274,7 +1273,7 @@ window.addEventListener('load', function () {
 
                 if (emailBodiesArray[1]) { // Only for Fortitude Report (index 1)
                     updateProgressMessage('Preparing filtered Uptime Stats (C18 & C19) for Fortitude Report...');
-                    const titleFilteredUS_Fortitude_HTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Uptime Stats</p>`;
+                    const titleFilteredUS_Fortitude_HTML = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Uptime Stats</p>`;
                     const fortitudeEmailBody = emailBodiesArray[1];
 
                     const tempDivFilteredUS = document.createElement('div');
@@ -1392,7 +1391,7 @@ window.addEventListener('load', function () {
                 }
                 // --- END: Add Filtered Uptime Stats (C18 & C19) to Fortitude Report ---
 
-                const weatherReportsTitle = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;">Weather Notes</p>`;
+                const weatherReportsTitle = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Weather Notes</p>`;
                 emailBodiesArray.forEach(emailBodyToAppendTo => {
                     const tempDivWR = document.createElement('div');
                     tempDivWR.innerHTML = weatherReportsTitle + imageSeparatorHTML + `<p><br></p>`;
@@ -1559,9 +1558,9 @@ window.addEventListener('load', function () {
         emailBody.setAttribute('aria-label', 'Email body content');
 
         // --- Common Styles and Placeholders ---
-        const tableStyle = `border-collapse: collapse; width: 95%; margin: 15px auto; font-size: 14px;`;
-        const thTdStyle = `border: 1px solid #444; text-align: left; padding: 8px;`;
-        const sectionTitleStyle = `font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; text-align: center; font-weight: bold;`;
+        const tableStyle = `border-collapse: collapse; width: 800; margin: 15px auto; font-size: 14px;`;
+        const thTdStyle = `border: 1px solid #444; text-align: left; padding: 8px; width: 400px;`;
+        const sectionTitleStyle = `font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;`;
         const placeholderData = "";
         const sectionSpacerHTML = `<p style="margin-bottom: 20px;">&nbsp;</p>`;
 
@@ -1618,9 +1617,9 @@ window.addEventListener('load', function () {
                     <tr><td style="${thTdStyle}">Other Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
                     <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 </table>`;
-            const repairNotesTitleHTML = `<p><br></p>` + `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Notes</p>`;
+            const repairNotesTitleHTML = `<p><br></p>` + `<p style="${sectionTitleStyle} margin-top: 25px;">Notes</p>`;
             const repairNotesContentHTML = `<p><br></p>`;
-            const partsInvoicingTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Parts Invoicing</p>`;
+            const partsInvoicingTitleHTML = `<p style="${sectionTitleStyle} margin-top: 25px;">Parts Invoicing</p>`;
             const partsInvoicingContentHTML = `<p><br></p>`;
 
             currentEmailContentHTML += generalStatsTableHTML +
@@ -1728,9 +1727,9 @@ window.addEventListener('load', function () {
                     <tr><td style="${thTdStyle}">Spare Miners</td><td style="${thTdStyle}">${placeholderData}</td></tr>
                     <tr><td style="${thTdStyle}">Total Offline</td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 </table>`;
-            const repairNotesTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Notes</p>`;
+            const repairNotesTitleHTML = `<p style="${sectionTitleStyle} margin-top: 25px;">Notes</p>`;
             const repairNotesContentHTML = `<p><br></p>`;
-            const partsInvoicingTitleHTML = `<p style="${sectionTitleStyle} text-align: center; margin-top: 25px;">Parts Invoicing</p>`;
+            const partsInvoicingTitleHTML = `<p style="${sectionTitleStyle} margin-top: 25px;">Parts Invoicing</p>`;
             const partsInvoicingContentHTML = `<p><br></p>`;
 
             currentEmailContentHTML += fortitudeTitleHTML +
