@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.1.5
+// @version      8.1.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -8930,10 +8930,12 @@ window.addEventListener('load', function () {
             GM_SuperValue.set('detailsData', {});
 
             function locateNewestSheet() {
+                console.log("Locating newest sheet...");
                 // Query all inner elements directly
-                const innerElements = document.querySelectorAll('div[role="row"][data-automationid^="row-"]');
+                const innerElements = document.querySelectorAll('div[role="gridcell"][data-automationid^="field-LinkFilename"]');
 
                 if(innerElements.length === 0) {
+                    console.log("No inner elements found, trying again in 500ms.");
                     setTimeout(locateNewestSheet, 500);
                     return;
                 }
@@ -8944,16 +8946,17 @@ window.addEventListener('load', function () {
 
                 // Loop through each inner element and check the aria-label
                 innerElements.forEach(element => {
-                    const ariaLabel = element.getAttribute('aria-label');
-                    if (ariaLabel && ariaLabel.toLowerCase().includes(minerType.toLowerCase())) {
+                    const linkButton = element.querySelector('span[role="button"][data-id="heroField"]');
+                    const linkButtonText = linkButton ? linkButton.textContent : "";
+                    if (linkButtonText && linkButtonText.toLowerCase().includes(minerType.toLowerCase())) {
                         // Check if a number is present in the aria-label, and get the number if it is
-                        const number = parseInt(ariaLabel.match(/\d+/));
+                        const number = parseInt(linkButtonText.match(/\d+/));
                         if (!isNaN(number)) {
                             matchingElements.push({ element, number });
                         }
                     }
 
-                    if (ariaLabel && ariaLabel.toLowerCase().includes(minerType.toLowerCase())) {
+                    if (linkButtonText && linkButtonText.toLowerCase().includes(minerType.toLowerCase())) {
                         backUpElement = element;
                     }
                 });
@@ -8987,6 +8990,8 @@ window.addEventListener('load', function () {
                     }, 15000);
 
                     linkButton.click();
+                    linkButton.dispatchEvent(new Event('click', { bubbles: true }));
+                    console.log("Clicked the link button:", linkButton);
 
                     // Find data-automationid="openFileCommand", click it then click "Open in Browser"
                     const interval = setInterval(() => {
@@ -9012,7 +9017,7 @@ window.addEventListener('load', function () {
                                 openFileCommand.click();
                             }
                         }
-                    }, 10);
+                    }, 100);
 
                 }
             }
