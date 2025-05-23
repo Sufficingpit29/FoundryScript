@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.1.3
+// @version      0.1.4
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -1571,7 +1571,7 @@ window.addEventListener('load', function () {
 
 
         const today = new Date();
-        const dateHTML = `<p style="margin-bottom: 8px;">Date: ${today.toLocaleDateString()}</p>`;
+        const dateHTML = `<p><br></p>` + `<p style="margin-bottom: 8px;">Date: ${today.toLocaleDateString()}</p>`;
         const siteName = getSelectedSiteName();
         const siteHTML = `<p style="margin-bottom: 15px;">Site: ${siteName}</p>`;
         const reportPlaceholderHTML = ""; // Kept from original, usually empty
