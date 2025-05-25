@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.1.4
+// @version      0.2.8
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -13,6 +13,7 @@
 // @run-at       document-start
 // ==/UserScript==
 
+const images_only = true;
 
 window.addEventListener('load', function () {
     const imageSeparatorHTML = `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAC8gAAAATCAYAAAD2gMU2AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGpSURBVHhe7dyxTcNQEAbge3bBBIyBRCZgBSpKUqdDiIo9oKFBVAlbsEV2QBnASM7jTGxFSJQRBOn7pF++e+95g9MFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcDCr8zJWX/bNcraIUh/Hro+omdJmPb3ZZoa6yXxkTjIAAAAAAAAAAAAAAPDb6vgtUetzdN1dzNebEquzy4j2Ji8udvff7H8CAAAAAAAAAAAAAIDj9B5Rb5uI9iqbn4bjB8NgvOF4AAAAAAAAAAAAAACO2WlEuW4i+tds3nZnAAAAAAAAAAAAAADw7wwb5F/22+GXs0WU+pDVdFYztscDAAAAAAAAAAAAAPCXtpkm02eGGfehntSo9Sm67j7m6814BgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABxaxCeiVSoY99t7uwAAAABJRU5ErkJggg==" alt="" style="display:block; width: 100%; height:auto;">`;
@@ -77,6 +78,9 @@ window.addEventListener('load', function () {
         }
     }
 
+    let siteName = localStorage.getItem("selectedSiteName");
+    if(siteName != "Minden") { return; } // Only run on Minden site
+
     async function getMinerData(callback) {
         let sleepCount = 0;
         let siteId = localStorage.getItem("selectedSite");
@@ -106,6 +110,60 @@ window.addEventListener('load', function () {
     const PROGRESS_OVERLAY_ID = 'opti-report-progress-overlay';
     let metricsReportWindow = null;
     let cancelMetricsFetchFlag = false;
+
+    // Function to convert a data URL to a Blob
+    function dataURLtoBlob(dataurl) {
+        var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new Blob([u8arr], {type:mime});
+    }
+
+    let lastCopyImageMessage = null;
+
+    function copyImageToClipboard(imgElement, name) {
+        const imgSrc = imgElement.src;
+        const blob = dataURLtoBlob(imgSrc);
+        const clipboardItem = new ClipboardItem({ 'image/png': blob });
+        navigator.clipboard.write([clipboardItem]).then(() => {
+            if (lastCopyImageMessage) {
+                lastCopyImageMessage.remove();
+                lastCopyImageMessage = null;
+            }
+
+            console.log('Image copied to clipboard');
+
+            // Show a fancy notification to user
+            const notification = document.createElement('div');
+            notification.style.position = 'fixed';
+            notification.style.top = '20px';
+            notification.style.right = '20px';
+            notification.style.backgroundColor = 'green'; // Changed to green
+            notification.style.color = '#fff';
+            notification.style.padding = '10px';
+            notification.style.borderRadius = '5px';
+            notification.style.zIndex = '99999';
+            notification.style.transition = 'opacity 0.5s ease-out'; // Added transition for fade out
+            notification.innerText = name + ' Image copied to clipboard!';
+            document.body.appendChild(notification);
+            lastCopyImageMessage = notification;
+            setTimeout(() => {
+                if(notification) {
+                    notification.style.opacity = '0';
+                    setTimeout(() => {
+                        if (document.body.contains(notification)) {
+                            document.body.removeChild(notification);
+                        }
+                    }, 500); // Wait for fade out to complete before removing
+                }
+            }, 2000);
+            
+        }).catch(err => {
+            console.error('Failed to copy image to clipboard:', err);
+        });
+    }
 
     // --- Function to disable mouse inputs in a given window ---
     function disableMouseInputsInWindow(targetWindow) {
@@ -169,7 +227,7 @@ window.addEventListener('load', function () {
                 #${PROGRESS_OVERLAY_ID} {
                     position: fixed;
                     bottom: 20px;
-                    right: 20px;
+                    left: 20px;
                     background-color: #333;
                     color: white;
                     padding: 15px;
@@ -572,6 +630,12 @@ window.addEventListener('load', function () {
             imgElement.style.marginTop = '15px'; imgElement.style.marginBottom = '15px';
             imgElement.style.border = '1px solid #555';
 
+            // copy image to clipboard if you right click it
+            imgElement.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                copyImageToClipboard(imgElement, desiredRangeTextInSpan);
+            });
+
             //emailBodyToAppendTo.appendChild(workAroundLineBreakElement.cloneNode(true));
             emailBodyToAppendTo.appendChild(imgElement);
             emailBodyToAppendTo.appendChild(workAroundLineBreakElement.cloneNode(true));
@@ -766,11 +830,14 @@ window.addEventListener('load', function () {
                 updateProgressMessage('Navigating to Site Overview page...');
                 metricsReportWindow.location.href = 'https://foundryoptifleet.com/Content/Dashboard/SiteOverview?OptiReport';
 
+                disableMouseInputsInWindow(metricsReportWindow); // Re-apply after navigation
                 await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for navigation
 
                 const siteOverviewElementSelector = 'div.m-section.has-space-xl';
                 const elementToCaptureSO = await waitForElement(siteOverviewElementSelector, metricsReportWindow.document);
-                disableMouseInputsInWindow(metricsReportWindow); // Re-apply after navigation
+
+                // Set style for the element to capture so padding is 16px on all sides
+                elementToCaptureSO.style.padding = '16px';
 
                 if (!elementToCaptureSO) {
                     throw new Error(`Could not find element "${siteOverviewElementSelector}" to capture for Site Overview.`);
@@ -905,6 +972,12 @@ window.addEventListener('load', function () {
                     imgElementSO.style.marginTop = '15px'; imgElementSO.style.marginBottom = '15px';
                     imgElementSO.style.border = '1px solid #555';
 
+                    // copy image to clipboard if you right click it
+                    imgElementSO.addEventListener('contextmenu', (event) => {
+                        event.preventDefault();
+                        copyImageToClipboard(imgElementSO, 'Site Overview');
+                    });
+
                     emailBodyToAppendTo.appendChild(document.createElement('p'));
                     emailBodyToAppendTo.appendChild(imgElementSO);
                     emailBodyToAppendTo.appendChild(document.createElement('p'));
@@ -937,21 +1010,24 @@ window.addEventListener('load', function () {
                 updateProgressMessage('Capturing "Hashrate Efficiency" section (zone-stats-panel)...');
                 const zoneStatsPanelSelector = 'div.zone-stats-panel';
                 await waitForElement('div.m-section.has-space-xl', metricsReportWindow.document, 10000);
-                disableMouseInputsInWindow(metricsReportWindow); // Re-apply after main section appears
+                disableMouseInputsInWindow(metricsReportWindow);
 
                 const elementToCaptureHE = await waitForElement(zoneStatsPanelSelector, metricsReportWindow.document, 15000);
                 if (!elementToCaptureHE) {
                     throw new Error(`Could not find element "${zoneStatsPanelSelector}" to capture for Hashrate Efficiency.`);
                 }
 
+                elementToCaptureHE.style.padding = '16px';
+
                 updateProgressMessage('Reloading Site Overview for Hashrate Efficiency capture...');
                 metricsReportWindow.location.href = 'https://foundryoptifleet.com/Content/Dashboard/SiteOverview?OptiReport';
+                disableMouseInputsInWindow(metricsReportWindow);
+
                 const gridID = '#zoneStatsGrid';
                 await waitForElement('div.m-section.has-space-xl', metricsReportWindow.document, 20000);
-                disableMouseInputsInWindow(metricsReportWindow); // Re-apply after navigation and main section appears
 
                 await waitForElement(gridID, metricsReportWindow.document, 15000);
-                disableMouseInputsInWindow(metricsReportWindow); // Re-apply after grid appears
+                disableMouseInputsInWindow(metricsReportWindow);
 
                 const statPanelClass = 'stat-panel';
                 let statPanelCheckInterval = 1000;
@@ -978,6 +1054,9 @@ window.addEventListener('load', function () {
                  if (!freshElementToCaptureHE) {
                     throw new Error(`Could not find element "${zoneStatsPanelSelector}" (after reload) to capture for Hashrate Efficiency.`);
                 }
+
+                // Set style for the element to capture so padding is 16px on all sides
+                freshElementToCaptureHE.style.padding = '16px';
 
                 const docElHE = metricsReportWindow.document.documentElement;
                 const bodyElHE = metricsReportWindow.document.body;
@@ -1039,6 +1118,12 @@ window.addEventListener('load', function () {
                     imgElementHE.style.maxWidth = '100%'; imgElementHE.style.height = 'auto';
                     imgElementHE.style.marginTop = '15px'; imgElementHE.style.marginBottom = '15px';
                     imgElementHE.style.border = '1px solid #555';
+
+                    // copy image to clipboard if you right click it
+                    imgElementHE.addEventListener('contextmenu', (event) => {
+                        event.preventDefault();
+                        copyImageToClipboard(imgElementHE, 'Hashrate Efficiency');
+                    });
 
                     emailBodyToAppendTo.appendChild(document.createElement('p'));
                     emailBodyToAppendTo.appendChild(imgElementHE);
@@ -1125,6 +1210,12 @@ window.addEventListener('load', function () {
                     imgElementHE_filtered.style.maxWidth = '100%'; imgElementHE_filtered.style.height = 'auto';
                     imgElementHE_filtered.style.marginTop = '15px'; imgElementHE_filtered.style.marginBottom = '15px';
                     imgElementHE_filtered.style.border = '1px solid #555';
+
+                    // copy image to clipboard if you right click it
+                    imgElementHE_filtered.addEventListener('contextmenu', (event) => {
+                        event.preventDefault();
+                        copyImageToClipboard(imgElementHE_filtered, 'Hashrate Efficiency (C18 & C19)');
+                    });
 
                     fortitudeEmailBody.appendChild(document.createElement('p'));
                     fortitudeEmailBody.appendChild(imgElementHE_filtered);
@@ -1260,6 +1351,12 @@ window.addEventListener('load', function () {
                     imgElementUS.style.marginTop = '15px'; imgElementUS.style.marginBottom = '15px';
                     imgElementUS.style.border = '1px solid #555';
 
+                    // copy image to clipboard if you right click it
+                    imgElementUS.addEventListener('contextmenu', (event) => {
+                        event.preventDefault();
+                        copyImageToClipboard(imgElementUS, 'Uptime Stats');
+                    });
+
                     emailBodyToAppendTo.appendChild(document.createElement('p'));
                     emailBodyToAppendTo.appendChild(imgElementUS);
                     emailBodyToAppendTo.appendChild(document.createElement('p'));
@@ -1382,6 +1479,12 @@ window.addEventListener('load', function () {
                     imgElementUS_Fortitude.style.marginBottom = '15px';
                     imgElementUS_Fortitude.style.border = '1px solid #555';
 
+                    // copy image to clipboard if you right click it
+                    imgElementUS_Fortitude.addEventListener('contextmenu', (event) => {
+                        event.preventDefault();
+                        copyImageToClipboard(imgElementUS_Fortitude, 'Uptime Stats (C18 & C19)');
+                    });
+
                     fortitudeEmailBody.appendChild(document.createElement('p'));
                     fortitudeEmailBody.appendChild(imgElementUS_Fortitude);
                     fortitudeEmailBody.appendChild(document.createElement('p'));
@@ -1391,16 +1494,22 @@ window.addEventListener('load', function () {
                 }
                 // --- END: Add Filtered Uptime Stats (C18 & C19) to Fortitude Report ---
 
-                const weatherReportsTitle = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Weather Notes</p>`;
-                emailBodiesArray.forEach(emailBodyToAppendTo => {
-                    const tempDivWR = document.createElement('div');
-                    tempDivWR.innerHTML = weatherReportsTitle + imageSeparatorHTML + `<p><br></p>`;
-                    while(tempDivWR.firstChild) {
-                        emailBodyToAppendTo.appendChild(tempDivWR.firstChild);
-                    }
-                    emailBodyToAppendTo.scrollTop = emailBodyToAppendTo.scrollHeight;
-                });
+                if(!images_only) {
+                    const weatherReportsTitle = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Weather Notes</p>`;
+                    emailBodiesArray.forEach(emailBodyToAppendTo => {
+                        const tempDivWR = document.createElement('div');
+                        tempDivWR.innerHTML = weatherReportsTitle + imageSeparatorHTML + `<p><br></p>`;
+                        while(tempDivWR.firstChild) {
+                            emailBodyToAppendTo.appendChild(tempDivWR.firstChild);
+                        }
+                        emailBodyToAppendTo.scrollTop = emailBodyToAppendTo.scrollHeight;
+                    });
+                }
 
+                // Set scroll pos back to top
+                emailBodiesArray.forEach(emailBodyToAppendTo => {
+                    emailBodyToAppendTo.scrollTop = 0;
+                });
 
                 updateProgressMessage('All reports and overview captured successfully!');
                 metricsReportWindow.close();
@@ -1448,12 +1557,13 @@ window.addEventListener('load', function () {
         panel.style.padding = '25px';
         panel.style.borderRadius = '8px';
         panel.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.5)';
-        panel.style.width = '90%';
-        panel.style.maxWidth = '700px'; // Max width for the panel
-        panel.style.maxHeight = '90vh'; // Max height relative to viewport height
-        panel.style.overflowY = 'auto'; // Scroll if content exceeds max height
-        panel.style.color = '#e0e0e0'; // Light text color for dark background
-        panel.style.fontFamily = 'Arial, sans-serif'; // Basic font
+        panel.style.width = '80%';
+        panel.style.height = '80%';
+        panel.style.display = 'flex';
+        panel.style.flexDirection = 'column';
+        panel.style.position = 'relative';
+        panel.style.color = '#e0e0e0';
+        panel.style.fontFamily = 'Arial, sans-serif';
 
         // Panel Title
         let title = document.createElement('h2');
@@ -1474,36 +1584,61 @@ window.addEventListener('load', function () {
         loadingMessage.style.margin = '20px 0';
         panel.appendChild(loadingMessage);
 
+        // --- Reports Container (Flex Row) ---
+        let reportsRowContainer = document.createElement('div');
+        reportsRowContainer.style.display = 'flex';
+        reportsRowContainer.style.gap = '30px';
+        reportsRowContainer.style.justifyContent = 'space-between';
+        reportsRowContainer.style.alignItems = 'stretch';
+        reportsRowContainer.style.marginBottom = '30px';
+        reportsRowContainer.style.flex = '1'; // Use flex shorthand to grow and shrink
+        reportsRowContainer.style.minHeight = '0'; // Allow shrinking below content size if necessary
+
         // --- Container for Full Report ---
         let fullReportContainer = document.createElement('div');
         fullReportContainer.id = 'optiFullReportContainer';
-        fullReportContainer.style.marginBottom = '30px'; // Space between reports
-        panel.appendChild(fullReportContainer);
+        fullReportContainer.style.flex = '1 1 0';
+        fullReportContainer.style.marginBottom = '0';
+        fullReportContainer.style.minWidth = '0';
+        fullReportContainer.style.height = '100%';
+        fullReportContainer.style.display = 'flex';
+        fullReportContainer.style.flexDirection = 'column';
 
         // --- Container for Fortitude Report ---
         let fortitudeReportContainer = document.createElement('div');
         fortitudeReportContainer.id = 'optiFortitudeReportContainer';
-        panel.appendChild(fortitudeReportContainer);
+        fortitudeReportContainer.style.flex = '1 1 0';
+        fortitudeReportContainer.style.minWidth = '0';
+        fortitudeReportContainer.style.height = '100%';
+        fortitudeReportContainer.style.display = 'flex';
+        fortitudeReportContainer.style.flexDirection = 'column';
 
+        reportsRowContainer.appendChild(fullReportContainer);
+        reportsRowContainer.appendChild(fortitudeReportContainer);
+        panel.appendChild(reportsRowContainer);
 
         // --- Main Controls Container (for Close button, etc.) ---
         let mainControlsContainer = document.createElement('div');
+        mainControlsContainer.style.position = 'absolute';
+        mainControlsContainer.style.right = '25px';
+        mainControlsContainer.style.bottom = '25px';
         mainControlsContainer.style.display = 'flex';
-        mainControlsContainer.style.justifyContent = 'flex-end'; // Aligns buttons to the right
-        mainControlsContainer.style.marginTop = '20px'; // Add some space above the close button
+        mainControlsContainer.style.justifyContent = 'flex-end';
+        mainControlsContainer.style.width = 'calc(100% - 50px)';
+        mainControlsContainer.style.pointerEvents = 'none'; // allow button to be clickable, but container doesn't block
 
         // Close Button
         let closeButton = document.createElement('button');
         closeButton.innerText = 'Close';
-        // ... (styling from original closeButton)
         closeButton.style.padding = '12px 25px';
         closeButton.style.fontSize = '16px';
-        closeButton.style.backgroundColor = '#f44336'; // Red color for close
+        closeButton.style.backgroundColor = '#f44336';
         closeButton.style.color = 'white';
         closeButton.style.border = 'none';
         closeButton.style.borderRadius = '5px';
         closeButton.style.cursor = 'pointer';
         closeButton.style.transition = 'background-color 0.3s ease';
+        closeButton.style.pointerEvents = 'auto'; // allow click
         closeButton.onmouseover = () => closeButton.style.backgroundColor = '#d32f2f';
         closeButton.onmouseout = () => closeButton.style.backgroundColor = '#f44336';
         closeButton.addEventListener('click', function() {
@@ -1554,12 +1689,14 @@ window.addEventListener('load', function () {
         emailBody.style.backgroundColor = '#2a2a2a';
         emailBody.style.color = '#e0e0e0';
         emailBody.style.borderRadius = '4px';
+        emailBody.style.flex = '1'; // Allow emailBody to grow and shrink vertically
+        // minHeight: '0' could be added, but existing minHeight/maxHeight will constrain it
         emailBody.style.lineHeight = '1.6';
         emailBody.setAttribute('aria-label', 'Email body content');
 
         // --- Common Styles and Placeholders ---
         const tableStyle = `border-collapse: collapse; width: 800; margin: 15px auto; font-size: 14px;`;
-        const thTdStyle = `border: 1px solid #444; text-align: left; padding: 8px; width: 400px;`;
+        const thTdStyle = `border: 2px solid #444; text-align: left; padding: 8px; width: 400px;`;
         const sectionTitleStyle = `font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;`;
         const placeholderData = "";
         const sectionSpacerHTML = `<p style="margin-bottom: 20px;">&nbsp;</p>`;
@@ -1639,7 +1776,10 @@ window.addEventListener('load', function () {
                                  imageSeparatorHTML +
                                  partsInvoicingContentHTML +
                                  reportPlaceholderHTML;
-            emailBody.innerHTML = currentEmailContentHTML;
+
+            if(!images_only) {
+                emailBody.innerHTML = currentEmailContentHTML;
+            }
 
             getMinerData(function(minerData) {
                 console.log('Miner data fetched for Full Report:', minerData);
@@ -1740,7 +1880,13 @@ window.addEventListener('load', function () {
                                  partsInvoicingTitleHTML +
                                  imageSeparatorHTML +
                                  partsInvoicingContentHTML;
-            emailBody.innerHTML = currentEmailContentHTML;
+
+                                 
+            
+
+            if(!images_only) {
+                emailBody.innerHTML = currentEmailContentHTML;
+            }
 
             getMinerData(function(minerData) {
                 console.log('Miner data fetched for Fortitude Report:', minerData);
