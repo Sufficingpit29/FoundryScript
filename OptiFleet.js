@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.1.6
+// @version      8.1.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -134,15 +134,15 @@ if(currentURL.includes("https://foundryoptifleet.com")) {
     const configMenu = document.createElement('div');
     configMenu.setAttribute('id', 'configMenu');
     configMenu.setAttribute('style', `
-        display: none; 
-        position: absolute; 
-        top: 50px; 
-        right: 0; 
-        background-color: #333; 
-        color: white; 
-        padding: 20px; 
-        border-radius: 10px; 
-        z-index: 1000; 
+        display: none;
+        position: absolute;
+        top: 50px;
+        right: 0;
+        background-color: #333;
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        z-index: 1000;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         width: 280px;
     `);
@@ -384,7 +384,7 @@ async function fetchGUIData(url, responseType, type, timeout) {
                                     try {
                                         // Step 1: Decompress the .gz file
                                         const decompressedData = pako.inflate(new Uint8Array(response.response));
-                            
+
                                         // Step 2: Parse the .tar archive
                                         untar(decompressedData.buffer)
                                             .then(files => {
@@ -722,7 +722,7 @@ const errorsToSearch = {
                 // For all fan speed 0 lines, get the fan number
                 console.log("Fan Fail Lines: ", fanFailLines2);
                 let fanSpeeds = [];
-                
+
                 for (const line of fanFailLines2) {
                     // Extract the fan number and speed from the line
                     const fanNumber = line.split("fan_id = ")[1].split(",")[0].trim();
@@ -733,7 +733,7 @@ const errorsToSearch = {
 
                 // If any of the fan numbers are 0, or are far away from the others, return them as failed fans
                 let failedFans = [];
-                
+
                 for (let i = 0; i < fanSpeeds.length; i++) {
                     let fanSpeed = fanSpeeds[i];
                     if(fanSpeed === 0 || Math.abs(fanSpeed - Math.max(...fanSpeeds)) > 1500) {
@@ -1099,7 +1099,7 @@ const errorsToSearch = {
             if(text.includes("The last error numbers are different.")) {
                 return "Different error numbers";
             } else {
-                
+
             }
             return "Unknown error";
         }
@@ -1230,7 +1230,7 @@ function runErrorScanLogic(logText) {
                             showOnceErrors[error] = null;
                         }
                     }
-                        
+
 
                     // Check if the error text meets the conditions
                     if (typeof errorData.conditions === 'function' ? errorData.conditions(errorText) : true && !errorTextAlreadyFound) {
@@ -1248,11 +1248,11 @@ function runErrorScanLogic(logText) {
                                 lastError.textReturn = testReturn;
                                 shouldAddNew = false;
                             }
-                        } 
-                        
+                        }
+
                         if(shouldAddNew) {
                             let textReturn = errorData.textReturn ? errorData.textReturn(errorText) : error;
-                            
+
                             errorsFound.push({
                                 name: error,
                                 icon: errorData.icon || "https://img.icons8.com/?size=100&id=51Tr6obvkPgA&format=png&color=FFFFFF",
@@ -1260,9 +1260,9 @@ function runErrorScanLogic(logText) {
                                 start: startIndex,
                                 end: endIndex,
                                 type: errorData.type || "Other",
-                                textReturn: textReturn 
+                                textReturn: textReturn
                             });
-                            
+
 
                             // So we know the previous error to remove it if it's found again
                             if (errorData.showOnce) {
@@ -1455,7 +1455,7 @@ window.addEventListener('load', function () {
 
         let OptiFleetService2 = Object.getPrototypeOf(unsafeWindow.ms);
         var serviceInstance = Object.getPrototypeOf(unsafeWindow.ms);
-        
+
         var viewServiceInstance = new MinerViewService();
         var siteId = getSelectedSiteId();
         var siteName = getSelectedSiteName();
@@ -1464,7 +1464,7 @@ window.addEventListener('load', function () {
         var lastCompanyId = companyId;
         var lastMinerDataUpdate = 0;
         var reloadCards = false;
-        
+
         let minerSNLookup = GM_SuperValue.get("minerSNLookup_"+siteName, {});
 
         let lastUpTime = {}; //GM_SuperValue.get("lastUpTime_"+siteName, {});
@@ -1540,7 +1540,7 @@ window.addEventListener('load', function () {
             const onlyNonHashingContainer = document.createElement('div');
             onlyNonHashingContainer.style.display = 'flex';
             onlyNonHashingContainer.style.alignItems = 'center';
-            
+
             const onlyNonHashingInput = document.createElement('input');
             onlyNonHashingInput.type = 'checkbox';
             onlyNonHashingInput.checked = onlyNonHashing;
@@ -1560,7 +1560,7 @@ window.addEventListener('load', function () {
             const alertEnabledContainer = document.createElement('div');
             alertEnabledContainer.style.display = 'flex';
             alertEnabledContainer.style.alignItems = 'center';
-            
+
             const alertEnabledInput = document.createElement('input');
             alertEnabledInput.type = 'checkbox';
             alertEnabledInput.checked = alertEnabled;
@@ -1576,7 +1576,7 @@ window.addEventListener('load', function () {
 
             alertEnabledContainer.appendChild(alertEnabledInput);
             alertEnabledContainer.appendChild(alertEnabledLabelText);
-            
+
             const majorAlertEnableContainer = document.createElement('div');
             majorAlertEnableContainer.style.display = 'flex';
             majorAlertEnableContainer.style.alignItems = 'center';
@@ -1650,7 +1650,7 @@ window.addEventListener('load', function () {
                 GM_SuperValue.set("alertEnabled", alertEnabledInput.checked.toString());
                 GM_SuperValue.set("majorAlertEnable", majorAlertEnableInput.checked.toString());
                 GM_SuperValue.set("majorAlertTTS", majorAlertTTSEnableInput.checked.toString());
-                
+
                 popup.remove();
 
                 minerIssueNotification();
@@ -1693,8 +1693,8 @@ window.addEventListener('load', function () {
 
             document.body.appendChild(popup);
         }
-        
-        
+
+
         // Add a small edit button to bottom right
         if(currentURL.includes("https://foundryoptifleet.com/Content/Issues/Issues") && siteName.includes("Minden") && savedFeatures["alertSystem"]) {
 
@@ -1832,7 +1832,7 @@ window.addEventListener('load', function () {
                             audio.play();
                             GM_SuperValue.set("majorAlert_LastPlayed", new Date().getTime());
                         }
-                        
+
                         if(majorAlertTTS && (new Date().getTime() - GM_SuperValue.get("majorAlertTTS_LastSpoken", 0)) > 20000) {
                             GM_SuperValue.set("majorAlertTTS_LastSpoken", new Date().getTime());
                             var msg = new SpeechSynthesisUtterance();
@@ -1919,7 +1919,7 @@ window.addEventListener('load', function () {
                 }
             }
         }
-        
+
         function updateAllMinersData(keepTrying = false, callback) {
             console.log("Updating all miners data");
             // Reset allMinersLookup
@@ -1983,20 +1983,20 @@ window.addEventListener('load', function () {
 
                     let miners = resp.miners;
                     //console.log("Miners Data:", miners);
-    
+
                     if(keepTrying && Date.now() - lastMinerDataUpdate > 1000 && miners.length === 0) {
                         console.log("Retrying to get miner data");
                         setTimeout(function() {
                             updateAllMinersData(true);
                         }, 500);
                     }
-                    
+
                     if(!disableFrozenMiners) {
                         // Sets up a lookup table
                         delete frozenMiners;
                         frozenMiners = [];
                         miners.forEach(miner => {
-                            
+
                             // If the miner is frozen, add it to the frozen miners list
                             const minerID = miner.id;
                             const uptimeValue = miner.uptimeValue;
@@ -2019,7 +2019,7 @@ window.addEventListener('load', function () {
                                 gotFrozenData = true;
                                 gotFrozenDataFor[minerID] = true;
                             }
-                            
+
                             lastUpTime[minerID] = { value: uptimeValue, time: miner.lastStatsUpdate };
                             if(sameHashRate) {
                                 lastUpTime[minerID].sameHashRateCount++;
@@ -2063,15 +2063,15 @@ window.addEventListener('load', function () {
                         }, 500);
                     }
                 });
-                
+
             });
 
             /*
             // Call the getMiners method
             viewServiceInstance.getMiners(companyId, siteId).then(function(miners) {
-               
+
             }).catch(function(error) {
-                
+
             });
             */
         }
@@ -2154,7 +2154,7 @@ window.addEventListener('load', function () {
 
         let updatePlannerCardsData = function() {}; // Placeholder function for the actual function that will be created later
 
-        getPlannerCardData = function() { 
+        getPlannerCardData = function() {
             // Create the iframes for the planner boards
             let plannerKeys = [`Bitmain`, `Fortitude`, `RAMM`];
             let plannerPages = [];
@@ -2177,15 +2177,15 @@ window.addEventListener('load', function () {
                 const lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
                 const currentTime = new Date().getTime();
                 const timeDiff = (currentTime - lastCollectionTime) / 1000;
-        
+
                 if (timeDiff < 10 && !collectionStarted) {
                     collectionStarted = true;
                 }
-        
+
                 if (!collectionStarted) {
                     return;
                 }
-        
+
                 let plannerCardsDataAll = {};
                 for (const key in urlLookupPlanner) {
                     const plannerID = getPlannerID(urlLookupPlanner[key]); //.match(/plan\/([^?]+)/)[1].split('/')[0];
@@ -2303,7 +2303,7 @@ window.addEventListener('load', function () {
                 if(getSelectedSiteId() !== siteId || getSelectedCompanyId() !== companyId) {
                     //updateAllMinersData(true);
                     console.log("Site ID or Company ID has changed.");
-    
+
                     // Reload the page (Just far easier than trying to update the data and handle all the edge cases)
                     window.location.reload();
                 }
@@ -2373,7 +2373,7 @@ window.addEventListener('load', function () {
                         </m-stack>
                     </m-box>
                 `;
-                
+
 
                 // Add a bit of margin to the top
                 hashRateCard.style.marginTop = '0px';
@@ -2596,12 +2596,12 @@ window.addEventListener('load', function () {
                 }
 
                 console.log('Paste event detected!');
-                
+
                 let clipboardData = event.clipboardData || window.clipboardData || unsafeWindow.clipboardData;
                 let pastedData = clipboardData.getData('text');
                 pastedData = pastedData.replace("http://root:root@", "");
                 pastedData = pastedData.split('/')[0].trim();
-                
+
                 console.log('Pasted data:', `[${pastedData}]`);
                 // If that wasn't pasted in an actual input, then we open the miner page
                 let hasSpaces = pastedData.includes(' ');
@@ -2614,7 +2614,7 @@ window.addEventListener('load', function () {
                     } else if(pastedData.length === 17) {
                         createNotification("Miner with serial number " + pastedData + " not found.");
                     }
-                }    
+                }
             });
         }
 
@@ -2687,7 +2687,7 @@ window.addEventListener('load', function () {
                         textToCopy += `${label.textContent.trim()}\n`;
                         const primaryText = info.querySelector('.m-text:not(.is-secondary), .m-link');
                         const secondaryText = info.querySelector('.m-text.is-secondary, span.is-secondary');
-                        
+
                         if (primaryText) {
                             textToCopy += `${primaryText.textContent.trim()}\n`;
                         }
@@ -2700,7 +2700,7 @@ window.addEventListener('load', function () {
                         textToCopy += '\n';
                     }
                 });
-                
+
                 // Remove Copy/Copied text
                 textToCopy = textToCopy.replace(/Copy/g, '');
                 textToCopy = textToCopy.replace(/Copied/g, '');
@@ -2787,7 +2787,7 @@ window.addEventListener('load', function () {
                     let plannerUrl = urlLookupPlanner[type];
                     window.open(plannerUrl).focus();
                 }
-                
+
             }
 
             function createDataInputPopup() {
@@ -2971,7 +2971,7 @@ window.addEventListener('load', function () {
                 }
             }
             addCustomerNameText();
-            
+
 
             function addCopyButton(element, textToCopy) {
                 if (element.querySelector('.copyBtn')) {return};
@@ -3097,13 +3097,13 @@ window.addEventListener('load', function () {
                     submitButton.setAttribute('observing', 'true');
                 }
             }
-            
+
             function addMutationObserver() {
                 const observer = new MutationObserver(() => {
                     //fixAccountWorkerFormatting();
                     setModelEditSumbitToUpdate();
                     addCopyButtonsToElements();
-                    
+
                 });
 
                 observer.observe(document.body, { childList: true, subtree: true });
@@ -3111,7 +3111,7 @@ window.addEventListener('load', function () {
 
             //addCopyButtonsToElements();
             addMutationObserver();
-            
+
             // Add "Log" Tab
             const tabsContainer = document.querySelector('.tabs');
             let customTabExists = false;
@@ -3144,7 +3144,7 @@ window.addEventListener('load', function () {
                     for (let i = 0; i < children.length; i++) {
                         children[i].classList.remove("active");
                     }
-                    
+
                     // Add the new data to the tab content (deletes if it already exists)
                     const customTabContainer = document.createElement('div');
                     customTabContainer.className = 'customTabContainer active';
@@ -3182,7 +3182,7 @@ window.addEventListener('load', function () {
 
                     fetchDataCallback(customTabContainer, loadingText, loadingSpinner);
                 };
-                
+
                 tabsContainer.appendChild(customTab);
             };
 
@@ -3224,7 +3224,7 @@ window.addEventListener('load', function () {
                                 <m-icon name="chevron-down" data-dashlane-shadowhost="true" data-dashlane-observed="true" class="flip"></m-icon>
                             </div>
                         `;
-                    
+
                         // Create the group items with icons dynamically
                         const items = errors.map((error, index) => `
                             <div class="m-nav-group-item" style="display: flex; align-items: center;">
@@ -3232,7 +3232,7 @@ window.addEventListener('load', function () {
                                 <a href="#" class="m-nav-item" data-error-index="${index}">${error.textReturn}</a>
                             </div>
                         `).join('');
-                        
+
                         // Combine all parts into the final HTML
                         errorTab.innerHTML = `
                             ${header}
@@ -3242,12 +3242,12 @@ window.addEventListener('load', function () {
                                 </div>
                             </div>
                         `;
-                    
+
                         // Add collapse and open logic
                         const headerElement = errorTab.querySelector('.m-nav-group-header');
                         const sectionElement = errorTab.querySelector('.m-nav-group-section');
                         const chevronIcon = errorTab.querySelector('.m-nav-group-header m-icon');
-                    
+
                         headerElement.addEventListener('click', () => {
                             const isOpen = sectionElement.style.display === 'block';
                             sectionElement.style.display = isOpen ? 'none' : 'block';
@@ -3258,7 +3258,7 @@ window.addEventListener('load', function () {
                             sectionElement.style.display = 'block';
                             chevronIcon.classList.add('flip');
                         }
-                    
+
                         // Add click event listener to each error item
                         const errorItems = errorTab.querySelectorAll('.m-nav-item');
                         errorItems.forEach(errorItem => {
@@ -3291,11 +3291,11 @@ window.addEventListener('load', function () {
                                 findLog = false;
                             }
                         });
-                    
+
                         mnav.appendChild(errorTab);
                         return errorTab;
                     }
-                    
+
                     let logElement;
                     function handleErrorClick(error, orignalLogText) {
                         logElement = document.querySelector('#logElement');
@@ -3305,11 +3305,11 @@ window.addEventListener('load', function () {
                             logElement.removeChild(logElement.firstChild);
                         }
                         logElement.textContent = orignalLogText;
-                    
+
                         // Create a new element to highlight the error
                         const errorElement = document.createElement('span');
                         errorElement.style.backgroundColor = '#780707';
-                        
+
                         const errorTextNode = document.createElement('span');
                         errorTextNode.style.fontWeight = 'bolder';
                         //errorTextNode.style.textShadow = '1px 1px 2px black';
@@ -3318,7 +3318,7 @@ window.addEventListener('load', function () {
                         errorElement.appendChild(errorTextNode);
                         errorElement.style.width = logElement.scrollWidth + 'px';
                         errorElement.style.display = 'block';
-                    
+
                         // Create a copy button
                         const copyButton = document.createElement('button');
                         copyButton.textContent = 'Copy';
@@ -3376,14 +3376,14 @@ window.addEventListener('load', function () {
                                 copyButton.textContent = 'Copy';
                             }, 1000);
                         });
-                    
+
                         errorElement.style.position = 'relative';
                         errorElement.appendChild(copyButton);
-                    
+
                         errorElement.addEventListener('mouseover', () => {
                             copyButton.style.display = 'block';
                         });
-                    
+
                         errorElement.addEventListener('mouseout', () => {
                             copyButton.style.display = 'none';
                         });
@@ -3393,19 +3393,19 @@ window.addEventListener('load', function () {
                             event.preventDefault();
                             copyButton.click();
                         });
-                    
+
                         // Replace the error text in the log with the highlighted version
                         const logTextNode = logElement.childNodes[0];
                         const beforeErrorText = logTextNode.textContent.substring(0, error.start);
                         const afterErrorText = logTextNode.textContent.substring(error.end);
 
                         logTextNode.textContent = beforeErrorText;
-                        
+
                         logElement.insertBefore(errorElement, logTextNode.nextSibling);
                         logElement.insertBefore(document.createTextNode(afterErrorText), errorElement.nextSibling);
                         errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
-                    
+
                     // Remove the loading text and spinner
                     customTabContainer.removeChild(loadingText);
                     customTabContainer.removeChild(loadingSpinner);
@@ -3432,7 +3432,7 @@ window.addEventListener('load', function () {
 
                         let startSectionText = "----------Start Foundry Miner";
                         let logSections = responseText.split(startSectionText);
-                        
+
                         // Readd startSectionText to the beginning of each section
                         for (let i = 1; i < logSections.length; i++) {
                             logSections[i] = startSectionText + logSections[i];
@@ -3445,7 +3445,7 @@ window.addEventListener('load', function () {
                                 2025-04-04 15:54:41 enable power watchdog: 0x0001
                                 1970-01-01 00:00:13 Invalid config option --bitmain-freq-level: '' is not a number
                             */
-                            
+
                             const logLines = responseText.split('\n');
                             logSections = [];
                             let currentSection = '';
@@ -3700,7 +3700,7 @@ window.addEventListener('load', function () {
 
                         responseText = responseText.trim();
                         responseText = cleanErrors(responseText);
-                        
+
 
                         orignalLogText = responseText;
                         logElement.textContent = orignalLogText;
@@ -3741,9 +3741,9 @@ window.addEventListener('load', function () {
                         if(errorsFound.length === 0) {
                             return;
                         }
-                        
+
                         logElement.scrollIntoView({ behavior: 'auto', block: 'end' });
-                        
+
                         const infoTab = createErrorTab("Info", errorsFound.filter(error => error.type === "Info"), true);
                         const mainTab = createErrorTab("Main Errors", errorsFound.filter(error => error.type === "Main"), true);
                         const otherTab = createErrorTab("Other Errors", errorsFound.filter(error => error.type === "Other"));
@@ -3751,7 +3751,7 @@ window.addEventListener('load', function () {
                         // Scroll to show new tabs
                         if(mainTab) {mainTab.scrollIntoView({ behavior: 'auto', block: 'end' });}
                         if(otherTab) {otherTab.scrollIntoView({ behavior: 'auto', block: 'end' });}
-                    } 
+                    }
                 }
 
                 createCustomTab('quickIPGrabTab', 'Current Log', (customTabContainer, loadingText, loadingSpinner) => {
@@ -3763,7 +3763,7 @@ window.addEventListener('load', function () {
 
                             // Get status from the miner
                             const status = getMinerDetails()[1].status;
-                            
+
                             if(status !== "Online") {
                                 // Remove the loading text and spinner
                                 customTabContainer.removeChild(loadingText);
@@ -3775,7 +3775,7 @@ window.addEventListener('load', function () {
                                 customTabContainer.appendChild(offlineMessage);
                                 return;
                             }
-                            
+
                             // firmwareInfoElement
                             const firmwareInfoElement = document.querySelector('#firmwareInfo');
                             const firmwareInfo = firmwareInfoElement ? firmwareInfoElement.innerText : "Unknown";
@@ -3783,7 +3783,7 @@ window.addEventListener('load', function () {
                             if(isFoundryFirmware(firmwareInfo)) {
                                 const ip = new URL(ipHref).hostname;
                                 const responseText = fetchAndCombineLogs(ip);
-                                responseText.then(responseText => { 
+                                responseText.then(responseText => {
                                     SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText);
                                 }).catch(error => {
                                     try {
@@ -3795,7 +3795,7 @@ window.addEventListener('load', function () {
                                     const errorMessage = document.createElement('div');
                                     errorMessage.textContent = 'Failed to retrieve current log.\n\n' + error;
                                     customTabContainer.appendChild(errorMessage);
-                                    
+
                                     // Log the error to the console
                                     console.error(error);
                                 });
@@ -3814,7 +3814,7 @@ window.addEventListener('load', function () {
                                         const errorMessage = document.createElement('div');
                                         errorMessage.textContent = 'Failed to retrieve current log.\n\n' + error;
                                         customTabContainer.appendChild(errorMessage);
-                                        
+
                                         // Log the error to the console
                                         console.error(error);
                                     });
@@ -3840,7 +3840,7 @@ window.addEventListener('load', function () {
 
                             // Get status from the miner
                             const status = getMinerDetails()[1].status;
-                            
+
                             if(status !== "Online") {
                                 // Remove the loading text and spinner
                                 customTabContainer.removeChild(loadingText);
@@ -3852,7 +3852,7 @@ window.addEventListener('load', function () {
                                 customTabContainer.appendChild(offlineMessage);
                                 return;
                             }
-                            
+
                             // firmwareInfoElement
                             const firmwareInfoElement = document.querySelector('#firmwareInfo');
                             const firmwareInfo = firmwareInfoElement ? firmwareInfoElement.innerText : "Unknown";
@@ -3860,7 +3860,7 @@ window.addEventListener('load', function () {
                             if(isFoundryFirmware(firmwareInfo)) {
                                 const ip = new URL(ipHref).hostname;
                                 const responseText = fetchAndCombineLogs(ip);
-                                responseText.then(responseText => { 
+                                responseText.then(responseText => {
                                     SetUpLog(customTabContainer, loadingText, loadingSpinner, responseText, true, true, true);
                                 }).catch(error => {
                                     try {
@@ -3891,7 +3891,7 @@ window.addEventListener('load', function () {
                                         const errorMessage = document.createElement('div');
                                         errorMessage.textContent = 'Failed to retrieve history log.\n\n' + error;
                                         customTabContainer.appendChild(errorMessage);
-                                        
+
                                         // Log the error to the console
                                         console.error(error);
                                     });
@@ -3901,7 +3901,7 @@ window.addEventListener('load', function () {
                 });
             }
 
-            // Loop through all the tabs and add an extra on click event 
+            // Loop through all the tabs and add an extra on click event
             const tabs = document.querySelectorAll('.tab');
             tabs.forEach(tab => {
                 tab.addEventListener('click', function(event) {
@@ -3953,19 +3953,19 @@ window.addEventListener('load', function () {
                 rows.forEach(row => {
                     const uid = row.getAttribute('data-uid');
                     let minerLinkElement = minerGrid.querySelector(`[data-uid="${uid}"] .menu-wrapper`);
-              
+
                     // Loop through columnIndexes and get the data for each column
                     for (const [key, colIndex] of Object.entries(columnIndexes)) {
                         let colRowElement = row.querySelector('td[role="gridcell"]:nth-child(' + (parseInt(colIndex+1)) + ')');
                         if (minerLinkElement && colRowElement) {
-                            // Store the data in the minersListTableLookup 
+                            // Store the data in the minersListTableLookup
                             const minerID = minerLinkElement.getAttribute('data-miner-id');
                             minersListTableLookup[minerID] = minersListTableLookup[minerID] || {};
                             minersListTableLookup[minerID][key] = colRowElement;
                         }
                     }
 
-                    
+
 
                     if(minerLinkElement && savedFeatures["rightClickContextMenu"]) {
                         let rightClick = false;
@@ -4027,11 +4027,11 @@ window.addEventListener('load', function () {
                 const minerList = document.querySelector('#minerList') || document.querySelector('#minerGrid');
                 if (minerList) {
                     clearInterval(minerListCheck);
-                    
-                    
+
+
                     let plannerCardsDataAll = {};
                     function updatePlannerLink(plannerElement) {
-                        
+
                         let lastCollectionTime = GM_SuperValue.get('plannerCardsDataTime', 0);
                         let currentTime = new Date().getTime();
                         let timeDiff = (currentTime - lastCollectionTime) / 1000;
@@ -4141,7 +4141,7 @@ window.addEventListener('load', function () {
                                     }, 200);
                                 }
                             }
-                
+
                             function autoSelectIPAddressSetup() {
                                 if(!savedFeatures["autoSelectPool"] || !siteName.includes("Minden")) { return; }
                                 const PoolConfigModal = document.querySelector('#PoolConfigModal');
@@ -4151,7 +4151,7 @@ window.addEventListener('load', function () {
                                     return;
                                 }
                                 const PoolSelectionDropDown = PoolConfigModalContent.querySelector('.dropdown.clickable');
-                
+
                                 // Set up observer if PoolConfigModal ever changes display to not be none
                                 const observer = new MutationObserver(() => {
                                     const PoolConfigModal = document.querySelector('#PoolConfigModal');
@@ -4166,7 +4166,7 @@ window.addEventListener('load', function () {
                         }
 
                         getCurrentMinerList();
-                        
+
                         // Loop through all the Slot ID elements and add the Breaker Number and Container Temp
                         for (const [minerID, minerData] of Object.entries(minersListTableLookup)) {
                             hasSetUp = true;
@@ -4189,7 +4189,7 @@ window.addEventListener('load', function () {
 
                             // Set the model name to be a link to the miner page
                             if (modelNameElement && savedFeatures["minerNameLink"]) {
-                                // change model name to a link if it isn't already  
+                                // change model name to a link if it isn't already
                                 if(modelNameElement.tagName !== 'A') {
                                     const newElement = document.createElement('a');
                                     newElement.href = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
@@ -4251,21 +4251,21 @@ window.addEventListener('load', function () {
                                                     response = JSON.parse(response);
                                                 }
 
-                                                
+
 
                                                 const ipHref2 = "http://" + ip + '/cgi-bin/summary.cgi';
                                                 fetchGUIData(ipHref2)
                                                     .then(response2 => {
 
                                                     let mainErrors = minerErrors[ip] || "";
-                                                    
+
                                                     if (response2) {
                                                         response2 = JSON.parse(response2);
                                                     }
                                                     if(response.STATS && (response.STATS.length == 0 || response.STATS[0].chain === undefined || response.STATS[0].rate_ideal === undefined || (response.STATS[0].chain[0] && response.STATS[0].chain[0].rate_ideal === 0))) {
                                                         element.textContent = 'Initializing...?';
                                                         element.tooltip.textContent = 'Possibly starting after a reboot?\nOr is stuck...' + mainErrors;
-                                                        
+
                                                         if(response2.SUMMARY && response2.SUMMARY[0] && response2.SUMMARY[0].status) {
                                                             // Loop through the status and find the first one that is not "s" status
                                                             let status = response2.SUMMARY[0].status;
@@ -4282,7 +4282,7 @@ window.addEventListener('load', function () {
                                                         if(splitErrors.length > 1 && !splitErrors[3].includes("No Known Major Errors Found")) {
                                                             element.textContent = 'Error: ' + splitErrors[3];
                                                         }
-                                                       
+
                                                         return;
                                                     }
 
@@ -4317,14 +4317,14 @@ window.addEventListener('load', function () {
 
                                                     let elaspedTime = response.STATS[0].elapsed;
                                                     let formattedTime = Math.floor(elaspedTime / 3600) + "h " + Math.floor((elaspedTime % 3600) / 60) + "m " + (elaspedTime % 60) + "s";
-                                                    if (totalHash) { 
+                                                    if (totalHash) {
                                                         element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
                                                         element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n";
                                                         if(chains.length >= 1) {
                                                             element.hashboardRates += `\n`;
                                                         }
-                                                        
-                                                        element.hashboardRates += chains.map((chain, index) => 
+
+                                                        element.hashboardRates += chains.map((chain, index) =>
                                                             `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
                                                         ).join('\n');
 
@@ -4335,7 +4335,7 @@ window.addEventListener('load', function () {
                                                                 asicDifference = true;
                                                             }
                                                         });
-                                                        
+
                                                         let errorTextAppend = ""
 
                                                         if (issueFans.length > 0) {
@@ -4380,7 +4380,7 @@ window.addEventListener('load', function () {
                                         const ipHrefLog = "http://" + ip + '/cgi-bin/log.cgi';
                                         fetchGUIData(ipHrefLog)
                                             .then(logResponse => {
-                                                
+
                                                 logResponse = cleanErrors(logResponse);
                                                 let errorsFound = runErrorScanLogic(logResponse);
                                                 errorsFound = errorsFound.filter(error => error.type === 'Main');
@@ -4642,7 +4642,7 @@ window.addEventListener('load', function () {
                     const selectedIds = Object.keys(unsafeWindow.issues.activeGrid._selectedIds);
                     const columns = unsafeWindow.issues.activeExportGrid.columns.filter(col => col.field && !col.hidden);
                     const data = unsafeWindow.issues.hashingFilterMiners.filter(miner => selectedIds.includes(miner.id.toString()));
-                
+
                     const exportData = data.map(miner => {
                         const row = {};
                         columns.forEach(col => {
@@ -4650,16 +4650,16 @@ window.addEventListener('load', function () {
                         });
                         return row;
                     });
-                
+
                     const worksheet = XLSX.utils.json_to_sheet(exportData);
-                
+
                     // Adjust column widths to fit the text
                     const columnWidths = columns.map(col => {
                         const maxLength = Math.max(...exportData.map(row => (row[col.title] || '').toString().length), col.title.length);
                         return { wch: maxLength + 2 }; // Add some padding
                     });
                     worksheet['!cols'] = columnWidths;
-                
+
                     const workbook = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(workbook, worksheet, 'Selected Miners');
                     XLSX.writeFile(workbook, 'selected_miners.xlsx');
@@ -4890,7 +4890,7 @@ window.addEventListener('load', function () {
                         if (parent) {
                             parent.appendChild(popupResultElement);
 
-                            
+
                             // Resize and align into the parent
                             popupResultElement.style.width = '100%';
                             popupResultElement.style.height = '100%';
@@ -4900,7 +4900,7 @@ window.addEventListener('load', function () {
 
                             // Make sure it cant expand beyond the parent
                             popupResultElement.style.overflow = 'hidden';
-                            
+
                         } else {
                             document.body.appendChild(popupResultElement);
                         }
@@ -5038,7 +5038,7 @@ window.addEventListener('load', function () {
 
                         function addToProgressLog(currentMiner) {
                             const wasScrollAtBottom = progressLog.scrollTop + progressLog.clientHeight >= progressLog.scrollHeight-10;
-                            
+
                             // Add to progress log
                             const logEntry = document.createElement('div');
                             const logLink = document.createElement('a');
@@ -5228,7 +5228,7 @@ window.addEventListener('load', function () {
                                         const softRebootTimes = minerRebootTimesData.softRebootsTimes || [];
                                         const lastSoftRebootTime = softRebootTimes[softRebootTimes.length-1] || false;
                                         const timeSinceLastSoftReboot = lastSoftRebootTime ? (new Date() - new Date(lastSoftRebootTime)) : false;
-                                        
+
                                         if(timeSinceLastSoftReboot && timeSinceLastSoftReboot < 60*60*1000) { // Mainly if the page was reloaded or something and another scan was started before the miner uptime data could change so it still thinks it hasn't been rebooted IE the uptime hasn't changed
                                             moreThanOneHour = false;
                                         }
@@ -5239,7 +5239,7 @@ window.addEventListener('load', function () {
                                         rebootData[minerID].details = [];
                                         rebootData[minerID].miner = currentMiner;
 
-                                        
+
                                         lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
                                         const manualHardReboot = lastRebootTimes[minerID].manualHardReboot || false;
                                         const hardRebootAttemptedTime = lastRebootTimes[minerID].hardRebootAttempted || false;
@@ -5261,7 +5261,7 @@ window.addEventListener('load', function () {
                                         const numOfSoftReboots = lastRebootTimes[minerID].softRebootsTimes.length;
                                         const moreThan3SoftReboots = numOfSoftReboots >= 3;
 
-                                        
+
                                         const timeSinceHardRebootAttempted = hardRebootAttemptedTime ? (new Date() - new Date(hardRebootAttemptedTime)) : false;
                                         const hardRebootAttempted = (timeSinceHardRebootAttempted && timeSinceHardRebootAttempted < 6*60*60*1000) || hardRebootAttemptedTime === true;
 
@@ -5279,13 +5279,13 @@ window.addEventListener('load', function () {
                                                 if(rebootCount < maxRebootAllowed) {
                                                     // Reboot the miner
                                                     const minerIdList = [minerID];
-                                                    
+
                                                     rebootData[minerID].details.main = "Sent Soft Reboot";
                                                     rebootData[minerID].details.sub = [
                                                         "Miner has been online for more than 1 hour.",
                                                         "Miner is below 78°F."
                                                     ];
-                                                    
+
                                                     const formattedTime = new Date(new Date().toISOString()).toLocaleTimeString();
                                                     rebootData[minerID].details.sub.push("Soft Reboot sent at: " + formattedTime);
                                                     rebootData[minerID].details.sub.push("Soft Reboot ends at: " + new Date(new Date(new Date().toISOString()).getTime() + min15*1000).toLocaleTimeString());
@@ -5302,7 +5302,7 @@ window.addEventListener('load', function () {
                                                         })
                                                         .catch((error) => {
                                                             console.error("Failed to reboot Miner: " + minerID, error);
-                                                            
+
                                                             // Remove the last reboot time if the reboot failed
                                                             //lastRebootTimes[minerID].softRebootsTimes.pop();
 
@@ -5348,7 +5348,7 @@ window.addEventListener('load', function () {
                                         if(stuckAtZero) {
                                             rebootData[minerID].details.sub.push("Miner might be stuck at 0 uptime? Please wait for confirmation check...");
                                         }
-                                        
+
                                         if( hardRebootRecommendedBool ) {
                                             lastRebootTimes[minerID] = lastRebootTimes[minerID] || {};
 
@@ -5413,7 +5413,7 @@ window.addEventListener('load', function () {
                                             rebootData[minerID].details.main = "Container Too Hot (78°F)";
                                             rebootData[minerID].details.sub.push("Container is above 78°F.");
                                         }
-                                        
+
                                         if(!aboveMinTemp) {
                                             rebootData[minerID].details.main = "Container Too Cold (25°F)";
                                             rebootData[minerID].details.sub.push("Container is below 25°F.");
@@ -5473,7 +5473,7 @@ window.addEventListener('load', function () {
 
                                         if (currentMinerIndex === Object.keys(rebootMiners).length) {
                                             reachedScanEnd = true;
-                                            
+
                                             // Save the rebootData
                                             GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
 
@@ -5579,10 +5579,10 @@ window.addEventListener('load', function () {
                                                     refreshButton.appendChild(refreshIcon);
 
                                                     // Now the button is created, we can grab the actual button element
-                                                     
+
                                                     const refreshAutoRebootButton = popupResultElement.querySelector('#refreshAutoReboot');
 
-                                                    
+
                                                     // Update the countdown
                                                     const countdownInterval = setInterval(() => {
                                                         if (pauseTime) {
@@ -5619,7 +5619,7 @@ window.addEventListener('load', function () {
                                                         var colNum = Number(splitSlotID[3]);
                                                         var rowWidth = 4;
                                                         var breakerNum = (rowNum-1)*rowWidth + colNum;
-                
+
                                                         // Remakes the slot ID, but with added 0 padding
                                                         let reconstructedSlotID = `${containerID}-${rackNum.toString().padStart(2, '0')}-${rowNum.toString().padStart(2, '0')}-${colNum.toString().padStart(2, '0')}`;
 
@@ -5630,7 +5630,7 @@ window.addEventListener('load', function () {
                                                         minerRebootData.details = minerRebootData.details || {};
                                                         minerRebootData.details.main = minerRebootData.details.main || "ERROR";
                                                         minerRebootData.details.sub = minerRebootData.details.sub || ["Failed to get details!"];
-                                                        
+
                                                         let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
                                                         row.innerHTML = `
                                                             <td style="text-align: left; position: relative;">
@@ -5655,7 +5655,7 @@ window.addEventListener('load', function () {
 
                                                         var questionColor = minerRebootData.details.color || false;
                                                         if(questionColor) {
-                                                            row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;   
+                                                            row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;
                                                         }
 
                                                         row.minerID = minerID;
@@ -5704,7 +5704,7 @@ window.addEventListener('load', function () {
                                                                 setUpRowData(row, currentMiner);
                                                             }
                                                         }
-                                                        
+
                                                         // Add a button to cancel the hard reboot mark if details.main === "Waiting on Hard Reboot Result"
                                                         if(minerRebootData.details.main === "Waiting on Hard Reboot Result") {
                                                             const cancelButton = document.createElement('button');
@@ -5719,7 +5719,7 @@ window.addEventListener('load', function () {
                                                                 margin-left: 5px;
                                                             `;
                                                             row.querySelector('td:last-child').appendChild(cancelButton);
-                                                            
+
                                                             // Add button hover effect
                                                             cancelButton.addEventListener('mouseenter', function() {
                                                                 this.style.backgroundColor = '#c82333'; /* Darker red on hover */
@@ -5837,7 +5837,7 @@ window.addEventListener('load', function () {
                                                                 setUpRowData(row, currentMiner);
                                                             }
                                                         }
-                                                        
+
                                                         // Custom right click context menu when right clicking on the row
                                                         row.addEventListener('contextmenu', (e) => {
                                                             e.preventDefault();
@@ -5889,7 +5889,7 @@ window.addEventListener('load', function () {
                                                                 };
                                                                 contextMenu.appendChild(button);
                                                             });
-                                                            
+
                                                             function setShouldHardReboot() {
                                                                 lastRebootTimes[minerID].hardRebootAttempted = false;
                                                                 lastRebootTimes[minerID].hardRebootRecommended = new Date().toISOString();
@@ -5910,9 +5910,9 @@ window.addEventListener('load', function () {
 
                                                                 // make a copy of the details data
                                                                 lastRebootTimes[minerID].previousDetails = structuredClone(rebootData[minerID].details);
-                                                                
+
                                                                 GM_SuperValue.set('lastRebootTimes', lastRebootTimes);
-                                                                
+
                                                                 setUpRowData(row, currentMiner);
                                                             }
 
@@ -5925,7 +5925,7 @@ window.addEventListener('load', function () {
                                                                 rebootData[minerID] = {};
                                                             }
                                                         });
-                                                        
+
                                                         // Add hover event listeners to show/hide the full details
                                                         const questionMark = row.querySelector('td:last-child div[style*="position: relative;"]');
                                                         const tooltip = questionMark.querySelector('div[style*="display: none;"]');
@@ -5943,7 +5943,7 @@ window.addEventListener('load', function () {
                                                             tooltip.style.top = `${questionMarkRect.top}px`;
                                                         });
 
-                                                        
+
                                                         // Start a timer to hide the tooltip after a delay if not hovered over
                                                         let hideTooltipTimer;
                                                         const hideTooltipWithDelay = () => {
@@ -5979,7 +5979,7 @@ window.addEventListener('load', function () {
                                                         const mightBeStuck = "Miner might be stuck at 0 uptime? Please wait for confirmation check...";
                                                         if(minerRebootData.details.sub.includes(mightBeStuck)) {
                                                             // Check if the miner has had no uptimes within 30 minutes
-                                                            
+
                                                             retrieveMinerData("MinerHashrate", minerID, 60*30, function(minerID, minerMinerHashrates) {
                                                                 // Loop through the hashrates and check for any 0 hashrates
                                                                 let hasHashrate = false;
@@ -6002,10 +6002,10 @@ window.addEventListener('load', function () {
                                                                     }
                                                                     previouHashrate = hashrate;
                                                                 }
-                                                                
+
                                                                 if(!hasHashrate) {
                                                                     rebootData[minerID].details.sub.push("Miner has not hashed in the last 30 minutes.");
-                                                                    
+
                                                                     if(rebootData[minerID].details.main === "Soft Reboot Skipped") {
                                                                         rebootData[minerID].details.main = "Hard Reboot Recommended";
                                                                         rebootData[minerID].details.color = 'orange';
@@ -6015,7 +6015,7 @@ window.addEventListener('load', function () {
                                                                 } else if(zeroCount > 3) {
                                                                     rebootData[minerID].details.sub.push("Miner has had numerous non hashing times in the last 30 minutes.");
                                                                     rebootData[minerID].details.sub.push("Non Hashing Count: " + zeroCount);
-                                                                    
+
                                                                     if(rebootData[minerID].details.main === "Soft Reboot Skipped") {
                                                                         rebootData[minerID].details.main = "Hard Reboot Recommended";
                                                                         rebootData[minerID].details.color = 'orange';
@@ -6031,7 +6031,7 @@ window.addEventListener('load', function () {
 
                                                                     let nonHashingTime = new Date() - lastHashrateTimeDate;
                                                                     let nonHashingTimeFormatted = formatUptime(nonHashingTime/1000);
-                                                                    rebootData[minerID].details.sub.push("Non Hashing for: " + nonHashingTimeFormatted);    
+                                                                    rebootData[minerID].details.sub.push("Non Hashing for: " + nonHashingTimeFormatted);
                                                                 }
 
                                                                 retrieveMinerData("MinerOnline", minerID, 60*30, function(minerID, minerUptime) {
@@ -6060,7 +6060,7 @@ window.addEventListener('load', function () {
 
                                                                     if(!hasUptime) {
                                                                         rebootData[minerID].details.sub.push("Miner is stuck at 0 uptime, there has been no uptimes in the last 30 minutes.");
-                                                                        
+
                                                                         if(rebootData[minerID].details.main === "Soft Reboot Skipped") {
                                                                             rebootData[minerID].details.main = "Hard Reboot Recommended";
                                                                             rebootData[minerID].details.color = 'orange';
@@ -6071,7 +6071,7 @@ window.addEventListener('load', function () {
                                                                         if(downCount > 2) {
                                                                             rebootData[minerID].details.sub.push("Miner has had numerous downtimes in the last 30 minutes.");
                                                                             rebootData[minerID].details.sub.push("Offline Count: " + downCount);
-                                                                            
+
                                                                             if(rebootData[minerID].details.main === "Soft Reboot Skipped") {
                                                                                 rebootData[minerID].details.main = "Hard Reboot Recommended";
                                                                                 rebootData[minerID].details.color = 'orange';
@@ -6154,11 +6154,11 @@ window.addEventListener('load', function () {
                                                         // Reset the scan
                                                         reachedScanEnd = false;
                                                         currentMinerIndex = 0;
-                                                        
+
                                                         rebootData = {};
 
                                                         function refreshTableLogic(rebootMiners) {
-                                                            
+
                                                             //console.log("Refreshed issue miners:", rebootMiners);
 
                                                             let rebootMinersLookup = {};
@@ -6182,7 +6182,7 @@ window.addEventListener('load', function () {
                                                                     rebootData[minerID] = rebootData[minerID] || {};
                                                                     rebootData[minerID].details = rebootData[minerID].details || {};
                                                                 }
-                                                                
+
                                                                 // If the miner had been set to have a hard reboot recommend, then let's skip the check as we want to wait until the user marks that it has been hard rebooted
                                                                 if(minerID && rebootData[minerID].details.main !== "Hard Reboot Recommended") {
                                                                     // Check the miner (If the currentMiner is no longer valid, then we can assume it is hashing again since it is no longer in the issue miners)
@@ -6202,7 +6202,7 @@ window.addEventListener('load', function () {
                                                                 }
                                                             });
 
-                                                            
+
                                                             // Find any new miners in the rebootMiners that are not in the table
                                                             for (const miner of rebootMiners) {
                                                                 if (miner === undefined || miner === null || !miner.id) {
@@ -6329,7 +6329,7 @@ window.addEventListener('load', function () {
                                                     // Append after
                                                     tableDiv.parentNode.insertBefore(progressBar, tableDiv.nextSibling);
                                                     */
-                                                    
+
                                                     // Hide the progress bar
                                                     progressBar.style.display = 'none';
 
@@ -6423,7 +6423,7 @@ window.addEventListener('load', function () {
                                                     `;
                                                     toggleSleepModeButton.textContent = 'Hide Sleep Mode Miners';
                                                     firstDiv.appendChild(toggleSleepModeButton);
-                                                    
+
                                                     // Add button hover effect
                                                     toggleSleepModeButton.addEventListener('mouseenter', function() {
                                                         this.style.backgroundColor = '#005a9e';
@@ -6445,7 +6445,7 @@ window.addEventListener('load', function () {
                                                     // Get the 3 toggle buttons, find the longest one, and set the other two to the same width
                                                     const buttons = [showSkippedButton, showSuccessfulButton, toggleSleepModeButton];
                                                     buttons.forEach(button => button.style.width = `${200}px`);
-                                                    
+
 
                                                     /*
                                                     // Add a checkbox for "Include Low Hashing Miners"
@@ -6457,7 +6457,7 @@ window.addEventListener('load', function () {
                                                         align-self: flex-end;
                                                     `;
                                                     firstDiv.appendChild(includeLowHashingMinersContainer);
-                                                    
+
 
                                                     const includeLowHashingMinersCheckbox = document.createElement('input');
                                                     includeLowHashingMinersCheckbox.id = 'includeLowHashingMinersCheckbox';
@@ -6544,7 +6544,7 @@ window.addEventListener('load', function () {
 
                                                             return comparableValue;
                                                         };
-                                                        
+
                                                         $('#minerTable').DataTable({
                                                             paging: false,       // Disable pagination
                                                             searching: false,    // Disable searching
@@ -6572,7 +6572,7 @@ window.addEventListener('load', function () {
 
                                                             $('#minerTable').attr('colIndex', $('#minerTable').DataTable().order()[0][0]);
                                                             $('#minerTable').attr('orderType', $('#minerTable').DataTable().order()[0][1]);
-                                                            
+
                                                             // If the table is sorted by the "Slot ID & Breaker" column, group the rows by container
                                                             const slotIDBreakerIndex = Array.from($('#minerTable th')).findIndex(th => th.textContent.includes('Slot ID & Breaker'));
                                                             if ($('#minerTable').DataTable().order()[0][0] === slotIDBreakerIndex) {
@@ -6650,7 +6650,7 @@ window.addEventListener('load', function () {
 
                                             // Now that we have the minerHashData, we can retrieve the uptime data
                                             retrieveMinerData("MinerOnline", minerID, timeFrame, function(minerID, minerUptime) {
-                                                
+
                                                 // Loop through the uptime and check for any downtime
                                                 var minerDownTimes = 0;
                                                 var previousState = '1';
@@ -6678,7 +6678,7 @@ window.addEventListener('load', function () {
                                                 minersScanData[minerID].overallHashRate = overallHashRate;
                                                 minersScanData[minerID].onlineHashRate = onlineHashRate;
                                                 minersScanData[minerID].miner = currentMiner;
-                    
+
                                                 // Run next miner
                                                 runNextMiner();
                                             });
@@ -6706,7 +6706,7 @@ window.addEventListener('load', function () {
                                         // Create a popup element for showing the results
                                         const cols = ['IP', 'Miner', 'Offline Count', 'Total Hash Efficiency', 'Online Only Hash Efficiency', 'Slot ID', 'Serial Number'];
                                         createPopUpTable(`Offline Count List (${scanTimeFrameText})`, cols, false, (popupResultElement) => {
-                                            
+
                                             const firstDiv = popupResultElement.querySelector('div');
 
                                             // Download as CSV
@@ -6715,7 +6715,7 @@ window.addEventListener('load', function () {
                                             downloadButton.style.cssText = `
                                                 padding: 10px 20px;
                                                 background-color: #0078d4;
-                                                color: white;  
+                                                color: white;
                                                 border: none;
                                                 cursor: pointer;
                                                 margin-top: 10px;
@@ -6726,7 +6726,7 @@ window.addEventListener('load', function () {
                                             `;
                                             downloadButton.textContent = 'Download as CSV';
                                             firstDiv.appendChild(downloadButton);
-                                            
+
                                             const downloadCSV = popupResultElement.querySelector('#downloadButton');
                                             downloadCSV.addEventListener('mouseenter', function() {
                                                 this.style.backgroundColor = '#005a9e';
@@ -6833,7 +6833,7 @@ window.addEventListener('load', function () {
                                                     let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
                                                     return comparableValue;
                                                 };
-                                                
+
 
                                                 $('#minerTable').DataTable({
                                                     paging: false,       // Disable pagination
@@ -7038,10 +7038,10 @@ window.addEventListener('load', function () {
 
                                         // Update the percentage text
                                         percentageText.textContent = `${Math.round(((doneNum) / originalLength) * 100)}% (${doneNum}/${originalLength})`;
-                            
+
                                         // Update the progress bar
                                         progressFill.style.width = `${((doneNum) / originalLength) * 100}%`;
-                            
+
                                     });
                             }
                         }
@@ -7243,7 +7243,7 @@ window.addEventListener('load', function () {
                                             } else {
                                                 var questionColor = 'red';
                                                 if(questionColor) {
-                                                    row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;   
+                                                    row.querySelector('td:last-child div[style*="position: relative;"] div').style.backgroundColor = questionColor;
                                                 }
                                                 const questionMark = row.querySelector('td:last-child div[style*="position: relative;"]');
                                                 const tooltip = questionMark.querySelector('div[style*="display: none;"]');
@@ -7322,7 +7322,7 @@ window.addEventListener('load', function () {
                                         const noErrorCountText = document.createElement('div');
                                         noErrorCountText.style.cssText = `
                                             padding: 5px;
-                                            background-color: #444947;  
+                                            background-color: #444947;
                                             border-radius: 5px;
                                             font-size: 0.8em;
                                         `;
@@ -7408,7 +7408,7 @@ window.addEventListener('load', function () {
                                             let model = currentMiner.modelName;
                                             let slotID = currentMiner.locationName;
 
-                                            let paddedSlotIDBreaker = padSlotID(slotID);       
+                                            let paddedSlotIDBreaker = padSlotID(slotID);
 
                                             let minerSerialNumber = currentMiner.serialNumber;
                                             let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
@@ -7432,12 +7432,12 @@ window.addEventListener('load', function () {
                                                         if(error.textReturn && error.textReturn.includes('HB: ')) {
                                                             hashboardModel = error.textReturn.replace('HB: ', '');
                                                         }
-                                                        
+
                                                         if(error.type !== 'Info') {
                                                             if(!iconLinks.find(icon => icon.icon === error.icon)) {
                                                                 iconLinks.push({icon: error.icon, count: 1, name: error.name});
                                                             } else {
-                                                                iconLinks.find(icon => icon.icon === error.icon).count++;                                                            
+                                                                iconLinks.find(icon => icon.icon === error.icon).count++;
                                                             }
                                                         }
                                                     });
@@ -7453,7 +7453,7 @@ window.addEventListener('load', function () {
                                                     border-radius: 5px;
                                                     outline: 1px solid #000;
                                                 `;
-                                                
+
                                                 iconLinks.forEach(icon => {
                                                     const iconDiv = document.createElement('div');
                                                     iconDiv.style.cssText = `
@@ -7511,7 +7511,7 @@ window.addEventListener('load', function () {
 
                                                         const tooltipOffset = 5;
                                                         tooltip.style.top = `${iconRect.top}px`;
-                                                        tooltip.style.left = `${iconRect.right}px`; 
+                                                        tooltip.style.left = `${iconRect.right}px`;
                                                     });
 
                                                     iconDiv.addEventListener('mouseleave', () => {
@@ -7523,7 +7523,7 @@ window.addEventListener('load', function () {
                                                 if(errorCount === '?') {
                                                     errorCountText = errorData[0].short || errorData[0].textReturn || "Error Count: ?";
                                                 }
-                                                    
+
                                                 const newRow = document.createElement('tr');
                                                 newRow.style.backgroundColor = '#444947';
                                                 newRow.style.color = 'white';
@@ -7592,7 +7592,7 @@ window.addEventListener('load', function () {
 
                                                 newRow.querySelector('td').prepend(toggleButtonSpan);
                                                 toggleButtonSpan.appendChild(toggleButton);
-                                                
+
                                                 newRow.classList.add('unselectable');
 
                                                 toggleButton.addEventListener('mouseenter', function() {
@@ -7723,7 +7723,7 @@ window.addEventListener('load', function () {
                                 buttonsDiv.style.display = 'flex';
                                 buttonsDiv.style.justifyContent = 'space-between';
                                 popupContent.appendChild(buttonsDiv);
-                                
+
 
                                 const submitButton = document.createElement('button');
                                 submitButton.textContent = 'Submit';
@@ -7783,7 +7783,7 @@ window.addEventListener('load', function () {
 
                         // Add the full auto reboot button to the right of the dropdown
                         //actionsDropdown.before(fullAutoRebootButton);
-                        
+
                         // Create a 'getPlannerCardData' button to the right of the dropdown
                         if(savedFeatures["plannerCardScan"]) {
                             const updatePlannerCardsDropdown = document.createElement('div');
@@ -7813,7 +7813,7 @@ window.addEventListener('load', function () {
                             let firstLoad = true;
                             function setUpPlannerCardRefresh() {
                                 const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
-                                
+
                                 // If first load and openOnLoad is enabled, open the planner cards
                                 if(firstLoad && plannerCardConfig.openOnLoad) {
                                     getPlannerCardData();
@@ -7824,7 +7824,7 @@ window.addEventListener('load', function () {
                                 if(plannerCardRefreshInterval) {
                                     clearInterval(plannerCardRefreshInterval);
                                 }
-                                
+
                                 // If the autoRetrieve is enabled, set the interval to refresh the planner cards
                                 if(plannerCardConfig.autoRetrieve) {
                                     plannerCardRefreshInterval = setInterval(() => {
@@ -7865,7 +7865,7 @@ window.addEventListener('load', function () {
                                 popupContent.appendChild(popupTitle);
 
                                 const plannerCardConfig = GM_SuperValue.get('plannerCardConfig', {autoRetrieve: false, openOnLoad: false, retrieveInterval: 60});
-                                
+
                                 // Auto retrieve checkbox
                                 const autoRetrieveContainer = document.createElement('div');
                                 autoRetrieveContainer.style.display = 'flex';
@@ -7916,7 +7916,7 @@ window.addEventListener('load', function () {
                                 retrieveIntervalLabel.style.color = 'white';
                                 retrieveIntervalLabel.style.marginBottom = '10px';
                                 popupContent.appendChild(retrieveIntervalLabel);
-                                
+
                                 const retrieveIntervalInput = document.createElement('input');
                                 retrieveIntervalInput.type = 'number';
                                 retrieveIntervalInput.min = 1;
@@ -7931,7 +7931,7 @@ window.addEventListener('load', function () {
                                 buttonsDiv.style.display = 'flex';
                                 buttonsDiv.style.justifyContent = 'space-between';
                                 popupContent.appendChild(buttonsDiv);
-                                
+
                                 const submitButton = document.createElement('button');
                                 submitButton.textContent = 'Save';
                                 submitButton.style.padding = '10px 20px';
@@ -7990,7 +7990,7 @@ window.addEventListener('load', function () {
                                     popup.remove();
                                 }
                             }
-                            
+
                             setUpPlannerCardRefresh();
                         }
                     }
@@ -8017,7 +8017,7 @@ window.addEventListener('load', function () {
 
                     // Overide tab toggle function to add in my custom fuctionality
                     function toggleCustomTab(tab) {
-                        
+
                         // show the miner-filters
                         const filterElement = document.querySelector(".filters-section.m-section");
                         const selectedElement = document.querySelector(".miners-selected");
@@ -8033,7 +8033,7 @@ window.addEventListener('load', function () {
                         if (popupResultElement) {
                             popupResultElement.remove();
                         }
-                        
+
                         // Removes the normal table if it exists
                         $(tab).addClass("selected");
                         $(tab).siblings(".tab").removeClass("selected");
@@ -8148,7 +8148,7 @@ window.addEventListener('load', function () {
                                         let comparableValue = numbers.reduce((acc, num) => acc * 1000 + num, 0);
                                         return comparableValue;
                                     };
-                                    
+
 
                                     $('#minerTable').DataTable({
                                         paging: false,       // Disable pagination
@@ -8217,7 +8217,7 @@ window.addEventListener('load', function () {
                         tabsContainer.appendChild(frozenMinersTab);
                     }
 
-                    // Loop through all the tabs and add an extra on click event 
+                    // Loop through all the tabs and add an extra on click event
                     const tabs = document.querySelectorAll('.tab');
                     tabs.forEach(tab => {
                         tab.onclick = function() {
@@ -8231,7 +8231,7 @@ window.addEventListener('load', function () {
 
             }, 1000);
         }
-        
+
         if(currentURL.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/List")) {
 
             // Add the "Copy Selected Rows" action for only selected rows
@@ -8452,7 +8452,7 @@ window.addEventListener('load', function () {
             createBreakerNumBox();
 
             //----------------------------------------------------------
-            
+
             // Logic for seeing if the miner exists in a planner board
             function checkIfInPlannerBoard() {
                 GM_SuperValue.set("locatePlannerCard", false);
@@ -8466,7 +8466,7 @@ window.addEventListener('load', function () {
                 }
 
                 var serialNumber = minerDetails['serialNumber'];
-                
+
                 // Cycle 3 dots
                 let cycle = 0;
                 let dots = "";
@@ -8597,10 +8597,10 @@ window.addEventListener('load', function () {
                         mBox.appendChild(refreshText);
                     }
                 }, 1000);
-                
+
             }
             checkIfInPlannerBoard();
-            
+
             function autoSelectPool() {
                 const PoolConfigModalContent = document.querySelector('#PoolConfigModalContent');
                 const PoolSelectionDropDown = PoolConfigModalContent.querySelector('.dropdown.clickable');
@@ -8610,7 +8610,7 @@ window.addEventListener('load', function () {
                     if (curPoolType === "Select Configs") {
                         PoolSelectionDropDown.click();
                         const customerName = unsafeWindow.im.miner.subcustomerName;
-                        
+
                         const waitUntilDropdown = setInterval(() => {
                             const optionPanel = document.querySelector('.k-list-optionlabel').parentElement;
                             if (optionPanel) {
@@ -8679,7 +8679,7 @@ window.addEventListener('load', function () {
             if(!savedFeatures["avgContainerTemps"]) {
                 return;
             }
-           
+
             let lastRan = 0;
             function addTemperatureData() {
                 const containers = document.querySelectorAll('.stat-panel');
@@ -8844,7 +8844,7 @@ window.addEventListener('load', function () {
 
             // Start observing the container
             observer.observe(document.body, { childList: true, subtree: true });
-            
+
         }
     }
 
@@ -8894,7 +8894,11 @@ window.addEventListener('load', function () {
     if (currentURL.includes("foundrydigitalllc.sharepoint.com/") ) {
         let taskName = GM_SuperValue.get("taskName", "");
         const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
-        const minerType = detailsData['type'];
+        let minerType = detailsData['type'];
+
+        if(minerType === "RAMM") {
+            minerType = "Needs Parts"; // Quick fix for file name being changed
+        }
 
         if (taskName !== "") {
             // Quick popup notification saying it been formatted & copied to clipboard
@@ -8939,7 +8943,7 @@ window.addEventListener('load', function () {
                     setTimeout(locateNewestSheet, 500);
                     return;
                 }
-        
+
                 // Initialize an array to store elements with the required aria-label
                 const matchingElements = [];
                 var backUpElement = null;
@@ -8999,7 +9003,7 @@ window.addEventListener('load', function () {
                         if(menuItems && menuItems.length > 0) {
                             menuItems.forEach(item => {
                                 if (item.textContent.trim() === 'Open in browser') {
-                                    
+
                                     unsafeWindow.open = function(url,windowName,parms) {
                                         // Instead set the current URL to the new URL
                                         if(url.includes("sharepoint")) {
@@ -9049,7 +9053,7 @@ window.addEventListener('load', function () {
                 const charArray = text.split('');
                 box.click();
                 for (const char of charArray) {
-                    
+
                     // Create and dispatch the keydown event
                     const keydownEvent = new KeyboardEvent('keydown', { key: char });
                     box.dispatchEvent(keydownEvent);
@@ -9096,14 +9100,14 @@ window.addEventListener('load', function () {
             let existingCard = false;
             let maxTries = 30;
             let curTry = 0;
-            
+
             let foundCards = [];
             function FindIfCardExists(serialNumber, findCallback) {
-                if (stopChecking) { 
+                if (stopChecking) {
                     console.log("Stop checking is true, exiting.");
-                    return; 
+                    return;
                 }
-                
+
                 // Get all sectionToggleButton and expand them
                 const sectionToggleButtons = document.querySelectorAll('.sectionToggleButton');
                 console.log("sectionToggleButtons: ", sectionToggleButtons);
@@ -9143,7 +9147,7 @@ window.addEventListener('load', function () {
                 const cards = document.querySelectorAll('.taskBoardCard');
                 curTry++;
                 console.log("Checking for card with serial number:", serialNumber);
-                
+
                 // At/past max tries or we at the end of the scroll of .columnsList
                 let columnsList = document.querySelector('.columnsList');
                 let endOfScroll = columnsList.scrollWidth - columnsList.clientWidth <= columnsList.scrollLeft+35;
@@ -9156,7 +9160,7 @@ window.addEventListener('load', function () {
                     // Reset the search bar
                     filterTextBox.value = ' ';
                     filterTextBox.dispatchEvent(new Event('input', { bubbles: true }));
-                    
+
                     // Set search bar color
                     filterTextBox.style.backgroundColor = 'red';
                     timeout = setTimeout(() => {
@@ -9185,7 +9189,7 @@ window.addEventListener('load', function () {
                         existingCard = container;
                         foundCards.push(container);
                         let columnTitle = container.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.querySelector('.columnTitle h3').textContent;
-                        
+
                         // Set search bar color
                         filterTextBox.style.backgroundColor = '#1797ff';
                         timeout = setTimeout(() => {
@@ -9258,7 +9262,7 @@ window.addEventListener('load', function () {
                                 border.remove();
                             }, 1000);
                         }, 1500);
-                        
+
                     });
 
                     // clear the locatePlannerCard data
@@ -9302,7 +9306,7 @@ window.addEventListener('load', function () {
                     overlay.style.alignItems = 'center';
                     overlay.style.justifyContent = 'center';
                     overlay.style.zIndex = '9999';
-                    
+
                     // Add text saying we're collecting data and a spinner
                     overlay.innerHTML = `
                         <div style="text-align: center;">
@@ -9331,8 +9335,8 @@ window.addEventListener('load', function () {
                     document.head.appendChild(spinnerStyle);
                     createdOverlay = true;
                 }
-                        
- 
+
+
                 if (!setDate) {
                     GM_SuperValue.set("plannerPageLoaded_"+plannerID, true);
                     GM_SuperValue.set('plannerCardsDataTime', Date.now());
@@ -9369,7 +9373,7 @@ window.addEventListener('load', function () {
                             return;
                         }
                     }
-                            
+
                     let cardData = {
                         columnTitle: columnTitle,
                         issue: issue,
@@ -9410,7 +9414,7 @@ window.addEventListener('load', function () {
                 let serialNumber = taskName.split('_')[0];
                 const minerData = minerSNLookup[serialNumber] || {};
                 let minerID = minerData.minerID;
-                
+
                 // Check if the button already exists
                 const openMinerButton = document.querySelector('#openMinerButton');
                 if (openMinerButton && previousMinerID === minerID) {
@@ -9450,7 +9454,7 @@ window.addEventListener('load', function () {
 
                 // Create the miner link
                 let minerLink = `https://foundryoptifleet.com/Content/Miners/IndividualMiner?id=${minerID}`;
-                
+
                 // Create the button and add it to into the taskEditor-dialog-header on the left side
                 const button = document.createElement('button');
                 button.id = 'openMinerButton';
@@ -9502,11 +9506,11 @@ window.addEventListener('load', function () {
                         leaveAlone = true;
                     }
                 }
-                
+
                 // If the name does seem to be formatted with the serial number, then add the slot ID to the card
                 // Check if there are multiple _ in the taskName, and no spaces in the serial number
                 if (taskName.includes('_') && !serialNumber.includes(' ') && serialNumber.length > 5 && !leaveAlone) {
-                    // Add it above textContent 
+                    // Add it above textContent
                     const taskCardContent = card.querySelector('.textContent');
                     const slotIDElement = document.createElement('div');
                     slotIDElement.classList.add('slotID');
@@ -9553,7 +9557,7 @@ window.addEventListener('load', function () {
                     wonkyEdgeCaseFixForSlotIDs();
                 }
             }, 500);
-            
+
             // Set up only run addSlotIDToCard when either a card is changed/added
             const cardObserver = new MutationObserver((mutationsList, observer) => {
                 if (window !== window.top) {
@@ -9573,7 +9577,7 @@ window.addEventListener('load', function () {
                     });
                 });
             });
-            
+
             // Observe the any changes in the planner
             cardObserver.observe(document.body, { childList: true, subtree: true });
 
@@ -9782,7 +9786,7 @@ window.addEventListener('load', function () {
                                     }
 
                                     // Now add the text to the notes
-                                    
+
                                     if (notesEditor && !notesEditor.inserted) {
                                         // Click the notes editor to focus it and enter editing mode
                                         notesEditor.click();
@@ -9795,7 +9799,7 @@ window.addEventListener('load', function () {
                                     } else {
                                         console.error('Notes editor not found.');
                                     }
-                                    
+
                                     // Now lets add the comment to the task for the log
                                     if (commentField && !commentField.inserted) {
                                         commentField.scrollIntoView({ behavior: 'auto', block: 'center' });
@@ -9913,10 +9917,10 @@ window.addEventListener('load', function () {
                     if (popup) {
                         document.body.removeChild(popup);
                     }
-                    
+
                     //const headers = document.querySelectorAll('.columnTitle');
                     //const header = Array.from(headers).find(el => el.textContent.trim() === 'Diagnosed');
-                    
+
                     if (header) {
                         hasClicked = true;
                         const container = header.closest('.columnContent');
@@ -10030,7 +10034,7 @@ window.addEventListener('load', function () {
         if(currentURL.includes('/#/logs')) {
             let errorListPanelContainer = null; // To hold the main error list panel
             let sharedTooltipElement = null; // For shared tooltip
-        
+
             // Function to create and/or retrieve the shared tooltip element
             function getOrCreateSharedTooltip() {
                 if (!sharedTooltipElement) {
@@ -10050,15 +10054,15 @@ window.addEventListener('load', function () {
                 }
                 return sharedTooltipElement;
             }
-        
+
             // Function to create the main error list panel on the left
             function createMainErrorListPanel() {
-                const targetParent = document.querySelector('.m-uishell-left-panel'); 
+                const targetParent = document.querySelector('.m-uishell-left-panel');
                 if (!targetParent) {
-                    console.error('.m-uishell-left-panel not found. Cannot create error list panel.'); 
+                    console.error('.m-uishell-left-panel not found. Cannot create error list panel.');
                     return null;
                 }
-        
+
                 // Remove existing error panel and divider if they exist to prevent duplication
                 // This ensures that if it's called again, it cleans up first.
                 const existingPanelQuery = document.getElementById('custom-error-list-panel');
@@ -10069,11 +10073,11 @@ window.addEventListener('load', function () {
                 if (existingDividerQuery) {
                     existingDividerQuery.remove();
                 }
-        
+
                 const divider = document.createElement('div');
                 divider.className = 'm-divider has-space-m error-divider custom-script-divider'; // Added custom class
                 targetParent.appendChild(divider); // Append to new parent
-        
+
                 const panel = document.createElement('div');
                 panel.id = 'custom-error-list-panel';
                 panel.style.padding = '0px 10px 10px 10px'; // Adjusted padding
@@ -10084,100 +10088,100 @@ window.addEventListener('load', function () {
                 panelTitle.style.padding = '10px 0px';
                 panelTitle.style.fontWeight = 'bold';
                 panel.appendChild(panelTitle);
-        
+
                 targetParent.appendChild(panel); // Append to new parent
                 return panel;
             }
-        
+
             function handleErrorClickInPanel(error, originalLogText, targetLogElement) {
                 if (!targetLogElement) {
                     console.error("Target log element not found for highlighting.");
                     return;
                 }
-            
+
                 targetLogElement.textContent = originalLogText; // Reset to original
-            
+
                 if (error.start === 0 && error.end === 0) { // Non-highlightable message
                     return;
                 }
-            
+
                 const errorIndex = originalLogText.indexOf(error.text);
                 if (errorIndex === -1) { // Fallback if start/end are off or text slightly differs due to processing
                     console.warn("Exact error text for highlighting not found, attempting partial match or skipping highlight.");
                     return;
                 }
-                
+
                 const actualStart = error.start !== -1 ? error.start : errorIndex;
                 const actualEnd = actualStart + error.text.length;
-        
+
                 const beforeErrorText = originalLogText.substring(0, actualStart);
                 const errorTextContent = originalLogText.substring(actualStart, actualEnd);
                 const afterErrorText = originalLogText.substring(actualEnd);
-            
+
                 targetLogElement.innerHTML = ''; // Clear current content
-            
+
                 targetLogElement.appendChild(document.createTextNode(beforeErrorText));
-            
+
                 const errorElement = document.createElement('span');
                 errorElement.style.backgroundColor = '#780707';
                 errorElement.style.color = 'white';
                 errorElement.style.fontWeight = 'bolder';
                 errorElement.textContent = errorTextContent;
                 errorElement.style.position = 'relative'; // For positioning the copy button
-                
+
                 // Make the highlight more block-like
                 errorElement.style.display = 'inline-block'; // Allows padding to take effect properly
                 errorElement.style.paddingTop = '2px';    // Add vertical padding
                 errorElement.style.paddingBottom = '2px'; // Add vertical padding
                 errorElement.style.paddingLeft = '4px';   // Add horizontal padding on the left
                 errorElement.style.paddingRight = '25px'; // Keep space for copy button
-        
+
                 targetLogElement.appendChild(errorElement);
-            
+
                 targetLogElement.appendChild(document.createTextNode(afterErrorText));
                 errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
+
                 // Add Copy Button
                 const copyButton = document.createElement('button');
                 copyButton.textContent = '📋'; // Using an emoji for copy
                 copyButton.title = 'Copy error text';
                 copyButton.style.position = 'absolute';
-                copyButton.style.right = '3px'; 
+                copyButton.style.right = '3px';
                 copyButton.style.top = '3px'; // Position to top right
-                copyButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; 
+                copyButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
                 copyButton.style.color = '#fff';
-                copyButton.style.border = '1px solid rgba(255, 255, 255, 0.3)'; 
-                copyButton.style.borderRadius = '4px'; 
-                copyButton.style.padding = '1px 3px'; 
+                copyButton.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+                copyButton.style.borderRadius = '4px';
+                copyButton.style.padding = '1px 3px';
                 copyButton.style.cursor = 'pointer';
-                copyButton.style.fontSize = '0.85em'; 
-                copyButton.style.display = 'none'; 
+                copyButton.style.fontSize = '0.85em';
+                copyButton.style.display = 'none';
                 copyButton.style.transition = 'none'; // Make all transitions instant
-        
+
                 const originalButtonBg = copyButton.style.backgroundColor;
                 const hoverButtonBg = 'rgba(255, 255, 255, 0.3)';
                 const activeErrorElementBg = 'rgba(255, 255, 255, 0.2)';
                 const pressedButtonBg = 'rgba(255, 255, 255, 0.4)'; // For simulating press
-        
+
                 let copyTimeoutId = null; // To manage the feedback timeout
-        
+
                 const copyAction = (event) => {
-                    if (event) event.stopPropagation(); 
-        
+                    if (event) event.stopPropagation();
+
                     if (copyTimeoutId) { // Clear any existing timeout
                         clearTimeout(copyTimeoutId);
                         copyTimeoutId = null;
                     }
-        
+
                     // Simulate pressed state
                     copyButton.style.backgroundColor = pressedButtonBg;
-        
+
                     // copy text to clipboard
                     if (navigator.clipboard) {
                         navigator.clipboard.writeText(errorTextContent).then(() => {
                             console.log('Text copied to clipboard');
                             copyButton.textContent = '✅';
-                            copyButton.style.backgroundColor = 'rgba(76, 175, 80, 0.5)'; 
+                            copyButton.style.backgroundColor = 'rgba(76, 175, 80, 0.5)';
                             copyTimeoutId = setTimeout(() => {
                                 copyButton.textContent = '📋';
                                 // Restore appropriate hover/normal background based on current mouse position
@@ -10191,7 +10195,7 @@ window.addEventListener('load', function () {
                         }).catch(err => {
                             console.error('Failed to copy text: ', err);
                             copyButton.textContent = '❌';
-                            copyButton.style.backgroundColor = 'rgba(244, 67, 54, 0.5)'; 
+                            copyButton.style.backgroundColor = 'rgba(244, 67, 54, 0.5)';
                             copyTimeoutId = setTimeout(() => {
                                 copyButton.textContent = '📋';
                                 // Restore appropriate hover/normal background
@@ -10241,7 +10245,7 @@ window.addEventListener('load', function () {
                         document.body.removeChild(textArea);
                     }
                 };
-        
+
                 copyButton.addEventListener('click', copyAction);
                 errorElement.appendChild(copyButton);
                 errorElement.addEventListener('mouseenter', () => {
@@ -10249,7 +10253,7 @@ window.addEventListener('load', function () {
                     // Apply hover style only if not in feedback state
                     if (copyButton.textContent === '📋') {
                     copyButton.style.opacity = '0.7';
-                    copyButton.style.backgroundColor = activeErrorElementBg; 
+                    copyButton.style.backgroundColor = activeErrorElementBg;
                     }
                 });
                 errorElement.addEventListener('mouseleave', () => {
@@ -10257,15 +10261,15 @@ window.addEventListener('load', function () {
                     // Reset style only if not in feedback state (though it will be hidden)
                     if (copyButton.textContent === '📋') {
                     copyButton.style.opacity = '1';
-                    copyButton.style.backgroundColor = originalButtonBg; 
+                    copyButton.style.backgroundColor = originalButtonBg;
                     }
                 });
-        
+
                 copyButton.addEventListener('mouseover', () => {
                     // Apply hover style only if not in feedback state
                     if (copyButton.textContent === '📋') {
                     copyButton.style.opacity = '1';
-                    copyButton.style.backgroundColor = hoverButtonBg; 
+                    copyButton.style.backgroundColor = hoverButtonBg;
                     }
                  });
                 copyButton.addEventListener('mouseout', () => {
@@ -10278,31 +10282,31 @@ window.addEventListener('load', function () {
                     // If mouse is not over errorElement, errorElement's mouseleave will handle hiding.
                     }
                 });
-        
+
                 // Add right-click to copy functionality to the errorElement
                 errorElement.addEventListener('contextmenu', (e) => {
-                    e.preventDefault(); 
-                    copyAction(e); 
+                    e.preventDefault();
+                    copyAction(e);
                 });
             }
-        
+
             function createErrorTypeTab(title, errors, parentContainer, originalLogText, targetLogElement, defaultOpen = false) {
                 if (errors.length === 0) {
                     return null;
                 }
-            
+
                 const errorTab = document.createElement('div');
-                errorTab.className = 'm-nav-group error-category-tab'; 
+                errorTab.className = 'm-nav-group error-category-tab';
                 errorTab.style.paddingBottom = '5px'; // Added padding to the bottom of the tab
                 errorTab.style.paddingTop = '5px'; // Added padding to the top of the tab
-            
+
                 const headerDiv = document.createElement('div');
                 headerDiv.className = 'm-nav-group-header';
                 headerDiv.style.cursor = 'pointer';
-                headerDiv.style.display = 'flex'; 
-                headerDiv.style.justifyContent = 'space-between'; 
+                headerDiv.style.display = 'flex';
+                headerDiv.style.justifyContent = 'space-between';
                 headerDiv.style.alignItems = 'center'; // Align items vertically
-                
+
                 const originalHeaderColor = '#E2E2E2'; // Assuming default color
                 headerDiv.addEventListener('mouseover', () => {
                     labelDiv.style.color = '#5FB2FF'; // Light blue on hover
@@ -10310,30 +10314,30 @@ window.addEventListener('load', function () {
                 headerDiv.addEventListener('mouseout', () => {
                     labelDiv.style.color = ''; // Revert to original/CSS defined
                 });
-        
+
                 const labelDiv = document.createElement('div');
                 labelDiv.className = 'm-nav-group-label';
                 labelDiv.innerHTML = `<img src="${'https://img.icons8.com/?size=100&id=24552&format=png&color=FFFFFF'}" alt="icon" style="width: 16px; height: 16px; margin-right: 5px;"> ${title} (${errors.length})`;
-            
-                const chevronIcon = document.createElement('img'); 
+
+                const chevronIcon = document.createElement('img');
                 chevronIcon.src = 'https://img.icons8.com/?size=100&id=39788&format=png&color=FFFFFF'; // Right arrow
                 chevronIcon.alt = 'chevron';
                 chevronIcon.style.transition = 'transform 0.2s ease-in-out';
-                chevronIcon.style.width = '16px'; 
-                chevronIcon.style.height = '16px'; 
-                chevronIcon.style.verticalAlign = 'middle'; 
-            
+                chevronIcon.style.width = '16px';
+                chevronIcon.style.height = '16px';
+                chevronIcon.style.verticalAlign = 'middle';
+
                 headerDiv.appendChild(labelDiv);
                 headerDiv.appendChild(chevronIcon);
-            
+
                 const sectionElement = document.createElement('div');
                 sectionElement.className = 'm-nav-group-section';
                 sectionElement.style.display = defaultOpen ? 'block' : 'none';
                 if (defaultOpen) chevronIcon.style.transform = 'rotate(90deg)'; // Point down when open
-            
+
                 const itemsContainer = document.createElement('div');
                 itemsContainer.className = 'm-nav-group-items';
-            
+
                 errors.forEach((error) => {
                     const itemDiv = document.createElement('div');
                     itemDiv.className = 'm-nav-group-item';
@@ -10344,10 +10348,10 @@ window.addEventListener('load', function () {
                     itemDiv.style.paddingTop = '4px';
                     itemDiv.style.cursor = 'pointer'; // Indicate clickable
                     itemDiv.style.transition = 'background-color 0.2s, color 0.2s';
-        
+
                     const originalItemColor = itemDiv.style.color;
                     const originalItemBgColor = itemDiv.style.backgroundColor;
-        
+
                     itemDiv.addEventListener('mouseover', () => {
                         itemDiv.style.backgroundColor = '#4a4a4a'; // Darker hover
                         itemDiv.style.color = '#ffffff';
@@ -10356,24 +10360,24 @@ window.addEventListener('load', function () {
                         itemDiv.style.backgroundColor = originalItemBgColor || '';
                         itemDiv.style.color = originalItemColor || '';
                     });
-            
+
                     const contentWrapper = document.createElement('div'); // Wrapper for icon and link
                     contentWrapper.style.display = 'flex';
                     contentWrapper.style.alignItems = 'center';
                     contentWrapper.style.flexGrow = '1';
                     contentWrapper.style.overflow = 'hidden'; // For ellipsis on errorLink
-        
+
                     const iconSpan = document.createElement('img');
                     iconSpan.style.marginRight = '8px';
                     iconSpan.style.width = '16px';
                     iconSpan.style.height = '16px';
-                    iconSpan.src = error.icon || (error.type === "Main" 
+                    iconSpan.src = error.icon || (error.type === "Main"
                         ? "https://img.icons8.com/?size=100&id=24552&format=png&color=FF0000" // Red exclamation icon
-                        : error.type === "Info" 
+                        : error.type === "Info"
                         ? "https://img.icons8.com/?size=100&id=24552&format=png&color=00FF00" // Green info icon
                         : "https://img.icons8.com/?size=100&id=24552&format=png&color=0000FF"); // Blue dot icon
                     iconSpan.alt = error.type || "icon";
-            
+
                     const errorLink = document.createElement('a');
                     errorLink.href = '#';
                     errorLink.className = 'm-nav-item';
@@ -10383,20 +10387,20 @@ window.addEventListener('load', function () {
                     errorLink.style.whiteSpace = 'nowrap';
                     errorLink.style.overflow = 'hidden';
                     errorLink.style.textOverflow = 'ellipsis';
-                    errorLink.style.flexGrow = '1'; 
+                    errorLink.style.flexGrow = '1';
                     errorLink.style.color = 'inherit'; // Inherit color from itemDiv for hover effect
                     errorLink.style.textDecoration = 'none';
-        
+
                     // Event listener on itemDiv itself or contentWrapper for better click area
                     contentWrapper.addEventListener('click', (event) => {
                         event.preventDefault();
                         handleErrorClickInPanel(error, originalLogText, targetLogElement);
                     });
-        
+
                     contentWrapper.appendChild(iconSpan);
                     contentWrapper.appendChild(errorLink);
                     itemDiv.appendChild(contentWrapper);
-        
+
                     // Create an info icon to the right that will show the error text
                     const infoIcon = document.createElement('div');
                     infoIcon.style.width = '14px';
@@ -10416,7 +10420,7 @@ window.addEventListener('load', function () {
                     infoIcon.style.float = 'right';
                     infoIcon.style.display = 'inline-block';
                     infoIcon.textContent = 'i';
-        
+
                     // Create the tooltip
                     const tooltip = document.createElement('div');
                     tooltip.style.display = 'none';
@@ -10430,7 +10434,7 @@ window.addEventListener('load', function () {
                     tooltip.style.boxShadow = '0px 0px 10px rgba(0, 0, 0, 0.5)';
                     tooltip.textContent = error.text;
                     document.body.appendChild(tooltip);
-        
+
                     // Position the tooltip relative to the infoIcon
                     infoIcon.addEventListener('mouseenter', () => {
                         const rect = infoIcon.getBoundingClientRect();
@@ -10438,55 +10442,55 @@ window.addEventListener('load', function () {
                         tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
                         tooltip.style.display = 'block';
                     });
-        
+
                     infoIcon.addEventListener('mouseleave', () => {
                         tooltip.style.display = 'none';
                     });
-        
+
                     // Append the info icon to the error item
                     itemDiv.appendChild(infoIcon);
                     itemsContainer.appendChild(itemDiv);
                 });
-            
+
                 sectionElement.appendChild(itemsContainer);
                 errorTab.appendChild(headerDiv);
                 errorTab.appendChild(sectionElement);
-            
+
                 headerDiv.addEventListener('click', () => {
                     const isOpen = sectionElement.style.display === 'block';
                     sectionElement.style.display = isOpen ? 'none' : 'block';
                     chevronIcon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)'; // 0deg for right, 90deg for down
                 });
-            
+
                 parentContainer.appendChild(errorTab);
                 return errorTab;
             }
-        
+
             function updateErrorPanelContent(logString, targetLogElement) {
                 if (!errorListPanelContainer) {
                     // Attempt to create if not existing
-                    errorListPanelContainer = createMainErrorListPanel(); 
-                    
+                    errorListPanelContainer = createMainErrorListPanel();
+
                     if (!errorListPanelContainer) {
                         console.error("Failed to create or find error list panel container for update.");
-                        return; 
+                        return;
                     }
                 }
-            
+
                 // Clear previous error type tabs, but preserve the title
                 const tabsToRemove = errorListPanelContainer.querySelectorAll('.error-category-tab');
                 tabsToRemove.forEach(tab => tab.remove());
                 // Remove "No errors" message if present
                 const noErrorsMsg = errorListPanelContainer.querySelector('.no-errors-message');
                 if (noErrorsMsg) noErrorsMsg.remove();
-        
+
                 const errorsFound = runErrorScanLogic(logString);
-            
+
                 if (errorsFound.length > 0) {
                     createErrorTypeTab("Main Errors", errorsFound.filter(e => e.type === "Main"), errorListPanelContainer, logString, targetLogElement, true);
                     createErrorTypeTab("Info/Warnings", errorsFound.filter(e => e.type === "Info"), errorListPanelContainer, logString, targetLogElement, true);
                     createErrorTypeTab("Other Messages", errorsFound.filter(e => e.type === "Other" && !(e.start === 0 && e.end === 0)), errorListPanelContainer, logString, targetLogElement, false);
-                    
+
                     // Handle the "No specific errors" type separately if it's the only one
                     const otherMessages = errorsFound.filter(e => e.type === "Other" && e.start === 0 && e.end === 0);
                     if (errorsFound.length === otherMessages.length && otherMessages.length > 0) {
@@ -10498,7 +10502,7 @@ window.addEventListener('load', function () {
                         noSpecificErrorsMessage.style.color = "#aaa"; // Muted color
                         errorListPanelContainer.appendChild(noSpecificErrorsMessage);
                     }
-        
+
                 } else {
                     const noErrorsMessage = document.createElement('div');
                     noErrorsMessage.textContent = "No notable messages found in this log section.";
@@ -10509,23 +10513,23 @@ window.addEventListener('load', function () {
                     errorListPanelContainer.appendChild(noErrorsMessage);
                 }
             }
-        
+
             // Function to dynamically add a tab to the History Logs panel (now a sub-tab system)
             function addHistoryLogsTab(tabLabel, fileName, specificTabList, specificTabsContainer, initialLogString = null) {
                 // Removed query for '.react-tabs__tab-panel.history-logs-panel'
                 // specificTabList and specificTabsContainer are passed in directly
-        
+
                 if (!specificTabList || !specificTabsContainer) {
                     console.error('Target tab list or tabs container for history sub-tab not provided.');
                     return;
                 }
-        
+
                 // Check if the tab already exists within this specific sub-tab system
                 if (specificTabsContainer.querySelector(`#tab\\:${CSS.escape(tabLabel)}`)) {
                     console.log(`Sub-tab with ID ${tabLabel} already exists.`);
                     return;
                 }
-        
+
                 // Create the new tab
                 const newTab = document.createElement('li');
                 newTab.className = 'font-size-m react-tabs__tab';
@@ -10537,10 +10541,10 @@ window.addEventListener('load', function () {
                 newTab.setAttribute('tabindex', '-1');
                 newTab.setAttribute('data-rttab', 'true');
                 newTab.textContent = tabLabel;
-        
+
                 // manually set font size smallr
                 newTab.style.fontSize = '0.9em';
-        
+
                 // Add hover effect
                 newTab.style.cursor = 'pointer';
                 newTab.style.transition = 'color 0.3s';
@@ -10550,7 +10554,7 @@ window.addEventListener('load', function () {
                 newTab.addEventListener('mouseout', () => {
                     newTab.style.color = '';
                 });
-        
+
                 // Add click event to switch tabs
                 newTab.addEventListener('click', () => {
                     // Deselect all tabs within this specific sub-tab system
@@ -10559,17 +10563,17 @@ window.addEventListener('load', function () {
                         t.setAttribute('aria-selected', 'false');
                         t.setAttribute('tabindex', '-1');
                     });
-        
+
                     newTab.classList.add('react-tabs__tab--selected');
                     newTab.setAttribute('aria-selected', 'true');
                     newTab.setAttribute('tabindex', '0');
-        
+
                     // Deselect all tab panels within this specific sub-tab system
                     specificTabsContainer.querySelectorAll('.react-tabs__tab-panel').forEach((panel) => {
                         panel.classList.remove('react-tabs__tab-panel--selected');
                     });
                     const currentNewTabPanel = specificTabsContainer.querySelector(`#panel\\:${CSS.escape(tabLabel)}`);
-                    
+
                     if (currentNewTabPanel) {
                         currentNewTabPanel.classList.add('react-tabs__tab-panel--selected');
                         // Clear previously added custom log elements from THIS tab's panel
@@ -10591,12 +10595,12 @@ window.addEventListener('load', function () {
                         }
                         return;
                     }
-                    
+
                     const processAndDisplayLog = (logStringToProcess, targetPanelForDisplay) => {
                         const fullLogString = logStringToProcess;
-                        
+
                         const logElement = document.createElement('div');
-                        logElement.classList.add('custom-log-element'); 
+                        logElement.classList.add('custom-log-element');
                         logElement.style.cssText = `
                             background-color: #18181b; color: #fff; padding: 15px; border-radius: 8px;
                             height: 350px; overflow-y: auto; overflow-x: auto;
@@ -10604,7 +10608,7 @@ window.addEventListener('load', function () {
                             width: 100%; box-sizing: border-box; scrollbar-width: thin; scrollbar-color: #888 #333;
                         `;
                         targetPanelForDisplay.appendChild(logElement);
-        
+
                         let sections = [];
                         const startMarker = "----------Start Foundry Miner";
                         if (fullLogString.includes(startMarker)) {
@@ -10612,65 +10616,65 @@ window.addEventListener('load', function () {
                             if (parts[0].trim() === "" && parts.length > 1) { // Log starts with marker
                                 sections = parts.slice(1).map(part => startMarker + part);
                             } else { // Log has content before first marker, or no marker at all (handled by else)
-                                sections.push(parts[0]); 
+                                sections.push(parts[0]);
                                 for (let i = 1; i < parts.length; i++) {
                                     sections.push(startMarker + parts[i]);
                                 }
                             }
-                        } else { 
+                        } else {
                             sections.push(fullLogString);
                         }
-                        if (sections.length === 0 && fullLogString.trim() !== "") { 
-                            sections.push(fullLogString); 
+                        if (sections.length === 0 && fullLogString.trim() !== "") {
+                            sections.push(fullLogString);
                         } else if (sections.length === 0 && fullLogString.trim() === "") {
-                            sections.push(""); 
+                            sections.push("");
                         }
-        
+
                         const logSections = sections;
                         const totalPages = logSections.length > 0 ? logSections.length : 1;
                         let currentPage = totalPages > 0 ? totalPages - 1 : 0; // Default to last page
-        
+
                         const pageInfo = document.createElement('span');
                         pageInfo.classList.add('custom-log-element');
                         pageInfo.style.cssText = `color: #fff; font-size: 14px;`;
-                        
+
                         const paginationControls = document.createElement('div');
                         paginationControls.classList.add('custom-log-element');
                         paginationControls.style.cssText = `display: flex; justify-content: space-between; align-items: center; margin-top: 10px;`;
-        
+
                         const prevButton = document.createElement('button');
                         prevButton.textContent = 'Previous';
                         prevButton.classList.add('custom-log-element');
                         prevButton.style.cssText = `background-color: #333; color: #fff; padding: 10px; border-radius: 5px; cursor: pointer; margin-right: 10px;`;
                         prevButton.addEventListener('click', () => { if (currentPage > 0) { currentPage--; renderPage(currentPage); } });
-        
+
                         const nextButton = document.createElement('button');
                         nextButton.textContent = 'Next';
                         nextButton.classList.add('custom-log-element');
                         nextButton.style.cssText = `background-color: #333; color: #fff; padding: 10px; border-radius: 5px; cursor: pointer; margin-left: 10px;`;
                         nextButton.addEventListener('click', () => { if (currentPage < totalPages - 1) { currentPage++; renderPage(currentPage); } });
-        
+
                         const pageInput = document.createElement('input');
                         pageInput.type = 'number'; pageInput.min = 1; pageInput.max = totalPages;
                         pageInput.classList.add('custom-log-element');
                         pageInput.style.cssText = `width: 50px; text-align: center; margin: 0 10px; padding: 5px; border-radius: 5px; border: 1px solid #555; background-color: #222; color: #fff;`;
                         pageInput.addEventListener('change', () => {
                             const inputPage = parseInt(pageInput.value, 10) - 1;
-                            if (!isNaN(inputPage) && inputPage >= 0 && inputPage < totalPages) { currentPage = inputPage; renderPage(currentPage); } 
+                            if (!isNaN(inputPage) && inputPage >= 0 && inputPage < totalPages) { currentPage = inputPage; renderPage(currentPage); }
                             else { pageInput.value = currentPage + 1; }
                         });
-        
+
                         paginationControls.appendChild(prevButton);
                         paginationControls.appendChild(pageInfo);
                         paginationControls.appendChild(pageInput);
                         paginationControls.appendChild(nextButton);
                         targetPanelForDisplay.appendChild(paginationControls);
-        
+
                         const spacing = document.createElement('div');
-                        spacing.classList.add('custom-log-element'); 
+                        spacing.classList.add('custom-log-element');
                         spacing.style.height = '10px';
                         targetPanelForDisplay.appendChild(spacing);
-        
+
                         // Scrollbar style (ensure it's added only once or managed)
                         if (!document.getElementById('custom-log-scrollbar-style')) {
                             const style = document.createElement('style');
@@ -10683,10 +10687,10 @@ window.addEventListener('load', function () {
                             `;
                             document.head.appendChild(style);
                         }
-        
+
                         function renderPage(page) {
                             const currentPageLogContent = (logSections.length > 0 && logSections[page] !== undefined) ? logSections[page].trim() : fullLogString.trim();
-                            logElement.textContent = currentPageLogContent; 
+                            logElement.textContent = currentPageLogContent;
                             pageInfo.textContent = `Page ${currentPage + 1} of ${totalPages}`;
                             pageInput.value = currentPage + 1;
                             prevButton.disabled = currentPage === 0;
@@ -10696,7 +10700,7 @@ window.addEventListener('load', function () {
                         }
                         renderPage(currentPage);
                     };
-        
+
                     const handleErrorDisplay = (error, targetPanelForDisplay) => {
                         console.error(`Error fetching/processing log for tab ${tabLabel}:`, error);
                         if (targetPanelForDisplay) {
@@ -10720,7 +10724,7 @@ window.addEventListener('load', function () {
                             errorListPanelContainer.appendChild(fetchErrorMessage);
                         }
                     };
-        
+
                     if (initialLogString !== null) {
                         try {
                             processAndDisplayLog(initialLogString, currentNewTabPanel);
@@ -10730,7 +10734,7 @@ window.addEventListener('load', function () {
                     } else if (fileName) {
                         const logUrl = `http://${curIP}/files/logs/${fileName}`;
                         fetchGUIData(logUrl, "arraybuffer", "tar.gz", 16000)
-                            .then(responseArchives => { 
+                            .then(responseArchives => {
                                 const minerLogs = responseArchives.filter(file => file.name.includes("foundryminerExec"));
                                 if (minerLogs.length === 0) {
                                     throw new Error("No 'foundryminerExec' log found in archive: " + fileName);
@@ -10747,10 +10751,10 @@ window.addEventListener('load', function () {
                         handleErrorDisplay(new Error("No log data source provided."), currentNewTabPanel);
                     }
                 });
-        
+
                 // Append the new tab to the specific tab list
                 specificTabList.appendChild(newTab);
-        
+
                 // Create the corresponding tab panel
                 const newTabPanel = document.createElement('div');
                 newTabPanel.className = 'react-tabs__tab-panel';
@@ -10763,13 +10767,13 @@ window.addEventListener('load', function () {
                 newTabPanel.style.boxSizing = 'border-box';
                 newTabPanel.style.minWidth = '0'; // Important for flex item children like tab panels
                 //newTabPanel.textContent = tabContent;
-        
+
                 // Append the new tab panel to the specific tabs container
                 specificTabsContainer.appendChild(newTabPanel);
-        
+
                 console.log(`History sub-tab "${tabLabel}" added successfully.`);
             }
-        
+
             // Function to remove custom panels
             function removeCustomPanels() {
                 // Find the panel associated with "Download Logs" tab (which hosts our history content)
@@ -10780,7 +10784,7 @@ window.addEventListener('load', function () {
                     const originalText = tab.getAttribute('data-original-text');
                     return currentText === 'Download Logs' || (originalText === 'Download Logs' && currentText === 'History Logs');
                 });
-        
+
                 if (downloadLogsTab) {
                     const panelId = downloadLogsTab.getAttribute('aria-controls');
                     if (panelId) {
@@ -10796,12 +10800,12 @@ window.addEventListener('load', function () {
                         }
                     }
                 }
-        
+
                 const errorPanel = document.getElementById('custom-error-list-panel');
                 if (errorPanel) {
                     errorPanel.remove();
                 }
-        
+
                 const leftPanel = document.querySelector('.m-uishell-left-panel');
                 if (leftPanel) {
                     const errorDivider = leftPanel.querySelector('.error-divider.custom-script-divider');
@@ -10812,7 +10816,7 @@ window.addEventListener('load', function () {
                 errorListPanelContainer = null; // Reset the reference
                 console.log('Custom panels/content removal process finished.');
             }
-        
+
             // Function to build and show the content of the History Logs panel
             function buildAndShowHistoryLogsPanel() {
                 if (!document.getElementById('custom-error-list-panel')) {
@@ -10824,10 +10828,10 @@ window.addEventListener('load', function () {
                     console.error("Failed to create or find error list panel for History Logs.");
                     return;
                 }
-        
+
                 const allTabs = Array.from(document.querySelectorAll('.react-tabs__tab'));
                 let targetMainTab = allTabs.find(tab => tab.textContent.trim() === 'Download Logs');
-                
+
                 if (!targetMainTab) {
                     targetMainTab = allTabs.find(tab => tab.textContent.trim() === 'History Logs' && tab.getAttribute('data-original-text') === 'Download Logs');
                     if (targetMainTab) {
@@ -10837,59 +10841,59 @@ window.addEventListener('load', function () {
                         return;
                     }
                 }
-        
+
                 const mainTabList = targetMainTab.closest('.react-tabs__tab-list');
                 if (!mainTabList) {
                     console.error("Could not find parent .react-tabs__tab-list for the target tab.");
                     return;
                 }
-                
+
                 const targetMainPanelId = targetMainTab.getAttribute('aria-controls');
                 let historyLogsContentHostPanel = document.getElementById(targetMainPanelId);
-        
+
                 if (!historyLogsContentHostPanel) {
                     console.error(`Panel with ID ${targetMainPanelId} not found to host history logs content.`);
                     return;
                 }
-        
+
                 const existingHistoryContent = historyLogsContentHostPanel.querySelector('.history-logs-panel-content');
                 if (existingHistoryContent) {
                     existingHistoryContent.remove();
                 }
-                
+
                 historyLogsContentHostPanel.classList.add('history-logs-content-host');
-        
+
                 const historyLogsPanelContainer = document.createElement('div');
                 historyLogsPanelContainer.className = 'history-logs-panel-content';
                 historyLogsPanelContainer.style.marginBottom = '20px';
                 historyLogsPanelContainer.style.width = '100%';
                 historyLogsPanelContainer.style.boxSizing = 'border-box';
                 historyLogsPanelContainer.style.minWidth = '0';
-        
+
                 const fieldset = document.createElement('fieldset');
                 fieldset.className = 'svelte-df8g3h m-box';
                 fieldset.style.width = '100%';
                 fieldset.style.boxSizing = 'border-box';
                 fieldset.style.minWidth = '0';
-        
+
                 const legend = document.createElement('legend');
                 legend.textContent = 'Archived Log Files';
                 fieldset.appendChild(legend);
-        
+
                 const subTabsContainer = document.createElement('div');
                 subTabsContainer.className = 'react-tabs history-logs-subtabs';
                 subTabsContainer.setAttribute('data-rttabs', 'true');
                 subTabsContainer.style.width = '100%';
                 subTabsContainer.style.boxSizing = 'border-box';
                 subTabsContainer.style.minWidth = '0';
-        
+
                 const subTabList = document.createElement('ul');
                 subTabList.className = 'react-tabs__tab-list';
                 subTabList.setAttribute('role', 'tablist');
                 subTabsContainer.appendChild(subTabList);
                 fieldset.appendChild(subTabsContainer);
                 historyLogsPanelContainer.appendChild(fieldset);
-        
+
                 // Initialize static properties for retry mechanism on the function object
                 if (typeof buildAndShowHistoryLogsPanel.insertionTimeoutId === 'undefined') {
                     buildAndShowHistoryLogsPanel.insertionTimeoutId = null;
@@ -10897,14 +10901,14 @@ window.addEventListener('load', function () {
                 if (typeof buildAndShowHistoryLogsPanel.insertionRetries === 'undefined') {
                     buildAndShowHistoryLogsPanel.insertionRetries = 0;
                 }
-        
+
                 // Clear any pending insertion from a previous call and reset retries for this new invocation
                 if (buildAndShowHistoryLogsPanel.insertionTimeoutId) {
                     clearTimeout(buildAndShowHistoryLogsPanel.insertionTimeoutId);
                     buildAndShowHistoryLogsPanel.insertionTimeoutId = null;
                 }
                 buildAndShowHistoryLogsPanel.insertionRetries = 0;
-        
+
                 function attemptInsertionOfArchivedLogs() {
                     let referenceNode = null;
                     // Look for <section class="has-space-xs"> as a direct child, containing the "Download Logs" legend
@@ -10916,7 +10920,7 @@ window.addEventListener('load', function () {
                             break;
                         }
                     }
-                    
+
                     // If section not found, look for <fieldset class="m-box"> as a direct child, containing the "Download Logs" legend
                     if (!referenceNode) {
                         const fieldsets = historyLogsContentHostPanel.querySelectorAll(':scope > fieldset.m-box');
@@ -10928,7 +10932,7 @@ window.addEventListener('load', function () {
                             }
                         }
                     }
-        
+
                     if (referenceNode) {
                         historyLogsContentHostPanel.insertBefore(historyLogsPanelContainer, referenceNode);
                         console.log('Archived Log Files panel inserted before the Download Logs container.');
@@ -10954,15 +10958,15 @@ window.addEventListener('load', function () {
                         }
                     }
                 }
-                
+
                 attemptInsertionOfArchivedLogs(); // Start the insertion attempt
-        
+
                 console.log('History Logs panel structure created, attempting to insert.');
-        
+
                 let currentLogTabAdded = false;
                 const currentLogFileName = "foundryminerExec.log"; // Used for display/labeling if needed, not for fetching if string provided
                 const currentLogUrl = `http://${curIP}/files/logs/${currentLogFileName}`;
-        
+
                 fetch(currentLogUrl)
                     .then(response => {
                         if (!response.ok) {
@@ -10987,7 +10991,7 @@ window.addEventListener('load', function () {
                             .then(logDirResponse => {
                                 const logs = JSON.parse(logDirResponse).logs;
                                 const previousLogs = logs.previous || [];
-        
+
                                 if (previousLogs.length === 0 && !currentLogTabAdded) { // Check if current log also failed or wasn't added
                                     const noLogsMsg = document.createElement('p');
                                     noLogsMsg.textContent = "No log files found.";
@@ -11015,14 +11019,14 @@ window.addEventListener('load', function () {
                                 if (currentLogTabAdded) {
                                     firstTabToActivate = subTabList.querySelector(`#tab\\:${CSS.escape("[Current Log]")}`);
                                 }
-                                
+
                                 if (!firstTabToActivate) { // If current log tab failed or wasn't added, try first archived
                                    const firstArchiveTab = subTabList.querySelector('.react-tabs__tab'); // Get any first tab
                                    if (firstArchiveTab && firstArchiveTab.id !== `tab:${CSS.escape("[Current Log - Error]")}`) { // Don't auto-select error tab
                                        firstTabToActivate = firstArchiveTab;
                                    }
                                 }
-                                
+
                                 if (firstTabToActivate) {
                                     firstTabToActivate.click();
                                 } else if (subTabList.children.length > 0) {
@@ -11036,33 +11040,33 @@ window.addEventListener('load', function () {
                             });
                     });
             }
-        
+
             // Main setup function
             function setupMainLogTabsAndHistoryFeature() {
                 const interval = setInterval(() => {
-                    const mainTabList = document.querySelector('.react-tabs__tab-list'); 
-                    
+                    const mainTabList = document.querySelector('.react-tabs__tab-list');
+
                     if (!mainTabList) {
                         // console.log('Main tab list not found yet. Retrying...');
-                        return; 
+                        return;
                     }
-        
+
                     const mainTabsInList = mainTabList.querySelectorAll(':scope > .react-tabs__tab');
                     if (mainTabsInList.length === 0) {
                         // console.log('No tabs found in the main tab list yet. Retrying...');
-                        return; 
+                        return;
                     }
-                    
+
                     let processedAnyInThisRun = false;
-        
+
                     mainTabsInList.forEach(tab => {
                         if (tab.hasAttribute('data-custom-log-listener')) {
-                            return; 
+                            return;
                         }
-        
+
                         const tabText = tab.textContent.trim();
                         let listenerAttached = false;
-                        
+
                         if (tabText === "Download Logs") {
                             tab.addEventListener('click', () => {
                                 console.log("'Download Logs' (acting as History) main tab clicked.");
@@ -11076,36 +11080,36 @@ window.addEventListener('load', function () {
                             });
                             listenerAttached = true;
                         }
-                       
+
                         if (listenerAttached) {
                             tab.setAttribute('data-custom-log-listener', 'true');
                             processedAnyInThisRun = true;
                         }
                     });
-        
+
                     if (processedAnyInThisRun) {
                          // console.log('Main log tabs processed in this round.');
                     }
-        
+
                     const allKnownTabsCurrentState = Array.from(mainTabList.querySelectorAll(':scope > .react-tabs__tab'));
                     const targetTextsForProcessing = ["Current Logs", "Download Logs", "Reboot Logs", "System Logs"];
-                    
+
                     const allTargetSystemTabs = allKnownTabsCurrentState.filter(t => {
                         const text = t.textContent.trim();
                         return targetTextsForProcessing.includes(text);
                     });
-        
+
                     if (allTargetSystemTabs.length > 0) {
                         const allListenersAttached = allTargetSystemTabs.every(t => t.hasAttribute('data-custom-log-listener'));
-        
+
                         if (allListenersAttached) {
                             console.log('All targeted main log tabs have listeners attached. Stopping interval.');
                             clearInterval(interval);
-        
+
                             const selectedDownloadLogsTab = allTargetSystemTabs.find(
                                 tab => tab.textContent.trim() === "Download Logs" && tab.classList.contains('react-tabs__tab--selected')
                             );
-        
+
                             if (selectedDownloadLogsTab) {
                                 console.log("'Download Logs' tab is active on load/setup completion. Building its panel.");
                                 buildAndShowHistoryLogsPanel();
@@ -11113,8 +11117,8 @@ window.addEventListener('load', function () {
                                 // If Download Logs is not active, check if any other of our target tabs is active.
                                 // If so, ensure custom panels are removed, as their click listener might not have fired yet.
                                 const activeNonDownloadTargetTab = allTargetSystemTabs.find(
-                                    tab => tab.classList.contains('react-tabs__tab--selected') && 
-                                           (tab.textContent.trim() === "Current Logs" || 
+                                    tab => tab.classList.contains('react-tabs__tab--selected') &&
+                                           (tab.textContent.trim() === "Current Logs" ||
                                             tab.textContent.trim() === "Reboot Logs" ||
                                             tab.textContent.trim() === "System Logs")
                                 );
@@ -11127,7 +11131,7 @@ window.addEventListener('load', function () {
                     }
                 }, 750);
             }
-        
+
             // Call the setup function
             setupMainLogTabsAndHistoryFeature();
         }
@@ -11145,7 +11149,7 @@ window.addEventListener('load', function () {
             let currentSiteNames = GM_SuperValue.get("siteNames", {});
             let minerData = null;
             const sortedSiteNames = Object.entries(currentSiteNames).sort((a, b) => b[1] - a[1]);
-            
+
             const headingAGUI = document.querySelector('.miner-type');
             if (panelSection && macAddressElement && macAddressElement !== "") {
 
@@ -11284,7 +11288,7 @@ window.addEventListener('load', function () {
 
             // If the log content exists, run the error tab setup
             if(logContent && logContent.textContent.includes("\n")) {
-                
+
                 // Scroll to bottom of the log content
                 if(savedFeatures["startAtLogBottom"]) {
                     logContent.scrollTop = logContent.scrollHeight;
@@ -11362,7 +11366,7 @@ window.addEventListener('load', function () {
                                     }
                                 `;
                                 document.head.appendChild(style);
-                                
+
 
                                 // Add line separator, if it doesn't already exist
                                 if (!document.querySelector('.separator')) {
@@ -11406,7 +11410,7 @@ window.addEventListener('load', function () {
 
                                 // set a slight padding to the sub-menu
                                 errorSubMenu.style.paddingLeft = '10px';
-                                
+
                                 // Find and replace the drop icon so it doesn't flip when the other sub-menu is opened
                                 const dropIcon = errorTab.querySelector('.drop-icon');
                                 if (dropIcon) {
@@ -11427,7 +11431,7 @@ window.addEventListener('load', function () {
                                 const errorIcon = errorTab.querySelector('.error-ico');
                                 if (errorIcon) {
                                     errorIcon.style.backgroundImage = 'url(https://img.icons8.com/?size=100&id=24552&format=png&color=FFFFFF)';
-                                    
+
                                     errorIcon.style.display = 'inline-block';
                                     errorIcon.style.backgroundSize = 'contain';
                                     errorIcon.style.marginRight = '5px';
@@ -11511,7 +11515,7 @@ window.addEventListener('load', function () {
                                                 copyButton.textContent = 'Copy';
                                             }, 1000);
                                         });
-                                        
+
                                         // Add as child of error element
                                         errorElement.style.position = 'relative'; // Ensure the errorElement is positioned relative
                                         errorElement.appendChild(copyButton);
@@ -11594,7 +11598,7 @@ window.addEventListener('load', function () {
                                         errorDetailIcon.style.width = '22px';
                                         errorDetailIcon.style.height = '22px';
                                     }
-                                    
+
                                     // Create an info icon to the right that will show the error text
                                     const infoIcon = document.createElement('div');
                                     infoIcon.style.width = '14px';
@@ -11614,7 +11618,7 @@ window.addEventListener('load', function () {
                                     infoIcon.style.float = 'right';
                                     infoIcon.style.display = 'inline-block';
                                     infoIcon.textContent = 'i';
-                                                                
+
                                     // Create the tooltip
                                     const tooltip = document.createElement('div');
                                     tooltip.style.display = 'none';
@@ -11648,7 +11652,7 @@ window.addEventListener('load', function () {
                                         tooltip.style.top = `${rect.top + window.scrollY + 20}px`;
                                         tooltip.style.display = 'block';
                                     });
-                                    
+
                                     infoIcon.addEventListener('mouseleave', () => {
                                         tooltip.style.display = 'none';
                                     });
@@ -11715,7 +11719,7 @@ window.addEventListener('load', function () {
                     const layoutLWidth = layoutL.offsetWidth;
                     const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
                     homePage.style.width = `calc(100% - ${layoutLWidth+scrollBarWidth}px)`;
-                    
+
                     // find head clearfix and set the width to the same as homePage
                     const headClearfix = document.querySelector('.head.clearfix');
                     if (headClearfix) {
@@ -11732,7 +11736,7 @@ window.addEventListener('load', function () {
                     }
                 }
             }
-        }  
+        }
 
         // Function to check the current URL
         var lastRunTime = 0; // Note this run time is refering to last time the function was run, not the miner run/uptime time
@@ -11748,7 +11752,7 @@ window.addEventListener('load', function () {
             // Add link to firmware downloads if on firmware upgrade page
             const formsContent = document.querySelector('.forms-content');
             const formsTitle = document.querySelector('.forms-title[data-locale="update"]');
-            
+
             if (formsContent && formsTitle) {
                 const linkAlreadyExists = formsContent.querySelector('a[href="https://shop.bitmain.com/support/download"]');
                 if (linkAlreadyExists || !savedFeatures["firmwareLinks"]) { return; }
@@ -11782,7 +11786,7 @@ window.addEventListener('load', function () {
         // Function to update the estimated time
         function updateEstimatedTime() {
             const minerRunningTimeElement = document.querySelector('td span[data-locale="mRunTm"]');
-            if (!minerRunningTimeElement || !minerRunningTimeElement.nextElementSibling) { 
+            if (!minerRunningTimeElement || !minerRunningTimeElement.nextElementSibling) {
                 setTimeout(updateEstimatedTime, 0);
                 return;
             }
@@ -11816,7 +11820,7 @@ window.addEventListener('load', function () {
                 }
             }
             lastRealUpTime = parseRunningTime(true);
-            
+
 
             // Create a new element for the estimated time if it doesn't already exist
             if(!estimatedTimeElement) {
@@ -11902,7 +11906,7 @@ window.addEventListener('load', function () {
                 const modelDropdown = document.querySelector('.filter-box .filter:nth-child(2) input');
 
                 if (algorithmDropdown && modelDropdown) {
-                   
+
 
                     var algorithmDropdownFound = false;
                     var modelDropdownFound = false;
@@ -11913,7 +11917,7 @@ window.addEventListener('load', function () {
                         if(algorithmOptions.length === 0) {
                             algorithmDropdown.focus();
                             algorithmDropdown.click();
-        
+
                             algorithmDropdown.style.backgroundColor = '#ffcc99';
                         }
 
@@ -11935,7 +11939,7 @@ window.addEventListener('load', function () {
 
                                             modelDropdown.style.backgroundColor = '#ffcc99';
                                         }
-                
+
                                         setTimeout(() => {
                                             modelOptions = document.querySelectorAll('.filter ul li');
                                             modelOptions.forEach(option => {
@@ -11949,7 +11953,7 @@ window.addEventListener('load', function () {
                                                     return;
                                                 }
                                             });
-                
+
                                             // If the algorithm wasn't found, set it to red
                                             if(!modelDropdownFound) {
                                                 modelDropdown.style.backgroundColor = '#ff6666';
