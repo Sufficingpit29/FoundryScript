@@ -542,7 +542,7 @@ const errorsToSearch = {
     },
     'Bad ASIC Number': {
         icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
-        start: ["bad asic num"],
+        start: ["bad asic num", "find asic fail restart times"],
         end: "] asic[",
         type: "Main",
         textReturn: (text) => {
@@ -8896,9 +8896,7 @@ window.addEventListener('load', function () {
         const detailsData = JSON.parse(GM_SuperValue.get("detailsData", "{}"));
         let minerType = detailsData['type'];
 
-        if(minerType === "RAMM") {
-            minerType = "Needs Parts"; // Quick fix for file name being changed
-        }
+        let fallBack = "Needs Parts";
 
         if (taskName !== "") {
             // Quick popup notification saying it been formatted & copied to clipboard
@@ -8952,7 +8950,7 @@ window.addEventListener('load', function () {
                 innerElements.forEach(element => {
                     const linkButton = element.querySelector('span[role="button"][data-id="heroField"]');
                     const linkButtonText = linkButton ? linkButton.textContent : "";
-                    if (linkButtonText && linkButtonText.toLowerCase().includes(minerType.toLowerCase())) {
+                    if (linkButtonText && (linkButtonText.toLowerCase().includes(minerType.toLowerCase()) || linkButtonText.toLowerCase().includes(fallBack.toLowerCase()))) {
                         // Check if a number is present in the aria-label, and get the number if it is
                         const number = parseInt(linkButtonText.match(/\d+/));
                         if (!isNaN(number)) {
@@ -8960,7 +8958,7 @@ window.addEventListener('load', function () {
                         }
                     }
 
-                    if (linkButtonText && linkButtonText.toLowerCase().includes(minerType.toLowerCase())) {
+                    if (linkButtonText && (linkButtonText.toLowerCase().includes(minerType.toLowerCase()) || linkButtonText.toLowerCase().includes(fallBack.toLowerCase()))) {
                         backUpElement = element;
                     }
                 });
