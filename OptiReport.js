@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.3.6
+// @version      0.4.6
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -456,53 +456,12 @@ window.addEventListener('load', function () {
                 try {
                     await new Promise(resolve => setTimeout(resolve, 10));
                     if(dateRangeKey === "Last 30 Days") {
-
-                        console.log('[Opti-Report] Clicking #reportrange to open dropdown.');
-                        reportRangeDiv.click();
-                        await new Promise(resolve => setTimeout(resolve, 10));
-
-                        const rightCalendar = await waitForElement('.drp-calendar.right', reportWindow.document, 2000);
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        // Find all available .m-text cells containing "1" (not 'off' or 'disabled')
-                        const calendarTable = rightCalendar.querySelector('.calendar-table');
-                        const monthCells = Array.from(calendarTable.querySelectorAll('.m-text.available:not(.off):not(.disabled)'));
-
-                        const firstDay = monthCells[0] || null;
-                        const lastDay = monthCells.length > 0 ? monthCells[monthCells.length - 1] : null;
-
-                        console.log('First available:', firstDay);
-                        console.log('Last available:', lastDay);
-
-                        
-                        if (firstDay) {
-                            updateProgress(`Clicking first day of month cell for "${dateRangeKey}"...`);
-                            firstDay.click();
-                            firstDay.focus();
-                            firstDay.click();
-
-                            // Try a series of events to ensure the click is registered
-                            firstDay.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-                            firstDay.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
-                            firstDay.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-                            firstDay.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-                            firstDay.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-                            firstDay.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                            firstDay.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-                            firstDay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-
-                            console.log('[Opti-Report] Clicked first day of month cell for Month to Day.');
-                        } else {
-                            console.warn('[Opti-Report] No first available cell found in the calendar.');
-                        }
-
-                        let reportrangeDiv = reportWindow.document.querySelector('#reportrange');
+                        const reportrangeDiv = reportWindow.document.querySelector('#reportrange');
                         let pickerInstance = null;
 
                         if (reportrangeDiv && reportWindow.$) {
                             pickerInstance = reportWindow.$(reportrangeDiv).data('daterangepicker');
                         }
-
-                        console.log("[Opti-Report] Daterangepicker instance:", pickerInstance);
 
                         if (pickerInstance) {
                             const monthStart = new Date();
@@ -510,41 +469,28 @@ window.addEventListener('load', function () {
                             const today = new Date();
                             dateStart = monthStart;
                             dateEnd = today;
-                            pickerInstance.setStartDate(dateStart);
-                            pickerInstance.setEndDate(dateEnd);
+                            pickerInstance.setStartDate(monthStart);
+                            pickerInstance.setEndDate(today);
                             if (typeof pickerInstance.clickApply === 'function') {
                                 pickerInstance.clickApply();
                             }
                         }
 
-                        // close
-                        reportWindow.document.body.click();
-                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        reportrangeDiv.click();
 
-                        // reopen
-                        reportRangeDiv.click();
-                        await new Promise(resolve => setTimeout(resolve, 1000));
-
-                        // Find the "Apply" button and click it
-                        const applyButton = await waitForElement('.applyBtn', reportWindow.document, 2000);
-                        if (applyButton) {
-                            updateProgress(`Clicking "Apply" button for "${dateRangeKey}"...`);
-                            console.log('[Opti-Report] Clicked "Apply" button for Last 30 Days.');
-                            let reportrangeDiv = reportWindow.document.querySelector('#reportrange');
-                            let pickerInstance = null;
-
-                            if (reportrangeDiv && reportWindow.$) {
-                                pickerInstance = reportWindow.$(reportrangeDiv).data('daterangepicker');
-                            }
-                            pickerInstance.setStartDate(dateStart);
-                            pickerInstance.setEndDate(dateEnd);
+                        if (pickerInstance) {
+                            const monthStart = new Date();
+                            monthStart.setDate(1); // Set to the first day of the current month
+                            const today = new Date();
+                            dateStart = monthStart;
+                            dateEnd = today;
+                            pickerInstance.setStartDate(monthStart);
+                            pickerInstance.setEndDate(today);
                             if (typeof pickerInstance.clickApply === 'function') {
                                 pickerInstance.clickApply();
                             }
-                        } else {
-                            console.warn('[Opti-Report] Apply button not found for Last 30 Days.');
                         }
-                        await new Promise(resolve => setTimeout(resolve, 500));
 
                         // Get '.screen-busy' and see if it is "screen-busy active"
                         updateProgressMessage('Waiting for report page to load...');
