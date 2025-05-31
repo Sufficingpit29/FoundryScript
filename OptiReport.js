@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.4.6
+// @version      0.4.7
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -984,6 +984,43 @@ window.addEventListener('load', function () {
                     throw new Error(`Could not find element "${siteOverviewElementSelector}" to capture for Site Overview.`);
                 }
 
+                const minersOnlineCountElement = await waitForElement('#uptimeBarVal', metricsReportWindow.document, 10000);
+                let minersOnlineCount = "N/A";
+                if (minersOnlineCountElement) {
+                    minersOnlineCount = minersOnlineCountElement.textContent.trim();
+                    // 10270 Hashing
+                    // Keep trying until it contains a number, then extract only the number
+                    const numberRegex = /\d+/;
+                    while (!numberRegex.test(minersOnlineCount)) {
+                        console.log('[Opti-Report] Miners Online element not found or invalid. Waiting...');
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        minersOnlineCount = minersOnlineCountElement.textContent.trim();
+                    }
+                    // Extract only the number part
+                    const match = minersOnlineCount.match(numberRegex);
+                    minersOnlineCount = match ? match[0] : minersOnlineCount;
+                } else {
+                    console.error('[Opti-Report] Miners Online element not found. Defaulting to "N/A".');
+                    minersOnlineCount = "N/A";
+                }
+
+                const minersTotalElement = await waitForElement('#uptimeTotalMiners', metricsReportWindow.document, 10000);
+                let minersTotalCount = "N/A";
+                if (minersTotalElement) {
+                    minersTotalCount = minersTotalElement.textContent.trim();
+                    // Keep trying until it contains a number, then extract only the number
+                    const numberRegex = /\d+/;
+                    while (!numberRegex.test(minersTotalCount)) {
+                        console.log('[Opti-Report] Miners Total element not found or invalid. Waiting...');
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        minersTotalCount = minersTotalElement.textContent.trim();
+                    }
+                    // Extract only the number part
+                    const match = minersTotalCount.match(numberRegex);
+                    minersTotalCount = match ? match[0] : minersTotalCount;
+                }
+
+
                 const siteUtilization = await waitForElement('#siteUtilizationAssignedMinersPercent', metricsReportWindow.document, 10000);
                 if (!siteUtilization) {
                     console.error('[Opti-Report] Site Utilization element not found. Defaulting to "N/A".');
@@ -1018,10 +1055,12 @@ window.addEventListener('load', function () {
                             if (index === 0) {
                                 for (let i = 0; i < rows.length; i++) {
                                     const cells = rows[i].getElementsByTagName('td');
+                                    if(cells[0].textContent === "Miners Online") {
+                                        cells[1].textContent = `${minersOnlineCount}/${minersTotalCount}`;
+                                    }
                                     if(cells[0].textContent === "Hashrate") {
                                         cells[1].textContent = hashRateFullSite;
                                     }
-                                    /*
                                     if (cells[0].textContent === "Site Utilization") {
                                         const siteUtilizationValue = siteUtilization ? siteUtilization.textContent : 'N/A';
                                         cells[1].textContent = siteUtilizationValue;
@@ -1029,7 +1068,7 @@ window.addEventListener('load', function () {
                                     if (cells[0].textContent === "Efficiency") {
                                         const siteEfficiencyValue = siteEfficiency ? siteEfficiency.textContent : 'N/A';
                                         cells[1].textContent = siteEfficiencyValue;
-                                    }*/
+                                    }
                                 }
                             } else if (index === 1) {
                                 /* Need to set to the actual grabbed data for only fortitude, not this which is overall for whole site
