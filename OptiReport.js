@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      0.4.9
+// @version      0.5.0
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -756,7 +756,7 @@ window.addEventListener('load', function () {
         updateProgress(`Rendering "${desiredRangeTextInSpan}" screenshot...`);
 
         const canvas = await html2canvas(bodyEl, {
-            logging: true, useCORS: true, scale: 2.0,
+            logging: true, useCORS: true, scale: 1.5,
             width: captureWidth, height: captureHeight,
             windowWidth: captureWidth, windowHeight: captureHeight,
             x: 0, y: 0, backgroundColor: null,
@@ -767,7 +767,7 @@ window.addEventListener('load', function () {
         emailBodiesArray.forEach(emailBodyToAppendTo => {
             const imgElement = document.createElement('img');
             imgElement.src = imgDataUrl;
-            imgElement.style.width = '600px'; imgElement.style.height = 'auto';
+            imgElement.style.width = '800px'; imgElement.style.height = 'auto';
             imgElement.style.marginTop = '15px'; imgElement.style.marginBottom = '15px';
             imgElement.style.border = '1px solid #555';
 
@@ -1203,7 +1203,7 @@ window.addEventListener('load', function () {
                 updateProgressMessage('Rendering "Site Overview" screenshot...');
 
                 const canvasSO = await html2canvas(bodyElSO, {
-                    logging: true, useCORS: true, scale: 2.0,
+                    logging: true, useCORS: true, scale: 1.5,
                     width: captureWidthSO, height: captureHeightSO,
                     windowWidth: captureWidthSO, windowHeight: captureHeightSO,
                     x: 0, y: 0, backgroundColor: null,
@@ -1214,7 +1214,7 @@ window.addEventListener('load', function () {
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const imgElementSO = document.createElement('img');
                     imgElementSO.src = imgDataUrlSO;
-                    imgElementSO.style.width = '600px'; imgElementSO.style.height = 'auto';
+                    imgElementSO.style.width = '800px'; imgElementSO.style.height = 'auto';
                     imgElementSO.style.marginTop = '15px'; imgElementSO.style.marginBottom = '15px';
                     imgElementSO.style.border = '1px solid #555';
 
@@ -1351,7 +1351,7 @@ window.addEventListener('load', function () {
                 updateProgressMessage('Rendering "Hashrate Efficiency" screenshot...');
 
                 const canvasHE = await html2canvas(bodyElHE, {
-                    logging: true, useCORS: true, scale: 2.0,
+                    logging: true, useCORS: true, scale: 1.5,
                     width: captureWidthHE, height: captureHeightHE,
                     windowWidth: captureWidthHE, windowHeight: captureHeightHE,
                     x: 0, y: 0, backgroundColor: null,
@@ -1362,7 +1362,7 @@ window.addEventListener('load', function () {
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const imgElementHE = document.createElement('img');
                     imgElementHE.src = imgDataUrlHE;
-                    imgElementHE.style.width = '600px'; imgElementHE.style.height = 'auto';
+                    imgElementHE.style.width = '800px'; imgElementHE.style.height = 'auto';
                     imgElementHE.style.marginTop = '15px'; imgElementHE.style.marginBottom = '15px';
                     imgElementHE.style.border = '1px solid #555';
 
@@ -1445,7 +1445,7 @@ window.addEventListener('load', function () {
                     updateProgressMessage('Rendering "Filtered Hashrate Efficiency (C18 & C19)" screenshot...');
 
                     const canvasHE_filtered = await html2canvas(bodyElHE, {
-                        logging: true, useCORS: true, scale: 2.0,
+                        logging: true, useCORS: true, scale: 1.5,
                         width: captureWidthHE_filtered, height: captureHeightHE_filtered,
                         windowWidth: captureWidthHE_filtered, windowHeight: captureHeightHE_filtered,
                         x: 0, y: 0, backgroundColor: null,
@@ -1455,7 +1455,7 @@ window.addEventListener('load', function () {
 
                     const imgElementHE_filtered = document.createElement('img');
                     imgElementHE_filtered.src = imgDataUrlHE_filtered;
-                    imgElementHE_filtered.style.width = '600px'; imgElementHE_filtered.style.height = 'auto';
+                    imgElementHE_filtered.style.width = '800px'; imgElementHE_filtered.style.height = 'auto';
                     imgElementHE_filtered.style.marginTop = '15px'; imgElementHE_filtered.style.marginBottom = '15px';
                     imgElementHE_filtered.style.border = '1px solid #555';
 
@@ -1585,7 +1585,7 @@ window.addEventListener('load', function () {
                 updateProgressMessage('Rendering "Uptime Stats" screenshot...');
 
                 const canvasUS = await html2canvas(bodyElUS, {
-                    logging: true, useCORS: true, scale: 2.0,
+                    logging: true, useCORS: true, scale: 1.5,
                     width: captureWidthUS, height: captureHeightUS,
                     windowWidth: captureWidthUS, windowHeight: captureHeightUS,
                     x: 0, y: 0, backgroundColor: null,
@@ -1596,7 +1596,7 @@ window.addEventListener('load', function () {
                     const emailBodyToAppendTo = emailBodiesArray[0];
                     const imgElementUS = document.createElement('img');
                     imgElementUS.src = imgDataUrlUS;
-                    imgElementUS.style.width = '600px'; imgElementUS.style.height = 'auto';
+                    imgElementUS.style.width = '800px'; imgElementUS.style.height = 'auto';
                     imgElementUS.style.marginTop = '15px'; imgElementUS.style.marginBottom = '15px';
                     imgElementUS.style.border = '1px solid #555';
 
@@ -1713,7 +1713,7 @@ window.addEventListener('load', function () {
                     updateProgressMessage('Rendering "Filtered Uptime Stats (C18 & C19)" for Fortitude Report...');
 
                     const canvasUS_filtered_Fortitude = await html2canvas(bodyElUS, { // bodyElUS now contains the filtered and resized panel
-                        logging: true, useCORS: true, scale: 2.0,
+                        logging: true, useCORS: true, scale: 1.5,
                         width: captureWidthUS_filtered_Fortitude, height: captureHeightUS_filtered_Fortitude,
                         windowWidth: captureWidthUS_filtered_Fortitude, windowHeight: captureHeightUS_filtered_Fortitude,
                         x: 0, y: 0, backgroundColor: null,
@@ -1723,7 +1723,7 @@ window.addEventListener('load', function () {
 
                     const imgElementUS_Fortitude = document.createElement('img');
                     imgElementUS_Fortitude.src = imgDataUrlUS_filtered_Fortitude;
-                    imgElementUS_Fortitude.style.width = '600px';
+                    imgElementUS_Fortitude.style.width = '800px';
                     imgElementUS_Fortitude.style.height = 'auto';
                     imgElementUS_Fortitude.style.marginTop = '15px';
                     imgElementUS_Fortitude.style.marginBottom = '15px';
@@ -1946,7 +1946,7 @@ window.addEventListener('load', function () {
         emailBody.setAttribute('aria-label', 'Email body content');
 
         // --- Common Styles and Placeholders ---
-        const tableStyle = `border-collapse: collapse; width: 600px; margin: 15px 0; font-size: 14px; text-align: left;`;
+        const tableStyle = `border-collapse: collapse; width: 800px; margin: 15px 0; font-size: 14px; text-align: left;`;
         const thTdStyle = `border: 2px solid #444; text-align: left; padding: 8px; width: 400px;`;
         const placeholderData = "";
         const fortitudeTableHTML = `
