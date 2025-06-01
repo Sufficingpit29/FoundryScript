@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      1.0.2
+// @version      1.0.3
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -1757,7 +1757,7 @@ window.addEventListener('load', function () {
                 // --- END: Add Filtered Uptime Stats (C18 & C19) to Fortitude Report ---
 
                 if(!images_only) {
-                    const weatherReportsTitle = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Notes</p>`;
+                    const weatherReportsTitle = `<p><br></p>` + `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Weather</p>`;
                     emailBodiesArray.forEach(emailBodyToAppendTo => {
                         const tempDivWR = document.createElement('div');
                         tempDivWR.innerHTML = weatherReportsTitle + imageSeparatorHTML + `<p><br></p>`;
