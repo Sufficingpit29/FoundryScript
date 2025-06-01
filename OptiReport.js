@@ -13,6 +13,8 @@
 // @run-at       document-start
 // ==/UserScript==
 
+// To do: Fix uptime stats at bottom failing/month to day full failing
+
 const images_only = false;
 
 window.addEventListener('load', function () {
