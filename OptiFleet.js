@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.1.7
+// @version      8.1.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2391,7 +2391,7 @@ window.addEventListener('load', function () {
 
             const unsupportedModels = {
                 ["EquiHash"]:   ["Antminer Z15", "Antminer Z15j", "Antminer Z15e"],
-                ["Scrypt"] :    ["Antminer L7"]
+                ["Scrypt"] :    ["Antminer L7", "ElphaPex DG1+"]
             };
 
             function removeAllHashRateElements() {
@@ -2410,7 +2410,6 @@ window.addEventListener('load', function () {
                     return;
                 }
                 reloadCards = false;
-
                 var totalHashRates = {};
                 /* Basic sudo structure
                 {
@@ -2429,24 +2428,76 @@ window.addEventListener('load', function () {
 
                 // Loop through all miners
                 for (const [index, minerData] of Object.entries(allMinersData)) {
+                    if( minerData.statusName !== "Online" && minerData.statusName !== "Offline" ) {
+                        // Skip miners that are not online or offline
+                        continue;
+                    } 
+
                     // Check if the miner is in the hash rate types
+                    let found = false;
                     for (const [hashRateType, minerModels] of Object.entries(unsupportedModels)) {
                         if (minerModels.includes(minerData.modelName)) {
                             // Check if the miner is in the hash rate types
-                            if (!totalHashRates[hashRateType]) {
-                                totalHashRates[hashRateType] = {
-                                    "totalHashRate": 0,
-                                    "totalHashRatePotential": 0,
-                                    "totalMiners": 0
-                                };
-                            }
+                            totalHashRates[hashRateType + " Only"] = totalHashRates[hashRateType + " Only"] || {
+                                "totalHashRate": 0,
+                                "totalHashRatePotential": 0,
+                                "totalMiners": 0
+                            };
 
                             // Add the hash rate to the total hash rate
-                            totalHashRates[hashRateType].totalHashRate += minerData.hashrate;
-                            totalHashRates[hashRateType].totalHashRatePotential += minerData.expectedHashRate;
-                            totalHashRates[hashRateType].totalMiners++;
+                            totalHashRates[hashRateType + " Only"].totalHashRate += minerData.hashrate;
+                            totalHashRates[hashRateType + " Only"].totalHashRatePotential += minerData.expectedHashRate;
+                            totalHashRates[hashRateType + " Only"].totalMiners++;
+
+                            found = true;
                         }
+                        
                     }
+                    /*
+                    if (!found) {
+                        totalHashRates["Not Scrypt [expectedHashRate]"] = totalHashRates["Not Scrypt [expectedHashRate]"] || {
+                            "totalHashRate": 0,
+                            "totalHashRatePotential": 0,
+                            "totalMiners": 0
+                        };
+
+                        totalHashRates["Not Scrypt [expectedHashRate]"].totalHashRate += minerData.hashrate;
+                        totalHashRates["Not Scrypt [expectedHashRate]"].totalHashRatePotential += minerData.expectedHashRate;
+                        totalHashRates["Not Scrypt [expectedHashRate]"].totalMiners++;
+
+                        totalHashRates["Not Scrypt [targetHashrate]"] = totalHashRates["Not Scrypt [targetHashrate]"] || {
+                            "totalHashRate": 0,
+                            "totalHashRatePotential": 0,
+                            "totalMiners": 0
+                        };
+
+                        // Add the hash rate to the total hash rate
+                        totalHashRates["Not Scrypt [targetHashrate]"].totalHashRate += minerData.hashrate;
+                        totalHashRates["Not Scrypt [targetHashrate]"].totalHashRatePotential += minerData.targetHashrate;
+                        totalHashRates["Not Scrypt [targetHashrate]"].totalMiners++;
+                    }
+
+                    totalHashRates["Actual Total [expectedHashRate]"] = totalHashRates["Actual Total [expectedHashRate]"] || {
+                        "totalHashRate": 0,
+                        "totalHashRatePotential": 0,
+                        "totalMiners": 0
+                    };
+
+                    // Add the hash rate to the total hash rate
+                    totalHashRates["Actual Total [expectedHashRate]"].totalHashRate += minerData.hashrate;
+                    totalHashRates["Actual Total [expectedHashRate]"].totalHashRatePotential += minerData.expectedHashRate;
+                    totalHashRates["Actual Total [expectedHashRate]"].totalMiners++;
+
+                    totalHashRates["Actual Total [targetHashrate]"] = totalHashRates["Actual Total [targetHashrate]"] || {
+                        "totalHashRate": 0,
+                        "totalHashRatePotential": 0,
+                        "totalMiners": 0
+                    };
+
+                    // Add the hash rate to the total hash rate
+                    totalHashRates["Actual Total [targetHashrate]"].totalHashRate += minerData.hashrate;
+                    totalHashRates["Actual Total [targetHashrate]"].totalHashRatePotential += minerData.targetHashrate;
+                    totalHashRates["Actual Total [targetHashrate]"].totalMiners++;*/
                 }
 
                 if (Object.keys(totalHashRates).length === 0) {
