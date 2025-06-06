@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.1.8
+// @version      8.1.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -2427,6 +2427,7 @@ window.addEventListener('load', function () {
                 */
 
                 // Loop through all miners
+                let foundAtAll = false;
                 for (const [index, minerData] of Object.entries(allMinersData)) {
                     if( minerData.statusName !== "Online" && minerData.statusName !== "Offline" ) {
                         // Skip miners that are not online or offline
@@ -2450,6 +2451,7 @@ window.addEventListener('load', function () {
                             totalHashRates[hashRateType + " Only"].totalMiners++;
 
                             found = true;
+                            foundAtAll = true;
                         }
                         
                     }
@@ -2511,6 +2513,17 @@ window.addEventListener('load', function () {
                 // Loop through the total hash rates and add the hash rate info elements
                 for (const [hashRateType, hashRateData] of Object.entries(totalHashRates)) {
                     addHashRateInfoElement("Hash Rate [" + hashRateType +"]", hashRateData.totalHashRate, hashRateData.totalHashRatePotential, hashRateData.totalMiners);
+                }
+
+                if( foundAtAll ) {
+                    const titles = document.querySelectorAll('.bar-chart-card-title m-heading, .bar-chart-card-title .m-heading');
+                    for (const title of titles) {
+                        if (title.textContent.trim() === 'Hash Rate') {
+                            title.textContent = 'Hash Rate [Total]';
+                            clearInterval(waitForHashRateCard);
+                            break;
+                        }
+                    }
                 }
             }
 
