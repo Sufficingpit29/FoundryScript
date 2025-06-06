@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      1.0.3
+// @version      1.0.5
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -12,8 +12,6 @@
 // @grant        GM_addStyle
 // @run-at       document-start
 // ==/UserScript==
-
-// To do: Fix uptime stats at bottom failing/month to day full failing
 
 const images_only = false;
 
@@ -487,6 +485,19 @@ window.addEventListener('load', function () {
                             const monthStart = new Date();
                             monthStart.setDate(1); // Set to the first day of the current month
                             const today = new Date();
+                            dateStart = monthStart;
+                            dateEnd = today;
+                            pickerInstance.setStartDate(monthStart);
+                            pickerInstance.setEndDate(today);
+                            if (typeof pickerInstance.clickApply === 'function') {
+                                pickerInstance.clickApply();
+                            }
+
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                            reportrangeDiv.click();
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                            
+                            monthStart.setDate(1); // Set to the first day of the current month
                             dateStart = monthStart;
                             dateEnd = today;
                             pickerInstance.setStartDate(monthStart);
@@ -1505,17 +1516,19 @@ window.addEventListener('load', function () {
                 updateProgressMessage('Clicked "Uptime" tab. Waiting for content to load...');
 
                 const uptimeGridSelector = 'div#zoneUptimeGrid';
-                await waitForElement(uptimeGridSelector, metricsReportWindow.document, 15000);
+                const upTimeGrid = await waitForElement(uptimeGridSelector, metricsReportWindow.document, 15000);
                 disableMouseInputsInWindow(metricsReportWindow); // Re-apply after tab content (grid) appears
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
                 // Verify the Uptime grid and contains the expected content
                 updateProgressMessage('Verifying Uptime grid content...');
-                let zoneUptimeStatsPanels = metricsReportWindow.document.querySelectorAll('a.stat-panel');
+                let zoneUptimeStatsPanels = upTimeGrid.querySelectorAll('a.stat-panel');
+                console.log(`[Opti-Report] Found ${zoneUptimeStatsPanels.length} Uptime stat panels.`);
+                console.log(zoneUptimeStatsPanels);
                 while (zoneUptimeStatsPanels.length === 0) {
                     console.log('[Opti-Report] Waiting for Uptime stats panels to load...');
                     await new Promise(resolve => setTimeout(resolve, 500));
-                    zoneUptimeStatsPanels = metricsReportWindow.document.querySelectorAll('a.stat-panel');
+                    zoneUptimeStatsPanels = uptimeGridSelector.querySelectorAll('a.stat-panel');
                     if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
                 }
 
