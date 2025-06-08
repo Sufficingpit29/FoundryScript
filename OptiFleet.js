@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.1.9
+// @version      8.2.1
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -1441,6 +1441,326 @@ window.addEventListener('load', function () {
         }, duration + 500);
     }
 
+    // Hash Rate Types
+    const hashRateTypes = {
+        'H': 1,
+        'KH': 1e3,
+        'MH': 1e6,
+        'GH': 1e9,
+        'TH': 1e12,
+        'PH': 1e15,
+        'EH': 1e18,
+        'ZH': 1e21,
+    };
+
+    // Function to convert hash rates between types
+    function convertRates(hashRate, fromType, toType) {
+        const hashRateFrom = hashRateTypes[fromType];
+        const hashRateTo = hashRateTypes[toType];
+
+        return (hashRate * hashRateFrom) / hashRateTo;
+    }
+
+    // Convert the hash rate to the best type
+    function convertHashRate(hashRate, fromType) {
+        // Run through the hash rate types until we find the best one to display
+        var hashType = 'H';
+        hashRate = convertRates(hashRate, fromType, hashType);
+        for (const [key, value] of Object.entries(hashRateTypes)) {
+            if (hashRate >= value) {
+                hashType = key;
+            }
+        }
+
+        // Convert the hash rate to the best type
+        hashRate = convertRates(hashRate, 'H', hashType).toFixed(2);
+
+        return [parseFloat(hashRate), hashType];
+    }
+
+    if(currentURL.includes("blank.org/?quickipgrab")) {
+        //?quickipgrab&ip=${ip}&isfoundrygui=${isFoundryGUI}
+        const urlParams = new URLSearchParams(window.location.search);
+        const ip = urlParams.get('ip');
+        const isFoundryGUI = urlParams.get('isfoundrygui') === 'true';
+
+        let minerErrors = {};
+        
+        // Create a element to display the IP and Foundry GUI status
+        const element = document.createElement('div');
+        element.style.position = 'fixed';
+        element.style.top = '10px';
+        element.style.right = '10px';
+        element.style.backgroundColor = '#fff';
+        element.style.padding = '10px';
+        element.style.border = '1px solid #ccc';
+        element.style.zIndex = '1000';
+        element.style.fontFamily = 'Arial, sans-serif';
+        element.style.fontSize = '14px';
+        element.style.color = '#333';
+        element.textContent = ``;
+        element.hashboardRates = '';
+        element.tooltip = document.createElement('div')
+        element.tooltip.style.position = 'relative'
+        element.tooltip.style.marginTop = '5px'
+        element.tooltip.style.backgroundColor = '#fff'
+        element.tooltip.style.padding = '10px'
+        element.tooltip.style.border = '1px solid #ccc'
+        element.tooltip.style.zIndex = '1000'
+        element.tooltip.style.maxWidth = '300px'
+        element.tooltip.style.wordWrap = 'break-word'
+        element.tooltip.style.fontFamily = 'Arial, sans-serif'
+        element.tooltip.style.fontSize = '14px'
+        element.tooltip.style.color = '#333'
+        element.tooltip.textContent = 'Loading...';
+        element.appendChild(element.tooltip)
+        document.body.insertBefore(element.tooltip, document.body.firstChild);
+        document.body.insertBefore(element, document.body.firstChild);
+
+        if(!isFoundryGUI) {
+            const ipHref = "http://" + ip + '/cgi-bin/stats.cgi';
+            fetchGUIData(ipHref, undefined, undefined, 30000)
+                .then(response => {
+                    if(response.trim() == "Socket connect failed: Connection refused") {
+                        element.textContent = 'Rebooting...';
+                        element.hashboardRates = 'Probably rebooting.\nOr something really wacky happened...';
+                        element.tooltip.textContent = element.hashboardRates;
+                        return;
+                    }
+                    //console.log("response", response)
+                    // Convert the response from json if possible
+                    if (response && !response.STATS) {
+                        response = JSON.parse(response);
+                    }
+
+
+
+                    const ipHref2 = "http://" + ip + '/cgi-bin/summary.cgi';
+                    fetchGUIData(ipHref2, undefined, undefined, 30000)
+                        .then(response2 => {
+
+                        let mainErrors = minerErrors[ip] || "";
+
+                        if (response2) {
+                            response2 = JSON.parse(response2);
+                        }
+                        if(response.STATS && (response.STATS.length == 0 || response.STATS[0].chain === undefined || response.STATS[0].rate_ideal === undefined || (response.STATS[0].chain[0] && response.STATS[0].chain[0].rate_ideal === 0))) {
+                            element.textContent = 'Initializing...?';
+                            element.tooltip.textContent = 'Possibly starting after a reboot?\nOr is stuck...' + mainErrors;
+
+                            if(response2.SUMMARY && response2.SUMMARY[0] && response2.SUMMARY[0].status) {
+                                // Loop through the status and find the first one that is not "s" status
+                                let status = response2.SUMMARY[0].status;
+                                for(let i = 0; i < status.length; i++) {
+                                    if(status[i].status !== "s") {
+                                        element.textContent = 'Issue: ' + status[i].type;
+                                        element.tooltip.textContent += '\n\nStatus Issue: ' + status[i].type + '\n' + status[i].msg;
+                                    }
+                                }
+                            }
+
+                            // If there is errors, get the first one and set it as the issue
+                            let splitErrors = mainErrors.split('\n');
+                            if(splitErrors.length > 1 && !splitErrors[3].includes("No Known Major Errors Found")) {
+                                element.textContent = 'Error: ' + splitErrors[3];
+                            }
+
+                            return;
+                        }
+
+                        let totalHash = 0;
+                        let chains = [];
+                        for (let i = 0; i < response.STATS[0].chain.length; i++) {
+                            totalHash += response.STATS[0].chain[i].rate_real;
+                            chains.push({
+                                real: response.STATS[0].chain[i].rate_real,
+                                ideal: response.STATS[0].chain[i].rate_ideal,
+                                asics: response.STATS[0].chain[i].asic_num,
+                                percentage: (response.STATS[0].chain[i].rate_real / response.STATS[0].chain[i].rate_ideal) * 100
+                            });
+                        }
+                        let totalHashIdeal = response.STATS[0].rate_ideal;
+                        let totalHashPercentage = (totalHash / totalHashIdeal) * 100;
+                        totalHashPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage;
+                        let [newRate, hashType] = convertHashRate(totalHash, "GH");
+                        totalHash = newRate + " " + hashType;
+
+                        let fanNumbers = response.STATS[0].fan;
+                        //"fan": [0, 7000, 6970, 6960]
+                        // If any fan number is 0 or just far lower than others, list that index as an issue fan
+                        let issueFans = fanNumbers.map((fan, index) => {
+                            if (fan === 0) {
+                                return `[${index}]`;
+                            } else if (Math.abs(fan - Math.max(...fanNumbers)) > 1000) {
+                                return `[${index}]?`;
+                            }
+                            return null;
+                        }).filter(index => index !== null);
+
+                        let elaspedTime = response.STATS[0].elapsed;
+                        let formattedTime = Math.floor(elaspedTime / 3600) + "h " + Math.floor((elaspedTime % 3600) / 60) + "m " + (elaspedTime % 60) + "s";
+                        if (totalHash) {
+                            element.textContent = 'Realtime: ' + totalHashPercentage.toFixed(2) + '%';
+                            element.hashboardRates = "Total: " + totalHash + " / " + totalHashPercentage.toFixed(2) + "%\n";
+                            if(chains.length >= 1) {
+                                element.hashboardRates += `\n`;
+                            }
+
+                            element.hashboardRates += chains.map((chain, index) =>
+                                `HB${index + 1}: ${chain.real.toFixed(2)} GH / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
+                            ).join('\n');
+
+                            let asicDifference = false;
+                            chains.forEach((chain, index) => {
+                                // If the asic count is 0 or not equal to other counts, mark it as an issue
+                                if (chain.asics === 0 || chain.asics !== chains[0].asics) {
+                                    asicDifference = true;
+                                }
+                            });
+
+                            let errorTextAppend = ""
+
+                            if (issueFans.length > 0) {
+                                errorTextAppend = ` | Fan`
+                                element.hashboardRates += `\nIssue Fans: ${issueFans.join(', ')}`;
+                            } else if(asicDifference) {
+                                errorTextAppend = ` | 0 ASICs`
+                            }
+
+                            if(mainErrors.includes("Temperature")) {
+                                errorTextAppend = " | Temperature";
+                            } else if(mainErrors.includes("Voltage")) {
+                                errorTextAppend = " | Voltage";
+                            } else if(mainErrors.includes("Bad HB")) {
+                                errorTextAppend = " | Bad HB";
+                            } else if(mainErrors.includes("Fan Fail")) {
+                                errorTextAppend = " | Fan Fail";
+                            }
+
+                            element.textContent += errorTextAppend;
+
+                            element.hashboardRates += mainErrors + `\n\nUptime: ${formattedTime}`;
+                            element.tooltip.textContent = element.hashboardRates
+                        } else {
+                            element.textContent = 'Realtime: N/A';
+                            element.hashboardRates = 'Realtime Hashrate Error.' + mainErrors;
+                            element.tooltip.textContent = element.hashboardRates;
+                        }
+
+                        // Remove any extra new lines from the tooltip text
+                        element.hashboardRates = element.hashboardRates.replace(/\n{2,}/g, '\n\n');
+                        element.tooltip.textContent = element.hashboardRates;
+                    })
+                })
+                .catch(error => {
+                    console.log("Error fetching realtime hash rate: ", error);
+                    element.textContent = 'Realtime: Error';
+                    element.hashboardRates = 'Error fetching data.\n' + error;
+                    element.tooltip.textContent = element.hashboardRates;
+                });
+
+            const ipHrefLog = "http://" + ip + '/cgi-bin/log.cgi';
+            fetchGUIData(ipHrefLog, undefined, undefined, 30000)
+                .then(logResponse => {
+
+                    logResponse = cleanErrors(logResponse);
+                    let errorsFound = runErrorScanLogic(logResponse);
+                    errorsFound = errorsFound.filter(error => error.type === 'Main');
+
+                    // Clear out duplicate error and keep only last
+                    for (let i = errorsFound.length - 1; i >= 0; i--) {
+                        for (let j = i - 1; j >= 0; j--) {
+                            if (errorsFound[i].name === errorsFound[j].name) {
+                                errorsFound.splice(j, 1);
+                                i--;
+                            }
+                        }
+                    }
+
+                    const errorMessages = errorsFound.map(error => error.textReturn).join("\n");
+                    let mainErrors = errorsFound.length > 0 ? errorMessages : "No Known Major Errors Found";
+                    mainErrors = "\n\nLog Errors:\n" + mainErrors;
+                    minerErrors[ip] = mainErrors;
+                })
+                .catch(error => {
+                    console.log("Error fetching log data: ", error);
+                    minerErrors[ip] = "\n\nError fetching log data: " + error;
+                })
+        } else {
+            const ipHref = 'http://' + ip + '/cgi-bin/stats.cgi';
+            fetchGUIData(ipHref, undefined, undefined, 30000)
+                .then(response => {
+                    // Extract relevant data from the response
+                    if (response && !response.STATS) {
+                        response = JSON.parse(response);
+                    }
+
+                    const stats = response.STATS[1];
+                    const totalHash = convertRates(stats["total rate"], "TH", "H"); // Convert to H/s
+                    const totalHashIdeal = convertRates(stats["total_rateideal"], "GH", "H"); // Convert to H/s
+                    const totalHashPercentage = (totalHash / totalHashIdeal) * 100;
+
+                    const chains = [];
+                    const chainRates = [
+                        parseFloat(stats["chain_rate1"]),
+                        parseFloat(stats["chain_rate2"]),
+                        parseFloat(stats["chain_rate3"]),
+                    ];
+                    let [idealRatePerChain, idealRatePerChainHashType] = convertHashRate(totalHashIdeal / chainRates.length, "H");
+                    idealRatePerChain = Math.floor(idealRatePerChain)
+
+                    chainRates.forEach((rate, index) => {
+                        const oCount = (stats[`chain_acs${index + 1}`].match(/o/g) || []).length;
+                        const chainRate = convertRates(rate, "TH", idealRatePerChainHashType);
+                        chains.push({
+                            real: chainRate,
+                            ideal: idealRatePerChain,
+                            asics: oCount,
+                            percentage: (chainRate / idealRatePerChain) * 100
+                        });
+                    });
+
+                    let [newRate, hashType] = convertHashRate(totalHash, "H");
+                    const formattedHash = `${newRate} ${hashType}`;
+                    const formattedPercentage = isNaN(totalHashPercentage) ? 0 : totalHashPercentage.toFixed(2);
+
+                    let elaspedTime = stats.Elapsed
+                    let formattedTime = Math.floor(elaspedTime / 3600) + "h " + Math.floor((elaspedTime % 3600) / 60) + "m " + (elaspedTime % 60) + "s";
+
+                    if (totalHash) {
+                        element.textContent = `Realtime: ${formattedPercentage}%`;
+                        element.hashboardRates = `Total: ${formattedHash} / ${formattedPercentage}%\n\n`;
+                        element.hashboardRates += chains.map((chain, index) =>
+                            `HB${index + 1}: ${(chain.real).toFixed(0)} ${idealRatePerChainHashType} / ${chain.percentage.toFixed(2)}% \n(${chain.asics} ASICs)\n`
+                        ).join('\n');
+
+                        element.hashboardRates += `\nUptime: ${formattedTime}`;
+                        element.tooltip.textContent = element.hashboardRates;
+                    } else {
+                        element.textContent = 'Realtime: N/A';
+                        element.hashboardRates = 'Realtime data not available.';
+                        element.tooltip.textContent = element.hashboardRates;
+                    }
+                })
+                .catch(error => {
+                    console.log("Error fetching realtime hash rate: ", error);
+                    element.textContent = 'Realtime: Error';
+                    element.hashboardRates = 'Error fetching data.\nMiner is offline or unreachable.';
+                    element.tooltip.textContent = element.hashboardRates;
+                });
+        }
+
+        // Wait until element.textContent is not "" before setting the tooltip
+        const checkTextContent = setInterval(() => {
+            if (element.textContent !== "") {
+                clearInterval(checkTextContent);
+                GM_SuperValue.set("quickgrabip_time_" + ip, new Date().toISOString());
+                GM_SuperValue.set("quickgrabip_text_" + ip, element.textContent);
+                GM_SuperValue.set("quickgrabip_tooltip_" + ip, element.tooltip.textContent);
+            }
+        }, 500);
+    }
+
     function OptiFleetSpecificLogic() {
         var allMinersData = {};
         var allMinersLookup = {};
@@ -2256,43 +2576,6 @@ window.addEventListener('load', function () {
 
             console.log("Miner Details:", minerDetails);
             return [cleanedText, minerDetails];
-        }
-
-        // Hash Rate Types
-        const hashRateTypes = {
-            'H': 1,
-            'KH': 1e3,
-            'MH': 1e6,
-            'GH': 1e9,
-            'TH': 1e12,
-            'PH': 1e15,
-            'EH': 1e18,
-            'ZH': 1e21,
-        };
-
-        // Function to convert hash rates between types
-        function convertRates(hashRate, fromType, toType) {
-            const hashRateFrom = hashRateTypes[fromType];
-            const hashRateTo = hashRateTypes[toType];
-
-            return (hashRate * hashRateFrom) / hashRateTo;
-        }
-
-        // Convert the hash rate to the best type
-        function convertHashRate(hashRate, fromType) {
-            // Run through the hash rate types until we find the best one to display
-            var hashType = 'H';
-            hashRate = convertRates(hashRate, fromType, hashType);
-            for (const [key, value] of Object.entries(hashRateTypes)) {
-                if (hashRate >= value) {
-                    hashType = key;
-                }
-            }
-
-            // Convert the hash rate to the best type
-            hashRate = convertRates(hashRate, 'H', hashType).toFixed(2);
-
-            return [parseFloat(hashRate), hashType];
         }
 
         // Non-Bitcoin Hash Rate Logic
@@ -4297,7 +4580,30 @@ window.addEventListener('load', function () {
                                 hashCell.appendChild(realtimeHashrateElement);
 
                                 let minerErrors = {};
+                                let openPages = {};
                                 function fetchRealtimeHashRate(element, ip, isFoundryGUI) {
+                                    // Iframe about:blank?quickipgrab&ip=ipAddress&isfoundrygui=isFoundryGUI
+                                    // Create a new iframe to fetch the data
+                                    if(!ip || ip.trim() === "") {
+                                        element.textContent = 'Realtime: No IP';
+                                        element.hashboardRates = 'No IP Address found for this miner.';
+                                        element.tooltip.textContent = element.hashboardRates;
+                                        return;
+                                    }
+
+                                    /*
+                                    if(openPages[ip]) {
+                                        return;
+                                    }
+
+                                    const iframe = document.createElement('iframe');
+                                    iframe.style.display = 'none';
+                                    iframe.src = `https://www.blank.org/?quickipgrab&ip=${ip}&isfoundrygui=${isFoundryGUI}`;
+                                    document.body.appendChild(iframe);
+
+                                    // Add to openPages
+                                    openPages[ip] = iframe;*/
+
                                     if(!isFoundryGUI) {
                                         const ipHref = "http://" + ip + '/cgi-bin/stats.cgi';
                                         fetchGUIData(ipHref)
@@ -4531,6 +4837,30 @@ window.addEventListener('load', function () {
                                                 element.tooltip.textContent = element.hashboardRates;
                                             });
                                     }
+                                    
+                                    /*
+                                    let currentTime = new Date().getTime();
+
+                                    // Check every 1 second if the iframe has loaded and time is valid and not too old
+                                    const checkInterval = setInterval(() => {
+                                        //set(quickgrabip_time_" + ip, new Date().toISOString());
+                                        let quickgrabtime = GM_SuperValue.get("quickgrabip_time_" + ip, 0);
+                                        quickgrabtime = new Date(quickgrabtime).getTime();
+
+                                        if (quickgrabtime > 0 && currentTime <= quickgrabtime) {
+                                            element.textContent = GM_SuperValue.get("quickgrabip_text_" + ip, 'Realtime: Checking...');
+                                            element.tooltip.textContent = GM_SuperValue.get("quickgrabip_tooltip_" + ip, '');
+
+                                            // close the iframe and remove it from openPages
+                                            if(openPages[ip]) {
+                                                openPages[ip].remove();
+                                                delete openPages[ip];
+
+                                                clearInterval(checkInterval);
+                                            }
+                                        }
+                                    }, 100);
+                                    */
                                 }
 
                                 // Create a tooltip element
@@ -9833,11 +10163,25 @@ window.addEventListener('load', function () {
                             // Locate the add task button and click it
                             const addTaskButton = document.querySelector('.addTaskButton');
                             if (addTaskButton) {
+
+                                // We'll first grab any existing cards with the same name before clicking the button, so we know which one is new
+                                const anyExistingCards = Array.from(document.querySelectorAll(`[aria-label="${taskName}"]`));
+                                console.log("Any Existing Cards: ", anyExistingCards);
+
                                 addTaskButton.click();
 
                                 // Locate the new element with the inputted text
                                 const findNewCard_INTERVAL = setInterval(() => {
-                                    const newElement = document.querySelector(`[aria-label="${taskName}"]`);
+                                    const cards = document.querySelectorAll(`[aria-label="${taskName}"]`);
+                                    console.log("Current Cards: ", cards);
+                                    let newElement = null;
+                                    for (const card of cards) {
+                                        if (!anyExistingCards.includes(card)) {
+                                            newElement = card;
+                                            break;
+                                        }
+                                    }
+
                                     const notesEditor = document.querySelector('.notes-editor');
                                     const commentField = document.querySelector('textarea[aria-label="New comment"]');
                                     if (newElement && !notesEditor) {
