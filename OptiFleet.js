@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.1
+// @version      8.2.2
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -500,32 +500,6 @@ const errorsToSearch = {
         showOnce: "last",
     },
 
-    'Hashboard Model Mismatch': {
-        icon: "https://img.icons8.com/?size=100&id=Aqjz8Pn0nyLl&format=png&color=FFFFFF",
-        start: ["board_name:", "load machine", "different board name for"],
-        end: "machine : ",
-        type: "Main",
-        conditions: (text) => {
-            if(text.includes("different board name for")) {
-                return true;
-            } else if(text.includes("board_name")) {
-                // Extract the miner and board name from the text 2025-02-14 05:29:17 miner:BHB56804,board_name:BHB56804
-                const minerName = text.split("miner:")[1].split(",")[0].replace(/\r?\n|\r/g, '');
-                const boardName = text.split("board_name:")[1].replace(/\r?\n|\r/g, '');
-                return minerName !== boardName;
-            } else {
-                /*
-                2025-01-28 16:35:08 load machine BHB42651 conf
-                2025-01-28 16:35:08 machine : BHB42651
-                */
-                const loadName = text.split("load machine ")[1].split(" conf")[0].trim();
-                const machineName = text.split("machine : ")[1].replace(/\r?\n|\r/g, '').trim();
-                return loadName !== machineName;
-            }
-        },
-        showOnce: "last",
-    },
-
     'Bad Hashboard Chain': {
         icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
         start: ["get pll config err", /Chain\[0\]: find .* asic, times/],
@@ -540,6 +514,13 @@ const errorsToSearch = {
                 : "Bad HB Chain [?]";
         }
     },
+
+    'Not Enough Chain': {
+        icon: "https://img.icons8.com/?size=100&id=vkPtgpMyUTJG&format=png&color=FFFFFF",
+        start: ["Not enough chain, exit."],
+        type: "Main",
+    },
+
     'Bad ASIC Number': {
         icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
         start: ["bad asic num", "find asic fail restart times"],
@@ -1485,7 +1466,7 @@ window.addEventListener('load', function () {
         const isFoundryGUI = urlParams.get('isfoundrygui') === 'true';
 
         let minerErrors = {};
-        
+
         // Create a element to display the IP and Foundry GUI status
         const element = document.createElement('div');
         element.style.position = 'fixed';
@@ -2715,7 +2696,7 @@ window.addEventListener('load', function () {
                     if( minerData.statusName !== "Online" && minerData.statusName !== "Offline" ) {
                         // Skip miners that are not online or offline
                         continue;
-                    } 
+                    }
 
                     // Check if the miner is in the hash rate types
                     let found = false;
@@ -2736,7 +2717,7 @@ window.addEventListener('load', function () {
                             found = true;
                             foundAtAll = true;
                         }
-                        
+
                     }
                     /*
                     if (!found) {
@@ -4837,7 +4818,7 @@ window.addEventListener('load', function () {
                                                 element.tooltip.textContent = element.hashboardRates;
                                             });
                                     }
-                                    
+
                                     /*
                                     let currentTime = new Date().getTime();
 
