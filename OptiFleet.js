@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.2
+// @version      8.2.3
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -8608,6 +8608,26 @@ window.addEventListener('load', function () {
         }
 
         if(currentURL.includes("https://foundryoptifleet.com/Content/Dashboard/Miners/List")) {
+
+            const grid = unsafeWindow.$("#minerGrid").data("kendoGrid");
+            let lastSelectedIndex = null;
+
+            unsafeWindow.$("#minerGrid").on("click", "tr.k-master-row", function (e) {
+                const $rows = grid.tbody.find("tr.k-master-row");
+                const currentIndex = $rows.index(this);
+
+                if (e.target.type === "checkbox") {
+                    lastSelectedIndex = currentIndex;
+                } else if (e.shiftKey && lastSelectedIndex !== null) {
+                    const start = Math.min(lastSelectedIndex, currentIndex);
+                    const end = Math.max(lastSelectedIndex, currentIndex);
+
+                    grid.clearSelection();
+                    for (let i = start; i <= end; i++) {
+                        grid.select($rows.eq(i));
+                    }
+                }
+            });
 
             // Add the "Copy Selected Rows" action for only selected rows
             const minerListActionsDropdown = document.querySelector('#minerListActionsDropdown .m-menu');
