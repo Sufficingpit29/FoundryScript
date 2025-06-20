@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      1.0.6
+// @version      1.0.7
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -1798,6 +1798,47 @@ window.addEventListener('load', function () {
                 if (metricsReportWindow && !metricsReportWindow.closed) {
                     metricsReportWindow.close();
                 }
+
+                // --- New Error Handling UI ---
+                [fullReportEmailBody, fortitudeReportEmailBody].forEach(body => {
+                    if (body && body.parentElement) {
+                        const container = body.parentElement;
+                        const copyButton = container.querySelector('button');
+                        if (copyButton) {
+                            copyButton.disabled = true;
+                            copyButton.style.backgroundColor = '#a0a0a0';
+                            copyButton.style.cursor = 'not-allowed';
+                            if (error.message === 'Operation cancelled by user.') {
+                                copyButton.innerText = 'Cancelled';
+                            } else {
+                                copyButton.innerText = 'Failed';
+                            }
+                        }
+
+                        let errorElement = container.querySelector('.opti-report-error-message');
+                        if (!errorElement) {
+                            errorElement = document.createElement('p');
+                            errorElement.className = 'opti-report-error-message';
+                            errorElement.style.color = '#ff4d4d';
+                            errorElement.style.textAlign = 'center';
+                            errorElement.style.marginTop = '10px';
+                            errorElement.style.fontWeight = 'bold';
+                            // Insert after the button
+                            if (copyButton && copyButton.nextSibling) {
+                                container.insertBefore(errorElement, copyButton.nextSibling);
+                            } else {
+                                container.appendChild(errorElement);
+                            }
+                        }
+                        let reason = error.message;
+                        if (reason === 'Operation cancelled by user.') {
+                            reason = "Operation was cancelled.";
+                        }
+                        errorElement.innerText = `ERROR: ${reason}`;
+                    }
+                });
+                // --- End of New Error Handling UI ---
+
                 if (error.message === 'Operation cancelled by user.' || cancelMetricsFetchFlag) {
                     hideProgressOverlay();
                 } else {
@@ -2174,7 +2215,7 @@ window.addEventListener('load', function () {
                 if (fortitudeTable) {
                     const efficiency = ((fortitudeStats.hashrate / fortitudeStats.expectedHashRate) * 100).toFixed(2);
                     const rows = fortitudeTable.rows;
-                    rows[1].cells[1].innerText = `/1120`;
+                    rows[1].cells[1].innerText = `/${subcustomerStats.Fortitude.total}`;
                     let [hash, unit] = convertHashRate(fortitudeStats.hashrate);
                     rows[2].cells[1].innerText = `${hash} ${unit}/s`;
                     //rows[5].cells[1].innerText = `${efficiency}%`;
