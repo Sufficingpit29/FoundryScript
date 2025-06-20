@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.3
+// @version      8.2.4
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -4680,6 +4680,7 @@ window.addEventListener('load', function () {
                                                         ).join('\n');
 
                                                         let asicDifference = false;
+                                                        let totalAsics = chains.reduce((acc, chain) => acc + chain.asics, 0);
                                                         chains.forEach((chain, index) => {
                                                             // If the asic count is 0 or not equal to other counts, mark it as an issue
                                                             if (chain.asics === 0 || chain.asics !== chains[0].asics) {
@@ -4699,7 +4700,13 @@ window.addEventListener('load', function () {
                                                         if(mainErrors.includes("Temperature")) {
                                                             errorTextAppend = " | Temperature";
                                                         } else if(mainErrors.includes("Voltage")) {
-                                                            errorTextAppend = " | Voltage";
+                                                            console.log("totalAsics", totalAsics);
+                                                            if(totalAsics > 0) {
+                                                                errorTextAppend = " | Voltage";
+                                                            } else {
+                                                                element.textContent = "Realtime:";
+                                                                errorTextAppend = " | Voltage | 0 ASICs";
+                                                            }
                                                         } else if(mainErrors.includes("Bad HB")) {
                                                             errorTextAppend = " | Bad HB";
                                                         } else if(mainErrors.includes("Fan Fail")) {
