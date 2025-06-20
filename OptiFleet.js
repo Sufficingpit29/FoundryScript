@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.4
+// @version      8.2.5
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -4700,7 +4700,6 @@ window.addEventListener('load', function () {
                                                         if(mainErrors.includes("Temperature")) {
                                                             errorTextAppend = " | Temperature";
                                                         } else if(mainErrors.includes("Voltage")) {
-                                                            console.log("totalAsics", totalAsics);
                                                             if(totalAsics > 0) {
                                                                 errorTextAppend = " | Voltage";
                                                             } else {
