@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.5
+// @version      8.2.6
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -92,7 +92,7 @@ const features = [
     // Issues page
     { name: 'Down Scan', id: 'downScan', category: 'Issues' },
     { name: 'Error Scan', id: 'errorScan', category: 'Issues' },
-    { name: 'Auto Reboot', id: 'autoReboot', category: 'Issues' },
+    { name: 'Auto Reboot', id: 'autoReboot', category: 'Issues', startOff: true },
     { name: 'Planner Card Scan', id: 'plannerCardScan', category: 'Issues' },
     { name: 'Export Selected Miners', id: 'exportSelectedMiners', category: 'Issues' },
 
@@ -5467,6 +5467,18 @@ window.addEventListener('load', function () {
                             if (wasScrollAtBottom) {
                                 progressLog.scrollTop = progressLog.scrollHeight;
                             }
+
+                            // if log entries are more than 200, remove the oldest one
+                            if (Object.keys(logEntries).length > 200) {
+                                // Remove the first log entry
+                                const firstLogEntry = progressLog.querySelector('div');
+                                if (firstLogEntry) {
+                                    firstLogEntry.remove();
+                                    // Remove the entry from logEntries
+                                    const firstMinerID = Object.keys(logEntries)[0];
+                                    delete logEntries[firstMinerID];
+                                }
+                            }
                         }
 
                         return [scanningElement, progressBar, progressFill, scanningText, percentageText, progressLog, logEntries, addToProgressLog, setPreviousLogDone];
@@ -5591,7 +5603,7 @@ window.addEventListener('load', function () {
                                         const minSoftRebootUpTime = 60*60; // 1 hour
                                         const upTime = currentMiner.uptimeValue;
                                         const container = location.split("_")[1].split("-")[0].replace(/\D/g, '').replace(/^0+/, '');
-                                        const maxTemp = 78;
+                                        const maxTemp = 80;
                                         const minTemp = 10;
                                         const containerTemp = containerTempData[container].temp;
                                         const powerMode = currentMiner.powerModeName;
@@ -5664,7 +5676,7 @@ window.addEventListener('load', function () {
                                                     rebootData[minerID].details.main = "Sent Soft Reboot";
                                                     rebootData[minerID].details.sub = [
                                                         "Miner has been online for more than 1 hour.",
-                                                        "Miner is below 78°F."
+                                                        "Miner is below 80°F."
                                                     ];
 
                                                     const formattedTime = new Date(new Date().toISOString()).toLocaleTimeString();
@@ -5694,7 +5706,7 @@ window.addEventListener('load', function () {
                                                     rebootData[minerID].details.main = "Max Reboot Limit Reached";
                                                     rebootData[minerID].details.sub = [
                                                         "Miner has been online for more than 1 hour.",
-                                                        "Miner is below 78°F.",
+                                                        "Miner is below 80°F.",
                                                         "Max Reboot Limit of " + maxRebootAllowed + " reached.",
                                                         "15 minutes needs to pass before another reboot can be sent."
                                                     ];
@@ -5791,8 +5803,8 @@ window.addEventListener('load', function () {
                                         }
 
                                         if(!belowMaxTemp) {
-                                            rebootData[minerID].details.main = "Container Too Hot (78°F)";
-                                            rebootData[minerID].details.sub.push("Container is above 78°F.");
+                                            rebootData[minerID].details.main = "Container Too Hot (80°F)";
+                                            rebootData[minerID].details.sub.push("Container is above 80°F.");
                                         }
 
                                         if(!aboveMinTemp) {
