@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      1.2.5
+// @version      1.2.6
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -2184,8 +2184,8 @@ window.addEventListener('load', function () {
                 <tr><td style="${thTdStyle}"><b>Efficiency</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             </table>`;
 
-            const fortitudeTitleHTML = `<p style="${sectionTitleStyle}">Fortitude Information</p>`;
-            const rammTitleHTML = `<p style="${sectionTitleStyle}">RAMM 1410 LLC Information</p>`;
+            const fortitudeTitleHTML = `<p style="${sectionTitleStyle}">Fortitude Information</p>` + imageSeparatorHTML;
+            const rammTitleHTML = `<p style="${sectionTitleStyle}">RAMM 1410 LLC Information</p>` + imageSeparatorHTML;
             const rammTableHTML = `
             <table style="${tableStyle}">
                 <tr><td style="${thTdStyle}"><b>Fleet Utilization</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
