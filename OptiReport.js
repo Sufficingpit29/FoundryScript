@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      1.1.3
+// @version      1.2.5
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -10,10 +10,90 @@
 // @downloadURL  https://raw.githubusercontent.com/Sufficingpit29/FoundryScript/refs/heads/main/OptiReport.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js
 // @grant        GM_addStyle
+// @grant        GM_xmlhttpRequest
 // @run-at       document-start
 // ==/UserScript==
 
 const images_only = false;
+
+// choose an appropriate step size based on range (seconds)
+function getStep(start, end) {
+    const amount = end - start;
+    const day = 24 * 3600;
+    if (amount >= 30 * day) return 30 * 60;
+    if (amount >= 7 * day)  return 5 * 60;
+    if (amount >= 2 * day)  return 2 * 60;
+    if (amount >= 1 * day)  return 1 * 60;
+    if (amount >= 12 * 3600) return 30;
+    return 15;
+}
+
+
+//https://foundryoptifleet.com/api/KeyMetrics?siteId=6&subcustomerId=334&interval=300&step=300&start=1748832330&end=1750473781&withEvents=false&userId=9d0f7cb1-74ef-4fd1-bc86-f043d51e9432&companyFilter=331
+const siteId = 6
+const subcustomerIdFullSite = null;
+const subcustomerIdBitmain = 334;
+const subcustomerIdFortitude = 353;
+const subcustomerIdRAMM = 335;
+const companyFilter = 331;
+
+function fetchKeyMetricsAverageData(subcustomerId, start, end, uptimeCell) {
+
+    // convert start/end to unix timestamp if in Date(); format
+    if (start instanceof Date) {
+        start = Math.floor(start.getTime() / 1000);
+    }
+    if (end instanceof Date) {
+        end = Math.floor(end.getTime() / 1000);
+    }
+    
+
+    console.log(`Fetching KeyMetrics data for subcustomerId`);
+    const userID = localStorage.getItem("OptiFleetID");
+    const step = getStep(start, end);
+    console.log('Fetch Data Parameters:', {
+        siteId,
+        subcustomerId,
+        start,
+        end,
+        step,
+        userID,
+        companyFilter
+    });
+    const url = 'https://foundryoptifleet.com/api/KeyMetrics';
+    const query = `?siteId=${siteId}` +
+                    `&subcustomerId=${subcustomerId}` +
+                    `&interval=${step}` +
+                    `&step=${step}` +
+                    `&start=${start}` +
+                    `&end=${end}` +
+                    `&withEvents=${true}` +
+                    `&userId=${userID}` +
+                    `&companyFilter=${companyFilter}`;
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: url + query,
+            responseType: 'json',
+            onload(res) {
+                if (res.status !== 200) {
+                    console.error(`Error fetching KeyMetrics data: ${res.statusText}`);
+                    reject(new Error(`HTTP error! status: ${res.status}`));
+                    return;
+                }
+
+                let responseData = res.response[0];
+                let averageUptime = responseData.averageUptime;
+                if( uptimeCell !== null && uptimeCell !== undefined) {
+                    uptimeCell.textContent = averageUptime + '%';
+                }
+
+                resolve(res.response); 
+            },
+            onerror(err) { reject(err); }
+        });
+    });
+};
 
 window.addEventListener('load', function () {
     const imageSeparatorHTML = `<img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAC8gAAAATCAYAAAD2gMU2AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAGpSURBVHhe7dyxTcNQEAbge3bBBIyBRCZgBSpKUqdDiIo9oKFBVAlbsEV2QBnASM7jTGxFSJQRBOn7pF++e+95g9MFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcDCr8zJWX/bNcraIUh/Hro+omdJmPb3ZZoa6yXxkTjIAAAAAAAAAAAAAAPDb6vgtUetzdN1dzNebEquzy4j2Ji8udvff7H8CAAAAAAAAAAAAAIDj9B5Rb5uI9iqbn4bjB8NgvOF4AAAAAAAAAAAAAACO2WlEuW4i+tds3nZnAAAAAAAAAAAAAADw7wwb5F/22+GXs0WU+pDVdFYztscDAAAAAAAAAAAAAPCXtpkm02eGGfehntSo9Sm67j7m6814BgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABxaxCeiVSoY99t7uwAAAABJRU5ErkJggg==" alt="" style="display:block; width: 800px; height:auto;">`;
@@ -887,6 +967,7 @@ window.addEventListener('load', function () {
 
                 updateProgressMessage('Capturing "Last 24 Hours" report...');
                 await captureSingleReport(metricsReportWindow, "Last 24 Hours", "Last 24 Hours", fullReportEmailBody, updateProgressMessage);
+                
                 try {
                     const uptimeStatElement = metricsReportWindow.document.querySelector('#uptimeStat');
                     let uptime24hrValue = "N/A";
@@ -915,7 +996,6 @@ window.addEventListener('load', function () {
 
                 await captureSingleReport(metricsReportWindow, "Last 24 Hours", "Last 24 Hours", fortitudeReportEmailBody, updateProgressMessage, true);
                 
-
                 // --- Scrape Uptime 24hr Average ---
                 try {
                     const uptimeStatElement = metricsReportWindow.document.querySelector('#uptimeStat');
@@ -924,11 +1004,11 @@ window.addEventListener('load', function () {
                         uptime24hrValue = uptimeStatElement.textContent.trim();
                     }
                     
-                    let allEmails = [fortitudeReportEmailBody, fullReportEmailBody];
+                    let allEmails = [fortitudeReportEmailBody];
                     allEmails.forEach((emailBodyToUpdate, index) => {
                         const tables = emailBodyToUpdate.getElementsByTagName('table');
                         if (tables.length > 0) {
-                            const targetTable = tables[index]; // Assuming the first table is for Fortitude and the second for Full Report
+                            const targetTable = tables[0]; // Assuming the first table is for Fortitude and the second for Full Report
                             const rows = targetTable.getElementsByTagName('tr');
                             for (let i = 0; i < rows.length; i++) {
                                 const cells = rows[i].getElementsByTagName('td');
@@ -942,6 +1022,7 @@ window.addEventListener('load', function () {
                 } catch (e) {
                     console.error('[Opti-Report] Error scraping or updating Uptime 24hr Average:', e);
                 }
+
                 // --- End of Uptime 24hr Average scraping ---
 
                 // Add title and separator for the 30-day report
@@ -1011,11 +1092,11 @@ window.addEventListener('load', function () {
                         uptimeEfficiencyValue = uptimeEfficiencyElement.textContent.trim();
                     }
 
-                    let allEmails = [fortitudeReportEmailBody, fullReportEmailBody];
+                    let allEmails = [fortitudeReportEmailBody];
                     allEmails.forEach((emailBodyToUpdate, index) => {
                         const tables = emailBodyToUpdate.getElementsByTagName('table');
                         if (tables.length > 0) {
-                            const targetTable = tables[index]; // Assuming the first table is for Fortitude and the second for Full Report
+                            const targetTable = tables[0]; // Assuming the first table is for Fortitude and the second for Full Report
                             const rows = targetTable.getElementsByTagName('tr');
                             for (let i = 0; i < rows.length; i++) {
                                 const cells = rows[i].getElementsByTagName('td');
@@ -1033,7 +1114,7 @@ window.addEventListener('load', function () {
                     console.error('[Opti-Report] Error scraping or updating Uptime Monthly Average:', e);
                 }
                 // --- End of Uptime Monthly Average scraping ---
-
+               
                 // Add title and separator for the Site Overview
                 const titleSiteOverviewHTML = `<p style="font-size: 16px; color: #fff; margin-top: 25px; margin-bottom: 10px; font-weight: bold;">Site Overview</p>`;
                 if (emailBodiesArray[0]) { // Only for Full Report
@@ -1560,6 +1641,9 @@ window.addEventListener('load', function () {
 
                 const uptimeGridSelector = 'div#zoneUptimeGrid';
                 const upTimeGrid = await waitForElement(uptimeGridSelector, metricsReportWindow.document, 15000);
+                if (!upTimeGrid) {
+                    throw new Error(`Could not find Uptime grid "${uptimeGridSelector}" after clicking the tab.`);
+                }
                 disableMouseInputsInWindow(metricsReportWindow); // Re-apply after tab content (grid) appears
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -1571,7 +1655,7 @@ window.addEventListener('load', function () {
                 while (zoneUptimeStatsPanels.length === 0) {
                     console.log('[Opti-Report] Waiting for Uptime stats panels to load...');
                     await new Promise(resolve => setTimeout(resolve, 500));
-                    zoneUptimeStatsPanels = uptimeGridSelector.querySelectorAll('a.stat-panel');
+                    zoneUptimeStatsPanels = upTimeGrid.querySelectorAll('a.stat-panel');
                     if (cancelMetricsFetchFlag) throw new Error('Operation cancelled by user.');
                 }
 
@@ -2067,9 +2151,8 @@ window.addEventListener('load', function () {
             <tr><td style="${thTdStyle}"><b>Uptime 24hr Average</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Uptime Monthly Average</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Efficiency</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            <tr><td style="${thTdStyle}"><b>Miners Shipped Out for Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            <tr><td style="${thTdStyle}"><b>Miners Need Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            <tr><td style="${thTdStyle}"><b>Other Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+            <tr><td style="${thTdStyle}"><b>Miners Offline Awaiting Shipment</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+            <tr><td style="${thTdStyle}"><b>Miners Out For Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Spare Scrap</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Spare Miners</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Total Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
@@ -2105,22 +2188,32 @@ window.addEventListener('load', function () {
             const rammTitleHTML = `<p style="${sectionTitleStyle}">RAMM 1410 LLC Information</p>`;
             const rammTableHTML = `
             <table style="${tableStyle}">
+                <tr><td style="${thTdStyle}"><b>Fleet Utilization</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Miners Online</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Hashrate</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Miners Shipped Out for Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Miners Need Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Other Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Uptime 24hr Average</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Uptime Monthly Average</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Efficiency</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Miners Offline Awaiting Shipment</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Miners Out For Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Spare Scrap</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Spare Miners</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Total Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             </table>`;
             
             const bitmainTitleHTML = `<p style="${sectionTitleStyle}">Bitmain Information</p>` + imageSeparatorHTML;
             const bitmainTableHTML = `
             <table style="${tableStyle}">
+                <tr><td style="${thTdStyle}"><b>Fleet Utilization</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Miners Online</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Hashrate</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Miners Shipped Out for Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Miners Need Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Other Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Uptime 24hr Average</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Uptime Monthly Average</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Efficiency</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Miners Offline Awaiting Shipment</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Miners Shipped For Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Spare Scrap</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Spare Miners</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Total Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             </table>`;
             const repairNotesTitleHTML = `<p><br></p>` + `<p style="${sectionTitleStyle} margin-top: 25px;">Repair and Maintenance Notes</p>`;
@@ -2150,12 +2243,36 @@ window.addEventListener('load', function () {
                 emailBody.innerHTML = currentEmailContentHTML;
             }
 
+            const fortitudeTable = emailBody.querySelector('table:nth-of-type(2)');
+            const rammTable = emailBody.querySelector('table:nth-of-type(3)');
+            const bitmainTable = emailBody.querySelector('table:nth-of-type(4)');
+
+            const start24hr = new Date();
+            start24hr.setHours(start24hr.getHours() - 24);
+            const end24hr = new Date();
+            const fortitude24hrCell = fortitudeTable.querySelector('tr:nth-child(4) td:nth-child(2)');
+            const ramm24hrCell = rammTable.querySelector('tr:nth-child(4) td:nth-child(2)');
+            const bitmain24hrCell = bitmainTable.querySelector('tr:nth-child(4) td:nth-child(2)');
+            fetchKeyMetricsAverageData(subcustomerIdFortitude, start24hr, end24hr, fortitude24hrCell);
+            fetchKeyMetricsAverageData(subcustomerIdRAMM, start24hr, end24hr, ramm24hrCell);
+            fetchKeyMetricsAverageData(subcustomerIdBitmain, start24hr, end24hr, bitmain24hrCell);
+
+            const monthStart = new Date();
+            monthStart.setDate(1);
+            const monthEnd = new Date();
+            const fortitudeMonthCell = fortitudeTable.querySelector('tr:nth-child(5) td:nth-child(2)');
+            const rammMonthCell = rammTable.querySelector('tr:nth-child(5) td:nth-child(2)');
+            const bitmainMonthCell = bitmainTable.querySelector('tr:nth-child(5) td:nth-child(2)');
+            fetchKeyMetricsAverageData(subcustomerIdFortitude, monthStart, monthEnd, fortitudeMonthCell);
+            fetchKeyMetricsAverageData(subcustomerIdRAMM, monthStart, monthEnd, rammMonthCell);
+            fetchKeyMetricsAverageData(subcustomerIdBitmain, monthStart, monthEnd, bitmainMonthCell);
+
             getMinerData(function(minerData) {
                 console.log('Miner data fetched for Full Report:', minerData);
-                const subcustomerStats = {
-                    Fortitude: { online: 0, offline: 0, hashrate: 0, total: 1120 },
-                    RAMM: { online: 0, offline: 0, hashrate: 0, total: 1030 },
-                    Bitmain: { online: 0, offline: 0, hashrate: 0, total: 8400 }
+                let subcustomerStats = {
+                    Fortitude: { online: 0, offline: 0, total: 1120, hashrate: 0, expectedHashRate: 0 },
+                    RAMM: { online: 0, offline: 0, total: 1030, hashrate: 0, expectedHashRate: 0 },
+                    Bitmain: { online: 0, offline: 0, total: 8400, hashrate: 0, expectedHashRate: 0 }
                 };
                 let totalOnline = 0;
                 let totalOffline = 0;
@@ -2173,6 +2290,7 @@ window.addEventListener('load', function () {
                             }
                             if (miner.hashrate) {
                                 subcustomerStats[subcustomer].hashrate += miner.hashrate;
+                                subcustomerStats[subcustomer].expectedHashRate += miner.expectedHashRate;
                             }
                             break;
                         }
@@ -2180,7 +2298,7 @@ window.addEventListener('load', function () {
                 });
 
                 const generalStatsTable = emailBody.querySelector('table:nth-of-type(1)');
-                const fortitudeTable = emailBody.querySelector('table:nth-of-type(2)');
+                let fortitudeTable = emailBody.querySelector('table:nth-of-type(2)');
                 const rammTable = emailBody.querySelector('table:nth-of-type(3)');
                 const bitmainTable = emailBody.querySelector('table:nth-of-type(4)');
 
@@ -2193,20 +2311,28 @@ window.addEventListener('load', function () {
                     rows[1].cells[1].innerText = `/${subcustomerStats.Fortitude.total}`;
                     let [hash, unit] = convertHashRate(subcustomerStats.Fortitude.hashrate);
                     rows[2].cells[1].innerText = `${hash} ${unit}/s`;
+                    
+                    const efficiency = ((subcustomerStats.Fortitude.hashrate / subcustomerStats.Fortitude.expectedHashRate) * 100).toFixed(2);
+                    rows[5].cells[1].innerText = `${efficiency}%`;
                 }
                 if (rammTable) {
                     const rows = rammTable.rows;
-                    rows[0].cells[1].innerText = `/${subcustomerStats.RAMM.total}`;
+                    rows[1].cells[1].innerText = `/${subcustomerStats.RAMM.total}`;
                     let [hash, unit] = convertHashRate(subcustomerStats.RAMM.hashrate);
-                    rows[1].cells[1].innerText = `${hash} ${unit}/s`;
+                    rows[2].cells[1].innerText = `${hash} ${unit}/s`;
+
+                    const efficiency = ((subcustomerStats.RAMM.hashrate / subcustomerStats.RAMM.expectedHashRate) * 100).toFixed(2);
+                    rows[5].cells[1].innerText = `${efficiency}%`;
                 }
                 if (bitmainTable) {
                     const rows = bitmainTable.rows;
-                    rows[0].cells[1].innerText = `/${subcustomerStats.Bitmain.total}`;
+                    rows[1].cells[1].innerText = `/${subcustomerStats.Bitmain.total}`;
                     let [hash, unit] = convertHashRate(subcustomerStats.Bitmain.hashrate);
-                    rows[1].cells[1].innerText = `${hash} ${unit}/s`;
+                    rows[2].cells[1].innerText = `${hash} ${unit}/s`;
+
+                    const efficiency = ((subcustomerStats.Bitmain.hashrate / subcustomerStats.Bitmain.expectedHashRate) * 100).toFixed(2);
+                    rows[5].cells[1].innerText = `${efficiency}%`;
                 }
-                console.log(subcustomerStats);
             });
 
         } else if (reportType === "Fortitude Report") {
@@ -2259,13 +2385,13 @@ window.addEventListener('load', function () {
                 if (fortitudeTable) {
                     const efficiency = ((fortitudeStats.hashrate / fortitudeStats.expectedHashRate) * 100).toFixed(2);
                     const rows = fortitudeTable.rows;
-                    rows[1].cells[1].innerText = `/${subcustomerStats.Fortitude.total}`;
+                    rows[1].cells[1].innerText = `/1120`;
                     let [hash, unit] = convertHashRate(fortitudeStats.hashrate);
                     rows[2].cells[1].innerText = `${hash} ${unit}/s`;
-                    //rows[5].cells[1].innerText = `${efficiency}%`;
+                    rows[5].cells[1].innerText = `${efficiency}%`;
                     //rows[10].cells[1].innerText = `${fortitudeStats.offline}`;
                 }
-                console.log("Fortitude Stats:", fortitudeStats);
+                
             });
         }
 
@@ -2357,3 +2483,4 @@ window.addEventListener('load', function () {
 
     createOptiReportButton();
 });
+console.log("OptiReport.js loaded successfully");
