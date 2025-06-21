@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Opti-Report
 // @namespace    http://tampermonkey.net/
-// @version      1.1.2
+// @version      1.1.3
 // @description  Adds an Opti-Report panel to the page with auto screenshot capabilities.
 // @author       Matthew Axtell
 // @match        https://foundryoptifleet.com/Content/*
@@ -2067,8 +2067,9 @@ window.addEventListener('load', function () {
             <tr><td style="${thTdStyle}"><b>Uptime 24hr Average</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Uptime Monthly Average</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Efficiency</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            <tr><td style="${thTdStyle}"><b>Miners Offline awaiting shipment</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-            <tr><td style="${thTdStyle}"><b>Miners Shipped Back for Replacement</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+            <tr><td style="${thTdStyle}"><b>Miners Shipped Out for Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+            <tr><td style="${thTdStyle}"><b>Miners Need Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+            <tr><td style="${thTdStyle}"><b>Other Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Spare Scrap</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Spare Miners</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             <tr><td style="${thTdStyle}"><b>Total Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
@@ -2106,8 +2107,9 @@ window.addEventListener('load', function () {
             <table style="${tableStyle}">
                 <tr><td style="${thTdStyle}"><b>Miners Online</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Hashrate</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Miners Offline awaiting shipment</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Miners Shipped Back for Replacement </b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Miners Shipped Out for Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Miners Need Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Other Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Total Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             </table>`;
             
@@ -2116,8 +2118,9 @@ window.addEventListener('load', function () {
             <table style="${tableStyle}">
                 <tr><td style="${thTdStyle}"><b>Miners Online</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Hashrate</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Miners Offline awaiting shipment</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
-                <tr><td style="${thTdStyle}"><b>Miners Shipped Back for Replacement </b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Miners Shipped Out for Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Miners Need Repair</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
+                <tr><td style="${thTdStyle}"><b>Other Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
                 <tr><td style="${thTdStyle}"><b>Total Offline</b></td><td style="${thTdStyle}">${placeholderData}</td></tr>
             </table>`;
             const repairNotesTitleHTML = `<p><br></p>` + `<p style="${sectionTitleStyle} margin-top: 25px;">Repair and Maintenance Notes</p>`;
@@ -2126,13 +2129,13 @@ window.addEventListener('load', function () {
             const partsInvoicingContentHTML = `<p><br></p>`;
 
             currentEmailContentHTML += generalStatsTableHTML +
-                                 //sectionSpacerHTML +
-                                 //fortitudeTitleHTML +
-                                 //fortitudeTableHTML +
-                                 //sectionSpacerHTML +
-                                 //rammTitleHTML +
-                                 //rammTableHTML +
-                                 //sectionSpacerHTML +
+                                 sectionSpacerHTML +
+                                 fortitudeTitleHTML +
+                                 fortitudeTableHTML +
+                                 sectionSpacerHTML +
+                                 rammTitleHTML +
+                                 rammTableHTML +
+                                 sectionSpacerHTML +
                                  bitmainTitleHTML +
                                  bitmainTableHTML +
                                  repairNotesTitleHTML +
@@ -2177,15 +2180,6 @@ window.addEventListener('load', function () {
                 });
 
                 const generalStatsTable = emailBody.querySelector('table:nth-of-type(1)');
-                const bitmainTable = emailBody.querySelector('table:nth-of-type(2)');
-                if (bitmainTable) {
-                    const rows = bitmainTable.rows;
-                    rows[0].cells[1].innerText = `/${subcustomerStats.Bitmain.total}`;
-                    let [hash, unit] = convertHashRate(subcustomerStats.Bitmain.hashrate);
-                    rows[1].cells[1].innerText = `${hash} ${unit}/s`;
-                }
-
-                /*
                 const fortitudeTable = emailBody.querySelector('table:nth-of-type(2)');
                 const rammTable = emailBody.querySelector('table:nth-of-type(3)');
                 const bitmainTable = emailBody.querySelector('table:nth-of-type(4)');
@@ -2211,7 +2205,7 @@ window.addEventListener('load', function () {
                     rows[0].cells[1].innerText = `/${subcustomerStats.Bitmain.total}`;
                     let [hash, unit] = convertHashRate(subcustomerStats.Bitmain.hashrate);
                     rows[1].cells[1].innerText = `${hash} ${unit}/s`;
-                }*/
+                }
                 console.log(subcustomerStats);
             });
 
