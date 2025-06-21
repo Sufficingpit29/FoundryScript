@@ -5468,8 +5468,8 @@ window.addEventListener('load', function () {
                                 progressLog.scrollTop = progressLog.scrollHeight;
                             }
 
-                            // if log entries are more than 200, remove the oldest one
-                            if (Object.keys(logEntries).length > 200) {
+                            // if log entries are more than 100, remove the oldest one
+                            if (Object.keys(logEntries).length > 100) {
                                 // Remove the first log entry
                                 const firstLogEntry = progressLog.querySelector('div');
                                 if (firstLogEntry) {
