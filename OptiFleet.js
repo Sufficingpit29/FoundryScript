@@ -544,6 +544,13 @@ const errorsToSearch = {
                 return badAsicNumbers ? "Bad ASIC Num [" + badAsicNumbers + "]" : "Bad ASIC Number [?]";
             }
 
+            // 2025-06-27 08:17:16 find asic fail restart times:0
+            // Get the number after "find asic fail restart times:" and if greater than 0, return Fail Restart Times
+            const restartTimes = text.match(/find asic fail restart times:(\d+)/);
+            if (restartTimes && parseInt(restartTimes[1]) > 0) {
+                return "Bad ASIC Number [Fail Restart Times: " + restartTimes[1] + "]";
+            }
+            
             return "Bad ASIC Number";
         }
     },
