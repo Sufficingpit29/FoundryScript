@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.7
+// @version      8.2.8
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -552,6 +552,14 @@ const errorsToSearch = {
             }
             
             return "Bad ASIC Number";
+        },
+        conditions: (text) => {
+            // If fail restart times and the number is greater than 0, return true
+            const restartTimes = text.match(/find asic fail restart times:(\d+)/);
+            if (restartTimes) {
+                return parseInt(restartTimes[1]) > 0;
+            }
+            return true;
         }
     },
     'Bad Hashboard Chain FDMiner ': {
