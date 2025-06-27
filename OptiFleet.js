@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.6
+// @version      8.2.7
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -522,7 +522,7 @@ const errorsToSearch = {
     },
 
     'Bad ASIC Number': {
-        icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
+        icon: "https://img.icons8.com/?size=100&id=9134&format=png&color=FFFFFF",
         start: ["bad asic num", "find asic fail restart times"],
         end: "] asic[",
         type: "Main",
