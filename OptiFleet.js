@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.9
+// @version      8.3.0
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -503,7 +503,7 @@ const errorsToSearch = {
     'Bad Hashboard Chain': {
         icon: "https://img.icons8.com/?size=100&id=12607&format=png&color=FFFFFF",
         start: ["get pll config err", /Chain\[0\]: find .* asic, times/],
-        end: ["stop_mining: soc init failed", "stop_mining: asic number is not right"],
+        end: ["stop_mining: soc init failed", "stop_mining: asic number is not right", "stop_mining_waiting: asic number is not right"],
         type: "Main",
         conditions: (text) => {
             return text.includes('only find') || text.includes('asic number is not right');
