@@ -7,7 +7,7 @@
 // ==UserScript==
 // @name         OptiAdditions
 // @namespace    http://tampermonkey.net/
-// @version      8.2.8
+// @version      8.2.9
 // @description  Adds various features to the OptiFleet website to add additional functionality.
 // @author       Matthew Axtell
 // @match        *://*/*
@@ -664,7 +664,7 @@ const errorsToSearch = {
     },
     'Fan Speed Error': {
         icon: "https://img.icons8.com/?size=100&id=t7Gbjm3OaxbM&format=png&color=FFFFFF",
-        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed", "to run at expected RPM", "minFans Required", "Expected RPM:", "Fan Fail count", "Detected less than the min Required number of fans"],
+        start: ["Error, fan lost,", "Exit due to FANS NOT DETECTED | FAN FAILED", /FAN \d+ Fail/, "Expected RPM", /Fan \d+ Fail/, "Fans have Failed", "to run at expected RPM", "minFans Required", "Expected RPM:", "Fan Fail count", "Detected less than the min Required number of fans", "fan cannot control"],
         end: ["stop_mining_and_restart: fan lost", "stop_mining: fan lost", "ERROR_FAN_LOST: fan lost"],
         type: "Main",
         shouldGroup: (text) => {
@@ -740,6 +740,8 @@ const errorsToSearch = {
                 const fanFailNumbers = failedFans.map(fan => fan.toString()).join(", ");
                 return "Fan Fail [" + fanFailNumbers + "]";
             }
+
+
             return "Fan Fail";
         },
     },
